@@ -11,6 +11,8 @@ import Onboarding from './pages/Onboarding';
 import Dashboard from './pages/Dashboard';
 import Settings from './pages/Settings';
 import Protocols from './pages/Protocols';
+import ProtocolDetail from './pages/ProtocolDetail';
+import Import from './pages/Import';
 import Runs from './pages/Runs';
 
 const AuthenticatedApp = () => {
@@ -41,6 +43,8 @@ const AuthenticatedApp = () => {
         <Route path="/dashboard" element={<Dashboard />} />
         <Route path="/settings" element={<Settings />} />
         <Route path="/protocols" element={<Protocols />} />
+        <Route path="/protocol-detail" element={<ProtocolDetail />} />
+        <Route path="/import" element={<Import />} />
         <Route path="/runs" element={<Runs />} />
       </Route>
       <Route path="*" element={<PageNotFound />} />
