@@ -691,6 +691,8 @@ export default function ProtocolDetail() {
   const [publishing, setPublishing] = useState(false);
   const [showPreRunModal, setShowPreRunModal] = useState(false);
 
+  const [editingMeasurementsStepId, setEditingMeasurementsStepId] = useState(null);
+
   // Add step form
   const [showAddStep, setShowAddStep] = useState(false);
   const [newInstruction, setNewInstruction] = useState("");
