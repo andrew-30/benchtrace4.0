@@ -12,18 +12,30 @@ export default function AppLayout() {
   const location = useLocation();
 
   useEffect(() => {
+    const currentPath = window.location.pathname;
+    if (currentPath.includes("onboarding")) return;
+
+    const cachedOrgId = localStorage.getItem("bt_org_id");
+
     async function boot() {
       const currentUser = await base44.auth.me();
       setUser(currentUser);
+
+      if (cachedOrgId) {
+        const orgData = await base44.entities.Organization.filter({ id: cachedOrgId });
+        setOrg(orgData?.[0] || null);
+        setRole(localStorage.getItem("bt_role"));
+        setLoading(false);
+        if (location.pathname === "/") navigate("/dashboard", { replace: true });
+        return;
+      }
 
       const memberships = await base44.entities.OrganizationMembership.filter({
         user_id: currentUser.id,
       });
 
       if (!memberships || memberships.length === 0) {
-        if (location.pathname !== "/onboarding") {
-          navigate("/onboarding", { replace: true });
-        }
+        navigate("/onboarding", { replace: true });
         setLoading(false);
         return;
       }
@@ -33,12 +45,10 @@ export default function AppLayout() {
         id: membership.organization_id,
       });
 
-      const resolvedOrg = orgData?.[0] || null;
-
       localStorage.setItem("bt_org_id", membership.organization_id);
       localStorage.setItem("bt_role", membership.role);
 
-      setOrg(resolvedOrg);
+      setOrg(orgData?.[0] || null);
       setRole(membership.role);
       setLoading(false);
 
@@ -59,12 +69,6 @@ export default function AppLayout() {
         </div>
       </div>
     );
-  }
-
-  const isOnboarding = location.pathname === "/onboarding";
-
-  if (isOnboarding) {
-    return <Outlet context={{ user, org, role, setOrg, setRole }} />;
   }
 
   return (
