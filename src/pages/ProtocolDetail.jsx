@@ -447,6 +447,215 @@ function SectionCard({ section }) {
   );
 }
 
+// ─── PreRunModal — top level function declaration ────────────────────────────
+function PreRunModal({ protocol, steps, checklistItems, onStart, onCancel }) {
+  const [tab, setTab] = useState("checklist");
+  const [checkState, setCheckState] = useState(() => {
+    const init = {};
+    checklistItems.forEach(item => {
+      init[item.id] = { verified: false, lot_number: "", expiry_date: "" };
+    });
+    return init;
+  });
+  const [operatorName, setOperatorName] = useState("");
+  const [sampleRef, setSampleRef] = useState("");
+  const [instrumentId, setInstrumentId] = useState("");
+  const [temperature, setTemperature] = useState("");
+  const [tempUnit, setTempUnit] = useState("celsius");
+  const [humidity, setHumidity] = useState("");
+  const [contextNotes, setContextNotes] = useState("");
+  const [starting, setStarting] = useState(false);
+
+  useEffect(() => {
+    base44.auth.me().then(u => setOperatorName(u.full_name || u.email || ""));
+  }, []);
+
+  const safetyItems = checklistItems.filter(i => i.category === "safety");
+  const allSafetyVerified = safetyItems.every(i => checkState[i.id]?.verified);
+  const totalVerified = checklistItems.filter(i => checkState[i.id]?.verified).length;
+
+  function markAll() {
+    const updated = {};
+    checklistItems.forEach(item => {
+      updated[item.id] = { ...(checkState[item.id] || {}), verified: true };
+    });
+    setCheckState(updated);
+  }
+
+  async function handleStart() {
+    setStarting(true);
+    await onStart(protocol, checkState, {
+      operator_name: operatorName,
+      sample_reference: sampleRef,
+      instrument_id: instrumentId,
+      temperature: temperature ? parseFloat(temperature) : null,
+      temperature_unit: tempUnit,
+      humidity: humidity ? parseFloat(humidity) : null,
+      context_notes: contextNotes,
+    });
+    setStarting(false);
+  }
+
+  const catOrder = ["safety", "equipment", "reagent", "other"];
+  const catLabels = { safety: "Safety", equipment: "Equipment", reagent: "Reagents", other: "Other" };
+
+  return (
+    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)", zIndex: 200, display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
+      <div style={{ background: "white", borderRadius: 14, maxWidth: 600, width: "100%", maxHeight: "90vh", display: "flex", flexDirection: "column", boxShadow: "0 25px 60px rgba(0,0,0,0.25)" }}>
+        {/* Header */}
+        <div style={{ padding: "20px 24px 0", borderBottom: "1px solid #f1f5f9", flexShrink: 0 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 12 }}>
+            <div>
+              <div style={{ fontSize: 11, fontWeight: 700, color: "#6366f1", marginBottom: 4 }}>PRE-RUN SETUP</div>
+              <h2 style={{ fontSize: 17, fontWeight: 700, color: "#0f172a", margin: 0 }}>{protocol.name}</h2>
+            </div>
+            <button onClick={onCancel} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 20, color: "#94a3b8", padding: "0 4px" }}>×</button>
+          </div>
+          <div style={{ display: "flex", gap: 2, paddingBottom: 0 }}>
+            {["checklist", "details"].map(t => (
+              <button key={t} onClick={() => setTab(t)}
+                style={{
+                  padding: "8px 16px", border: "none", background: "none", cursor: "pointer",
+                  fontSize: 13, fontWeight: 600, borderBottom: tab === t ? "2px solid #6366f1" : "2px solid transparent",
+                  color: tab === t ? "#6366f1" : "#94a3b8",
+                }}>
+                {t === "checklist" ? "Checklist" : "Run Details"}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Body */}
+        <div style={{ flex: 1, overflowY: "auto", padding: "16px 24px" }}>
+          {tab === "checklist" && (
+            <div>
+              {checklistItems.length === 0 ? (
+                <p style={{ color: "#94a3b8", fontSize: 14, textAlign: "center", padding: "24px 0" }}>No checklist items for this protocol.</p>
+              ) : (
+                <>
+                  <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 12 }}>
+                    <button onClick={markAll}
+                      style={{ fontSize: 12, color: "#6366f1", background: "none", border: "1px solid #e0e7ff", borderRadius: 6, padding: "4px 10px", cursor: "pointer", fontWeight: 600 }}>
+                      Mark all verified
+                    </button>
+                  </div>
+                  {catOrder.map(cat => {
+                    const items = checklistItems.filter(i => i.category === cat);
+                    if (items.length === 0) return null;
+                    return (
+                      <div key={cat} style={{ marginBottom: 16 }}>
+                        <div style={{ fontSize: 11, fontWeight: 700, color: "#64748b", marginBottom: 8, textTransform: "uppercase" }}>{catLabels[cat]}</div>
+                        {items.map(item => (
+                          <div key={item.id} style={{ background: "#f8fafc", borderRadius: 8, padding: "10px 12px", marginBottom: 8 }}>
+                            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: checkState[item.id]?.verified ? 8 : 0 }}>
+                              <input type="checkbox" checked={checkState[item.id]?.verified || false}
+                                onChange={e => setCheckState(p => ({ ...p, [item.id]: { ...p[item.id], verified: e.target.checked } }))}
+                                style={{ width: 16, height: 16, cursor: "pointer" }} />
+                              <span style={{ fontSize: 14, color: "#1e293b", flex: 1 }}>{item.item_text}</span>
+                              <span style={{ fontSize: 10, fontWeight: 700, padding: "2px 7px", borderRadius: 99, background:
+                                cat === "safety" ? "#fef2f2" : cat === "equipment" ? "#eff6ff" : cat === "reagent" ? "#f5f3ff" : "#f1f5f9",
+                                color: cat === "safety" ? "#dc2626" : cat === "equipment" ? "#1d4ed8" : cat === "reagent" ? "#7c3aed" : "#64748b",
+                              }}>{cat}</span>
+                            </div>
+                            {checkState[item.id]?.verified && (
+                              <div style={{ display: "flex", gap: 8, marginTop: 6 }}>
+                                <div style={{ flex: 1 }}>
+                                  <label style={{ fontSize: 10, fontWeight: 700, color: "#94a3b8", display: "block", marginBottom: 3 }}>LOT #</label>
+                                  <input type="text" value={checkState[item.id]?.lot_number || ""}
+                                    onChange={e => setCheckState(p => ({ ...p, [item.id]: { ...p[item.id], lot_number: e.target.value } }))}
+                                    placeholder="Lot number"
+                                    style={{ width: "100%", padding: "5px 8px", border: "1px solid #e2e8f0", borderRadius: 6, fontSize: 12, boxSizing: "border-box" }} />
+                                </div>
+                                <div style={{ flex: 1 }}>
+                                  <label style={{ fontSize: 10, fontWeight: 700, color: "#94a3b8", display: "block", marginBottom: 3 }}>EXPIRY</label>
+                                  <input type="date" value={checkState[item.id]?.expiry_date || ""}
+                                    onChange={e => setCheckState(p => ({ ...p, [item.id]: { ...p[item.id], expiry_date: e.target.value } }))}
+                                    style={{ width: "100%", padding: "5px 8px", border: "1px solid #e2e8f0", borderRadius: 6, fontSize: 12, boxSizing: "border-box" }} />
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    );
+                  })}
+                </>
+              )}
+            </div>
+          )}
+
+          {tab === "details" && (
+            <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+              <div>
+                <label style={{ fontSize: 12, fontWeight: 700, color: "#64748b", display: "block", marginBottom: 4 }}>OPERATOR NAME</label>
+                <input value={operatorName} onChange={e => setOperatorName(e.target.value)}
+                  style={{ width: "100%", padding: "9px 12px", border: "1px solid #e2e8f0", borderRadius: 8, fontSize: 14, boxSizing: "border-box" }} />
+              </div>
+              <div>
+                <label style={{ fontSize: 12, fontWeight: 700, color: "#64748b", display: "block", marginBottom: 4 }}>SAMPLE REFERENCE</label>
+                <input value={sampleRef} onChange={e => setSampleRef(e.target.value)} placeholder="Optional"
+                  style={{ width: "100%", padding: "9px 12px", border: "1px solid #e2e8f0", borderRadius: 8, fontSize: 14, boxSizing: "border-box" }} />
+              </div>
+              <div>
+                <label style={{ fontSize: 12, fontWeight: 700, color: "#64748b", display: "block", marginBottom: 4 }}>INSTRUMENT ID</label>
+                <input value={instrumentId} onChange={e => setInstrumentId(e.target.value)} placeholder="Optional"
+                  style={{ width: "100%", padding: "9px 12px", border: "1px solid #e2e8f0", borderRadius: 8, fontSize: 14, boxSizing: "border-box" }} />
+              </div>
+              <div style={{ display: "flex", gap: 10 }}>
+                <div style={{ flex: 1 }}>
+                  <label style={{ fontSize: 12, fontWeight: 700, color: "#64748b", display: "block", marginBottom: 4 }}>TEMPERATURE</label>
+                  <input type="number" value={temperature} onChange={e => setTemperature(e.target.value)} placeholder="Optional"
+                    style={{ width: "100%", padding: "9px 12px", border: "1px solid #e2e8f0", borderRadius: 8, fontSize: 14, boxSizing: "border-box" }} />
+                </div>
+                <div>
+                  <label style={{ fontSize: 12, fontWeight: 700, color: "#64748b", display: "block", marginBottom: 4 }}>UNIT</label>
+                  <div style={{ display: "flex", gap: 6, paddingTop: 2 }}>
+                    <button onClick={() => setTempUnit("celsius")}
+                      style={{ padding: "7px 12px", border: `1px solid ${tempUnit === "celsius" ? "#6366f1" : "#e2e8f0"}`, borderRadius: 7, background: tempUnit === "celsius" ? "#eef2ff" : "white", color: tempUnit === "celsius" ? "#6366f1" : "#64748b", cursor: "pointer", fontSize: 13, fontWeight: 600 }}>°C</button>
+                    <button onClick={() => setTempUnit("fahrenheit")}
+                      style={{ padding: "7px 12px", border: `1px solid ${tempUnit === "fahrenheit" ? "#6366f1" : "#e2e8f0"}`, borderRadius: 7, background: tempUnit === "fahrenheit" ? "#eef2ff" : "white", color: tempUnit === "fahrenheit" ? "#6366f1" : "#64748b", cursor: "pointer", fontSize: 13, fontWeight: 600 }}>°F</button>
+                  </div>
+                </div>
+              </div>
+              <div>
+                <label style={{ fontSize: 12, fontWeight: 700, color: "#64748b", display: "block", marginBottom: 4 }}>HUMIDITY %</label>
+                <input type="number" min={0} max={100} value={humidity} onChange={e => setHumidity(e.target.value)} placeholder="Optional"
+                  style={{ width: "100%", padding: "9px 12px", border: "1px solid #e2e8f0", borderRadius: 8, fontSize: 14, boxSizing: "border-box" }} />
+              </div>
+              <div>
+                <label style={{ fontSize: 12, fontWeight: 700, color: "#64748b", display: "block", marginBottom: 4 }}>CONTEXT NOTES</label>
+                <textarea value={contextNotes} onChange={e => setContextNotes(e.target.value)} rows={3} placeholder="Any additional context..."
+                  style={{ width: "100%", padding: "9px 12px", border: "1px solid #e2e8f0", borderRadius: 8, fontSize: 14, resize: "none", boxSizing: "border-box" }} />
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Footer */}
+        <div style={{ padding: "14px 24px", borderTop: "1px solid #f1f5f9", display: "flex", alignItems: "center", justifyContent: "space-between", flexShrink: 0 }}>
+          <span style={{ fontSize: 12, color: "#94a3b8" }}>{totalVerified} of {checklistItems.length} items verified</span>
+          <div style={{ display: "flex", gap: 10 }}>
+            <button onClick={onCancel}
+              style={{ padding: "9px 18px", background: "white", border: "1px solid #e2e8f0", borderRadius: 8, cursor: "pointer", fontSize: 14, color: "#64748b" }}>
+              Cancel
+            </button>
+            <button onClick={handleStart} disabled={starting || !allSafetyVerified}
+              style={{
+                padding: "9px 20px",
+                background: starting || !allSafetyVerified ? "#c7d2fe" : "#6366f1",
+                border: "none", borderRadius: 8, color: "white",
+                cursor: starting || !allSafetyVerified ? "not-allowed" : "pointer",
+                fontSize: 14, fontWeight: 700,
+              }}>
+              {starting ? "Starting..." : "Start Run →"}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── Badge helpers ────────────────────────────────────────────────────────────
 const STATUS_STYLES = {
   active: "bg-emerald-50 text-emerald-700 border border-emerald-200",
@@ -480,7 +689,7 @@ export default function ProtocolDetail() {
   const [activeTab, setActiveTab] = useState("overview");
   const [loading, setLoading] = useState(true);
   const [publishing, setPublishing] = useState(false);
-  const [editingMeasurementsStepId, setEditingMeasurementsStepId] = useState(null);
+  const [showPreRunModal, setShowPreRunModal] = useState(false);
 
   // Add step form
   const [showAddStep, setShowAddStep] = useState(false);
@@ -578,6 +787,52 @@ export default function ProtocolDetail() {
     setAddingItem(false);
   }
 
+  async function handleStartRun(proto, checklistData, runDetails) {
+    const user = await base44.auth.me();
+    const now = new Date().toISOString();
+
+    const stepsData = await base44.entities.ProtocolStep.filter({ protocol_id: proto.id, organization_id: orgId }, "step_order");
+    const sortedSteps = stepsData.sort((a, b) => a.step_order - b.step_order);
+
+    const run = await base44.entities.Run.create({
+      organization_id: orgId,
+      protocol_id: proto.id,
+      steps_snapshot: { steps: sortedSteps.map(s => ({ id: s.id, step_order: s.step_order, title: s.title, instruction: s.instruction, is_critical: s.is_critical, timing_mode: s.timing_mode, expected_duration_seconds: s.expected_duration_seconds, tolerance_lower_seconds: s.tolerance_lower_seconds, tolerance_upper_seconds: s.tolerance_upper_seconds, measurement_parameters: s.measurement_parameters || [] })) },
+      operator_user_id: user.id,
+      operator_name: runDetails.operator_name || user.full_name || user.email,
+      run_state: "in_progress",
+      run_started_at: now,
+      checklist_completed: checklistData,
+      sample_reference: runDetails.sample_reference || null,
+      instrument_id: runDetails.instrument_id || null,
+      temperature: runDetails.temperature || null,
+      temperature_unit: runDetails.temperature_unit || "celsius",
+      humidity: runDetails.humidity || null,
+      context_notes: runDetails.context_notes || null,
+    });
+
+    await Promise.all(sortedSteps.map(step => base44.entities.StepRun.create({
+      organization_id: orgId,
+      run_id: run.id,
+      step_id: step.id,
+      step_order: step.step_order,
+      step_state: "pending",
+    })));
+
+    await base44.entities.AuditLog.create({
+      organization_id: orgId,
+      entity_type: "Run",
+      entity_id: run.id,
+      event_type: "run_started",
+      actor_user_id: user.id,
+      actor_email: user.email,
+      metadata: { protocol_id: proto.id, step_count: sortedSteps.length },
+      created_at: now,
+    });
+
+    navigate(`/run-execution?id=${run.id}`);
+  }
+
   async function handlePublish() {
     setPublishing(true);
     const user = await base44.auth.me();
@@ -589,15 +844,7 @@ export default function ProtocolDetail() {
       version_number: protocol.version || 1,
       snapshot_json: {
         name: protocol.name,
-        steps: steps.map(s => ({
-          id: s.id, step_order: s.step_order, title: s.title, instruction: s.instruction,
-          is_critical: s.is_critical, timing_mode: s.timing_mode,
-          expected_duration_seconds: s.expected_duration_seconds,
-          tolerance_lower_seconds: s.tolerance_lower_seconds,
-          tolerance_upper_seconds: s.tolerance_upper_seconds,
-          requires_measurement: s.requires_measurement,
-          measurement_parameters: s.measurement_parameters,
-        })),
+        steps: steps.map(s => ({ id: s.id, step_order: s.step_order, title: s.title, instruction: s.instruction, is_critical: s.is_critical, timing_mode: s.timing_mode, expected_duration_seconds: s.expected_duration_seconds, tolerance_lower_seconds: s.tolerance_lower_seconds, tolerance_upper_seconds: s.tolerance_upper_seconds, requires_measurement: s.requires_measurement, measurement_parameters: s.measurement_parameters })),
         checklist: checklistItems,
         sections: protocol.sections_json || [],
         metadata: { classification: protocol.classification, compliance_tags: protocol.compliance_tags, estimated_duration_minutes: protocol.estimated_duration_minutes },
@@ -608,6 +855,7 @@ export default function ProtocolDetail() {
 
     await base44.entities.Protocol.update(protocol.id, { status: "active", version: newVer });
 
+    const now = new Date().toISOString();
     await base44.entities.AuditLog.create({
       organization_id: orgId,
       entity_type: "Protocol",
@@ -616,7 +864,7 @@ export default function ProtocolDetail() {
       actor_user_id: user.id,
       actor_email: user.email,
       metadata: { version_number: protocol.version || 1 },
-      created_at: new Date().toISOString(),
+      created_at: now,
     });
 
     setProtocol(p => ({ ...p, status: "active", version: newVer }));
@@ -833,7 +1081,7 @@ export default function ProtocolDetail() {
             </div>
           </div>
 
-          <Button className="w-full" onClick={() => navigate(`/pre-run?protocol_id=${protocol.id}`)}>
+          <Button className="w-full" onClick={() => setShowPreRunModal(true)}>
             <Play className="w-4 h-4 mr-2" />
             Start Run
           </Button>
@@ -845,6 +1093,16 @@ export default function ProtocolDetail() {
           )}
         </div>
       </div>
+
+      {showPreRunModal && (
+        <PreRunModal
+          protocol={protocol}
+          steps={steps}
+          checklistItems={checklistItems}
+          onStart={handleStartRun}
+          onCancel={() => setShowPreRunModal(false)}
+        />
+      )}
     </div>
   );
 }

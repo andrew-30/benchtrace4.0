@@ -1,0 +1,116 @@
+{
+  "name": "Run",
+  "type": "object",
+  "properties": {
+    "organization_id": {
+      "type": "string",
+      "title": "Organization ID"
+    },
+    "protocol_id": {
+      "type": "string",
+      "title": "Protocol ID"
+    },
+    "protocol_version_id": {
+      "type": "string",
+      "title": "Protocol Version ID"
+    },
+    "steps_snapshot": {
+      "type": "object",
+      "title": "Steps Snapshot",
+      "additionalProperties": true
+    },
+    "operator_user_id": {
+      "type": "string",
+      "title": "Operator User ID"
+    },
+    "operator_name": {
+      "type": "string",
+      "title": "Operator Name"
+    },
+    "run_state": {
+      "type": "string",
+      "title": "Run State",
+      "enum": [
+        "not_started",
+        "in_progress",
+        "completed",
+        "signed",
+        "abandoned"
+      ],
+      "default": "not_started"
+    },
+    "run_started_at": {
+      "type": "string",
+      "format": "date-time",
+      "title": "Run Started At"
+    },
+    "run_ended_at": {
+      "type": "string",
+      "format": "date-time",
+      "title": "Run Ended At"
+    },
+    "sample_reference": {
+      "type": "string",
+      "title": "Sample Reference"
+    },
+    "instrument_id": {
+      "type": "string",
+      "title": "Instrument ID"
+    },
+    "temperature": {
+      "type": "number",
+      "title": "Temperature"
+    },
+    "temperature_unit": {
+      "type": "string",
+      "title": "Temperature Unit",
+      "enum": [
+        "celsius",
+        "fahrenheit"
+      ],
+      "default": "celsius"
+    },
+    "humidity": {
+      "type": "number",
+      "title": "Humidity"
+    },
+    "context_notes": {
+      "type": "string",
+      "title": "Context Notes"
+    },
+    "checklist_completed": {
+      "type": "object",
+      "title": "Checklist Completed",
+      "additionalProperties": true
+    },
+    "is_signed_off": {
+      "type": "boolean",
+      "title": "Is Signed Off",
+      "default": false
+    },
+    "signed_off_at": {
+      "type": "string",
+      "format": "date-time",
+      "title": "Signed Off At"
+    },
+    "signed_off_by_user_id": {
+      "type": "string",
+      "title": "Signed Off By User ID"
+    },
+    "result_status": {
+      "type": "string",
+      "title": "Result Status",
+      "enum": [
+        "pass",
+        "fail",
+        "pending"
+      ],
+      "default": "pending"
+    }
+  },
+  "required": [
+    "organization_id",
+    "protocol_id",
+    "operator_user_id"
+  ]
+}

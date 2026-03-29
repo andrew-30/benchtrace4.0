@@ -1,0 +1,75 @@
+{
+  "name": "StepRun",
+  "type": "object",
+  "properties": {
+    "organization_id": {
+      "type": "string",
+      "title": "Organization ID"
+    },
+    "run_id": {
+      "type": "string",
+      "title": "Run ID"
+    },
+    "step_id": {
+      "type": "string",
+      "title": "Step ID"
+    },
+    "step_order": {
+      "type": "integer",
+      "title": "Step Order"
+    },
+    "step_state": {
+      "type": "string",
+      "title": "Step State",
+      "enum": [
+        "pending",
+        "active",
+        "completed",
+        "skipped"
+      ],
+      "default": "pending"
+    },
+    "step_started_at": {
+      "type": "string",
+      "format": "date-time",
+      "title": "Step Started At"
+    },
+    "step_completed_at": {
+      "type": "string",
+      "format": "date-time",
+      "title": "Step Completed At"
+    },
+    "measurement_value": {
+      "type": "number",
+      "title": "Measurement Value"
+    },
+    "measurement_unit": {
+      "type": "string",
+      "title": "Measurement Unit"
+    },
+    "measurement_values": {
+      "type": "object",
+      "title": "Measurement Values",
+      "additionalProperties": true
+    },
+    "notes": {
+      "type": "string",
+      "title": "Notes"
+    },
+    "timer_elapsed_seconds": {
+      "type": "integer",
+      "title": "Timer Elapsed Seconds"
+    },
+    "deviation_flagged": {
+      "type": "boolean",
+      "title": "Deviation Flagged",
+      "default": false
+    }
+  },
+  "required": [
+    "organization_id",
+    "run_id",
+    "step_id",
+    "step_order"
+  ]
+}

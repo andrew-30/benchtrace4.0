@@ -14,6 +14,8 @@ import Protocols from './pages/Protocols';
 import ProtocolDetail from './pages/ProtocolDetail';
 import Import from './pages/Import';
 import Runs from './pages/Runs';
+import RunExecution from './pages/RunExecution';
+import RunDetail from './pages/RunDetail';
 
 const AuthenticatedApp = () => {
   const { isLoadingAuth, isLoadingPublicSettings, authError, navigateToLogin } = useAuth();
@@ -46,6 +48,8 @@ const AuthenticatedApp = () => {
         <Route path="/protocol-detail" element={<ProtocolDetail />} />
         <Route path="/import" element={<Import />} />
         <Route path="/runs" element={<Runs />} />
+        <Route path="/run-execution" element={<RunExecution />} />
+        <Route path="/run-detail" element={<RunDetail />} />
       </Route>
       <Route path="*" element={<PageNotFound />} />
     </Routes>
