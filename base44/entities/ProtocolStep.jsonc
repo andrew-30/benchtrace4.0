@@ -1,0 +1,95 @@
+{
+  "name": "ProtocolStep",
+  "type": "object",
+  "properties": {
+    "organization_id": {
+      "type": "string",
+      "title": "Organization ID"
+    },
+    "protocol_id": {
+      "type": "string",
+      "title": "Protocol ID"
+    },
+    "step_order": {
+      "type": "integer",
+      "title": "Step Order"
+    },
+    "title": {
+      "type": "string",
+      "title": "Title"
+    },
+    "instruction": {
+      "type": "string",
+      "title": "Instruction"
+    },
+    "is_critical": {
+      "type": "boolean",
+      "title": "Is Critical",
+      "default": false
+    },
+    "timing_mode": {
+      "type": "string",
+      "title": "Timing Mode",
+      "enum": [
+        "none",
+        "advisory",
+        "strict"
+      ],
+      "default": "none"
+    },
+    "expected_duration_seconds": {
+      "type": "integer",
+      "title": "Expected Duration (seconds)"
+    },
+    "tolerance_lower_seconds": {
+      "type": "integer",
+      "title": "Tolerance Lower (seconds)",
+      "default": 0
+    },
+    "tolerance_upper_seconds": {
+      "type": "integer",
+      "title": "Tolerance Upper (seconds)",
+      "default": 0
+    },
+    "requires_measurement": {
+      "type": "boolean",
+      "title": "Requires Measurement",
+      "default": false
+    },
+    "measurement_unit": {
+      "type": "string",
+      "title": "Measurement Unit"
+    },
+    "measurement_parameters": {
+      "type": "array",
+      "title": "Measurement Parameters",
+      "items": {
+        "type": "object",
+        "additionalProperties": true,
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "unit": {
+            "type": "string"
+          },
+          "min_value": {
+            "type": "number"
+          },
+          "max_value": {
+            "type": "number"
+          },
+          "required": {
+            "type": "boolean"
+          }
+        }
+      }
+    }
+  },
+  "required": [
+    "organization_id",
+    "protocol_id",
+    "step_order",
+    "instruction"
+  ]
+}
