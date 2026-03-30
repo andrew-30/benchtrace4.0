@@ -745,58 +745,73 @@ export default function ProtocolDetail() {
 
   async function handleDeleteStep(stepId) {
     if (!window.confirm("Delete this step? This cannot be undone.")) return;
-    await base44.entities.ProtocolStep.delete(stepId);
-    const remaining = steps.filter(s => s.id !== stepId).sort((a, b) => a.step_order - b.step_order);
-    await Promise.all(remaining.map((s, i) => base44.entities.ProtocolStep.update(s.id, { step_order: i + 1 })));
-    setSteps(remaining.map((s, i) => ({ ...s, step_order: i + 1 })));
+    try {
+      await base44.entities.ProtocolStep.delete(stepId);
+      const freshSteps = await base44.entities.ProtocolStep.filter({ protocol_id: protocol.id, organization_id: orgId });
+      const sortedFresh = freshSteps.sort((a, b) => a.step_order - b.step_order);
+      await Promise.all(sortedFresh.map((s, i) => base44.entities.ProtocolStep.update(s.id, { step_order: i + 1 })));
+      const reloaded = await base44.entities.ProtocolStep.filter({ protocol_id: protocol.id, organization_id: orgId });
+      setSteps(reloaded.sort((a, b) => a.step_order - b.step_order));
+    } catch(e) {
+      console.error('Delete step failed:', e);
+      alert('Failed to delete step: ' + (e.message || 'Unknown error'));
+    }
   }
 
   async function handleAddStep(afterStepOrder = null) {
-    const sortedSteps = [...steps].sort((a, b) => a.step_order - b.step_order);
-    const insertAt = afterStepOrder !== null ? afterStepOrder + 1 : sortedSteps.length + 1;
-    const stepsToShift = sortedSteps.filter(s => s.step_order >= insertAt);
-    await Promise.all(stepsToShift.map(s => base44.entities.ProtocolStep.update(s.id, { step_order: s.step_order + 1 })));
-    const newStep = await base44.entities.ProtocolStep.create({
-      organization_id: orgId,
-      protocol_id: protocolId,
-      step_order: insertAt,
-      instruction: "New step — click to edit",
-      title: "",
-      is_critical: false,
-      timing_mode: "none",
-    });
-    setSteps(prev => [
-      ...prev.map(s => s.step_order >= insertAt ? { ...s, step_order: s.step_order + 1 } : s),
-      { ...newStep },
-    ].sort((a, b) => a.step_order - b.step_order));
-    setEditingStepId(newStep.id);
-    setEditingStepTitle("");
-    setEditingStepInstruction("New step — click to edit");
+    try {
+      const freshSteps = await base44.entities.ProtocolStep.filter({ protocol_id: protocol.id, organization_id: orgId });
+      const sortedFresh = freshSteps.sort((a, b) => a.step_order - b.step_order);
+      const insertAt = afterStepOrder !== null ? afterStepOrder + 1 : sortedFresh.length + 1;
+      const stepsToShift = sortedFresh.filter(s => s.step_order >= insertAt);
+      await Promise.all(stepsToShift.map(s => base44.entities.ProtocolStep.update(s.id, { step_order: s.step_order + 1 })));
+      const newStep = await base44.entities.ProtocolStep.create({
+        organization_id: orgId,
+        protocol_id: protocolId,
+        step_order: insertAt,
+        instruction: "New step — click to edit",
+        title: "",
+        is_critical: false,
+        timing_mode: "none",
+      });
+      const reloaded = await base44.entities.ProtocolStep.filter({ protocol_id: protocol.id, organization_id: orgId });
+      setSteps(reloaded.sort((a, b) => a.step_order - b.step_order));
+      setEditingStepId(newStep.id);
+      setEditingStepTitle("");
+      setEditingStepInstruction("New step — click to edit");
+    } catch(e) {
+      console.error('Add step failed:', e);
+      alert('Failed to add step: ' + (e.message || 'Unknown error'));
+    }
   }
 
   async function handleDuplicateStep(step) {
-    const sortedSteps = [...steps].sort((a, b) => a.step_order - b.step_order);
-    const insertAt = step.step_order + 1;
-    const stepsToShift = sortedSteps.filter(s => s.step_order >= insertAt);
-    await Promise.all(stepsToShift.map(s => base44.entities.ProtocolStep.update(s.id, { step_order: s.step_order + 1 })));
-    const duplicate = await base44.entities.ProtocolStep.create({
-      organization_id: orgId,
-      protocol_id: protocolId,
-      step_order: insertAt,
-      title: step.title || "",
-      instruction: step.instruction,
-      is_critical: step.is_critical || false,
-      timing_mode: step.timing_mode || "none",
-      expected_duration_seconds: step.expected_duration_seconds || null,
-      tolerance_lower_seconds: step.tolerance_lower_seconds || 0,
-      tolerance_upper_seconds: step.tolerance_upper_seconds || 0,
-      requires_measurement: step.requires_measurement || false,
-      measurement_parameters: step.measurement_parameters || [],
-    });
-    setSteps(prev => [
-      ...prev.map(s => s.step_order >= insertAt ? { ...s, step_order: s.step_order + 1 } : s),
-      { ...duplicate },
-    ].sort((a, b) => a.step_order - b.step_order));
+    try {
+      const freshSteps = await base44.entities.ProtocolStep.filter({ protocol_id: protocol.id, organization_id: orgId });
+      const sortedFresh = freshSteps.sort((a, b) => a.step_order - b.step_order);
+      const insertAt = step.step_order + 1;
+      const stepsToShift = sortedFresh.filter(s => s.step_order >= insertAt && s.id !== step.id);
+      await Promise.all(stepsToShift.map(s => base44.entities.ProtocolStep.update(s.id, { step_order: s.step_order + 1 })));
+      await base44.entities.ProtocolStep.create({
+        organization_id: orgId,
+        protocol_id: protocol.id,
+        step_order: insertAt,
+        title: step.title || "",
+        instruction: step.instruction || "",
+        is_critical: step.is_critical || false,
+        timing_mode: step.timing_mode || "none",
+        expected_duration_seconds: step.expected_duration_seconds || null,
+        tolerance_lower_seconds: step.tolerance_lower_seconds || 0,
+        tolerance_upper_seconds: step.tolerance_upper_seconds || 0,
+        requires_measurement: step.requires_measurement || false,
+        measurement_parameters: step.measurement_parameters || [],
+      });
+      const reloaded = await base44.entities.ProtocolStep.filter({ protocol_id: protocol.id, organization_id: orgId });
+      setSteps(reloaded.sort((a, b) => a.step_order - b.step_order));
+    } catch(e) {
+      console.error('Duplicate step failed:', e);
+      alert('Failed to duplicate step: ' + (e.message || 'Unknown error'));
+    }
   }
 
   async function handleToggleCritical(step) {
