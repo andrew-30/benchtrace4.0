@@ -23,8 +23,10 @@ export default function AppLayout() {
 
       if (cachedOrgId) {
         const orgData = await base44.entities.Organization.filter({ id: cachedOrgId });
-        setOrg(orgData?.[0] || null);
+        const org = orgData?.[0] || null;
+        setOrg(org);
         setRole(localStorage.getItem("bt_role"));
+        if (org?.timezone) localStorage.setItem("bt_tz", org.timezone);
         setLoading(false);
         if (location.pathname === "/") navigate("/dashboard", { replace: true });
         return;
@@ -47,6 +49,7 @@ export default function AppLayout() {
 
       localStorage.setItem("bt_org_id", membership.organization_id);
       localStorage.setItem("bt_role", membership.role);
+      if (orgData?.[0]?.timezone) localStorage.setItem("bt_tz", orgData[0].timezone);
 
       setOrg(orgData?.[0] || null);
       setRole(membership.role);
