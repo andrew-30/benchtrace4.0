@@ -153,6 +153,7 @@ export default function RunDetail() {
   const [mergedSteps, setMergedSteps] = useState([]);
   const [deviations, setDeviations] = useState([]);
   const [auditLogs, setAuditLogs] = useState([]);
+  const [checklistItems, setChecklistItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState("overview");
   const [currentUser, setCurrentUser] = useState(null);
@@ -185,7 +186,11 @@ export default function RunDetail() {
       const proto = await base44.entities.Protocol.filter({ organization_id: orgId, id: r.protocol_id });
       setProtocol(proto?.[0] || null);
 
-      const stepsData = await base44.entities.ProtocolStep.filter({ organization_id: orgId, protocol_id: r.protocol_id });
+      const [stepsData, checklistData] = await Promise.all([
+        base44.entities.ProtocolStep.filter({ organization_id: orgId, protocol_id: r.protocol_id }),
+        base44.entities.ProtocolChecklistItem.filter({ organization_id: orgId, protocol_id: r.protocol_id }),
+      ]);
+      setChecklistItems((checklistData || []).sort((a, b) => (a.item_order || 0) - (b.item_order || 0)));
 
       const merged = (stepRunsData || [])
         .sort((a, b) => a.step_order - b.step_order)
@@ -321,6 +326,87 @@ export default function RunDetail() {
               </div>
             )}
           </div>
+
+          {/* Materials Used */}
+          {checklistItems.length > 0 && run.checklist_completed && (() => {
+            const getExpiryStatus = (expiryDateStr) => {
+              if (!expiryDateStr) return null;
+              const expiry = new Date(expiryDateStr);
+              const daysUntil = Math.floor((expiry - new Date()) / (1000 * 60 * 60 * 24));
+              if (daysUntil < 0) return { type: "expired", label: `Expired ${Math.abs(daysUntil)}d ago`, color: "#dc2626", bg: "#fef2f2", border: "#fecaca" };
+              if (daysUntil <= 7) return { type: "critical", label: `Expires in ${daysUntil}d`, color: "#dc2626", bg: "#fef2f2", border: "#fecaca" };
+              if (daysUntil <= 30) return { type: "warning", label: `Expires in ${daysUntil}d`, color: "#d97706", bg: "#fffbeb", border: "#fde68a" };
+              return { type: "ok", label: `Exp: ${new Date(expiryDateStr).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })}`, color: "#16a34a", bg: "#f0fdf4", border: "#bbf7d0" };
+            };
+            const CATEGORY_CONFIG = {
+              safety:    { label: "Safety",    icon: "🛡", color: "#dc2626", border: "#fecaca", leftBorder: "#ef4444" },
+              equipment: { label: "Equipment", icon: "⚙️",  color: "#1d4ed8", border: "#bfdbfe", leftBorder: "#3b82f6" },
+              reagent:   { label: "Reagents",  icon: "🧪", color: "#16a34a", border: "#bbf7d0", leftBorder: "#10b981" },
+              other:     { label: "Other",     icon: "📋", color: "#475569", border: "#e2e8f0", leftBorder: "#94a3b8" },
+            };
+            const total = checklistItems.length;
+            const verifiedCount = checklistItems.filter(item => run.checklist_completed[item.id]?.verified).length;
+            const withLot = checklistItems.filter(item => run.checklist_completed[item.id]?.lot_number).length;
+            const expired = checklistItems.filter(item => { const exp = run.checklist_completed[item.id]?.expiry_date; return exp && new Date(exp) < new Date(); }).length;
+            return (
+              <div style={{ background: "white", borderRadius: 10, border: "1px solid #e2e8f0", padding: "16px 20px" }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 14, display: "flex", alignItems: "center", gap: 8 }}>
+                  🧪 Materials Used in This Run
+                  <span style={{ fontSize: 11, color: "#94a3b8", fontWeight: 400, textTransform: "none" }}>— captured at run start</span>
+                </div>
+                {["safety", "equipment", "reagent", "other"].map(category => {
+                  const categoryItems = checklistItems.filter(i => i.category === category);
+                  if (categoryItems.length === 0) return null;
+                  const cfg = CATEGORY_CONFIG[category];
+                  return (
+                    <div key={category} style={{ marginBottom: 12 }}>
+                      <div style={{ fontSize: 10, fontWeight: 700, color: cfg.color, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6 }}>
+                        {cfg.icon} {cfg.label} ({categoryItems.length})
+                      </div>
+                      <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
+                        {categoryItems.map(item => {
+                          const itemState = run.checklist_completed[item.id] || {};
+                          const expiryStatus = getExpiryStatus(itemState.expiry_date);
+                          const verified = itemState.verified;
+                          return (
+                            <div key={item.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 12px", background: "white", border: `1px solid ${cfg.border}`, borderLeft: `3px solid ${cfg.leftBorder}`, borderRadius: 7 }}>
+                              <span style={{ fontSize: 14, flexShrink: 0, color: verified ? "#16a34a" : "#94a3b8" }}>{verified ? "✓" : "○"}</span>
+                              <div style={{ flex: 1, minWidth: 0 }}>
+                                <div style={{ fontSize: 13, color: verified ? "#1e293b" : "#94a3b8", fontWeight: verified ? 500 : 400 }}>
+                                  {item.item_text}
+                                  {!verified && <span style={{ fontSize: 10, color: "#94a3b8", marginLeft: 6, fontStyle: "italic" }}>not verified</span>}
+                                </div>
+                                {verified && (itemState.lot_number || itemState.expiry_date) && (
+                                  <div style={{ display: "flex", gap: 8, marginTop: 3, flexWrap: "wrap", alignItems: "center" }}>
+                                    {itemState.lot_number && (
+                                      <span style={{ fontSize: 10, fontWeight: 600, padding: "1px 7px", borderRadius: 4, background: "#f1f5f9", color: "#475569", border: "1px solid #e2e8f0", fontFamily: "monospace" }}>Lot: {itemState.lot_number}</span>
+                                    )}
+                                    {expiryStatus && (
+                                      <span style={{ fontSize: 10, fontWeight: 700, padding: "1px 7px", borderRadius: 4, background: expiryStatus.bg, color: expiryStatus.color, border: `1px solid ${expiryStatus.border}` }}>
+                                        {expiryStatus.type === "expired" ? "🚫" : expiryStatus.type === "ok" ? "✓" : "⚠️"} {expiryStatus.label}
+                                      </span>
+                                    )}
+                                  </div>
+                                )}
+                              </div>
+                              {verified && !itemState.lot_number && !itemState.expiry_date && category !== "safety" && (
+                                <span style={{ fontSize: 10, color: "#94a3b8", fontStyle: "italic", flexShrink: 0 }}>no lot recorded</span>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                })}
+                <div style={{ padding: "8px 12px", background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 7, display: "flex", gap: 20, flexWrap: "wrap" }}>
+                  <span style={{ fontSize: 11, color: "#475569" }}><strong style={{ color: "#1e293b" }}>{verifiedCount}/{total}</strong> items verified</span>
+                  <span style={{ fontSize: 11, color: "#475569" }}><strong style={{ color: "#1e293b" }}>{withLot}</strong> lot numbers recorded</span>
+                  {expired > 0 && <span style={{ fontSize: 11, color: "#dc2626", fontWeight: 700 }}>⚠ {expired} expired item{expired > 1 ? "s" : ""} used</span>}
+                </div>
+              </div>
+            );
+          })()}
 
           {/* Progress summary */}
           <div style={{ background: "white", borderRadius: 10, border: "1px solid #e2e8f0", padding: "16px 20px" }}>
