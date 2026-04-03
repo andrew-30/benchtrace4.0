@@ -198,6 +198,139 @@ async function extractDocxText(file) {
     .replace(/&#x2013;/g, "–").replace(/&#x2019;/g, "'");
 }
 
+// ── Template downloader ─────────────────────────────────────────────────────
+async function downloadSectorTemplate(classification) {
+  const TEMPLATES = {
+    'Academic Research': [
+      { heading: '1. Objective', lines: ['Describe the purpose of this protocol in 1-2 sentences.'], isExecution: false },
+      { heading: '2. Materials and Equipment', lines: ['Reagents:', '• [Reagent name — Lot#, Expiry]', '• [Reagent name — Lot#, Expiry]', '', 'Equipment:', '• [Equipment name — Calibration date]', '• [Equipment name]'], isExecution: false },
+      { heading: '3. Methods', lines: ['3.1 [First Step Group]', '1. [Step instruction]', '2. [Step instruction]', '3. [Step instruction]', '', '3.2 [Second Step Group]', '1. [Step instruction]', '2. [Step instruction]'], isExecution: true },
+      { heading: '4. Data Analysis', lines: ['Describe how results should be analysed and interpreted.'], isExecution: false },
+      { heading: '5. References', lines: ['[List any references here]'], isExecution: false }
+    ],
+    'Clinical Diagnostic': [
+      { heading: '1. Purpose', lines: ['Describe the intended use of this test.'], isExecution: false },
+      { heading: '2. Specimen Requirements', lines: ['• Sample type: [blood/urine/swab]', '• Volume required: [amount]', '• Storage conditions: [temperature, time]'], isExecution: false },
+      { heading: '3. Reagents and Equipment', lines: ['Reagents:', '• [Reagent — Lot#, Expiry]', '', 'Equipment:', '• [Equipment — ID, Calibration due]'], isExecution: false },
+      { heading: '4. Test Procedure', lines: ['1. [Step instruction]', '2. [Step instruction]', '3. [Step instruction]', '4. [Step instruction]'], isExecution: true },
+      { heading: '5. Quality Control', lines: ['• Positive control: [expected range]', '• Negative control: [expected value]'], isExecution: false },
+      { heading: '6. Result Interpretation', lines: ['[Criteria for positive/negative/invalid results]'], isExecution: false }
+    ],
+    'GMP Manufacturing': [
+      { heading: '1. Scope', lines: ['Define what this SOP covers.'], isExecution: false },
+      { heading: '2. Responsibilities', lines: ['• [Role]: [Responsibility]', '• [Role]: [Responsibility]'], isExecution: false },
+      { heading: '3. Materials and Equipment', lines: ['Materials:', '• [Material — Lot#, Quantity]', '', 'Equipment:', '• [Equipment ID — Calibration date]'], isExecution: false },
+      { heading: '4. Safety Considerations', lines: ['• [PPE required]', '• [Hazards and precautions]'], isExecution: false },
+      { heading: '5. Manufacturing Instructions', lines: ['5.1 [Phase 1]', '1. [Step instruction]', '2. [Step instruction]', '', '5.2 [Phase 2]', '1. [Step instruction]', '2. [Step instruction]'], isExecution: true },
+      { heading: '6. In-Process Controls', lines: ['• [Parameter]: [Acceptable range]'], isExecution: false },
+      { heading: '7. Documentation', lines: ['[Records to complete and retention period]'], isExecution: false }
+    ],
+    'ISO Accredited': [
+      { heading: '1. Scope', lines: ['Define the scope and applicable range of this method.'], isExecution: false },
+      { heading: '2. Equipment and Materials', lines: ['Equipment:', '• [Equipment — Model, Calibration due]', '', 'Standards/Reagents:', '• [Standard — Lot#, Traceability certificate]'], isExecution: false },
+      { heading: '3. Test Method', lines: ['3.1 Sample Preparation', '1. [Step instruction]', '2. [Step instruction]', '', '3.2 Measurement Procedure', '1. [Step instruction]', '2. [Step instruction]'], isExecution: true },
+      { heading: '4. Measurement Uncertainty', lines: ['[Uncertainty components and combined uncertainty value]'], isExecution: false },
+      { heading: '5. Records Retention', lines: ['[Records required and retention period]'], isExecution: false }
+    ],
+    'CRO Study': [
+      { heading: '1. Objective', lines: ['State the primary and secondary objectives.'], isExecution: false },
+      { heading: '2. Study Design', lines: ['• Study type: [in vitro/in vivo/clinical]', '• Replicates: n=[X]', '• Controls: [types]'], isExecution: false },
+      { heading: '3. Materials', lines: ['Test Articles:', '• [Compound — Lot#, Purity]', '', 'Equipment:', '• [Equipment — ID]'], isExecution: false },
+      { heading: '4. Study Procedure', lines: ['4.1 Sample Preparation', '1. [Step instruction]', '2. [Step instruction]', '', '4.2 Assay Execution', '1. [Step instruction]', '2. [Step instruction]'], isExecution: true },
+      { heading: '5. Deliverables', lines: ['• [Report type — timeline]', '• [Data package — format]'], isExecution: false }
+    ],
+    'Biotech Startup': [
+      { heading: 'Objective', lines: ['What this protocol achieves in 1-2 sentences.'], isExecution: false },
+      { heading: 'Materials', lines: ['Reagents:', '• [Reagent]', '• [Reagent]', '', 'Equipment:', '• [Equipment]'], isExecution: false },
+      { heading: 'Steps', lines: ['1. [Step instruction]', '2. [Step instruction]', '3. [Step instruction]', '4. [Step instruction]'], isExecution: true },
+      { heading: 'Expected Results', lines: ['[What success looks like]'], isExecution: false },
+      { heading: 'Troubleshooting', lines: ['• Problem: [issue] → Solution: [fix]'], isExecution: false }
+    ],
+    'General': [
+      { heading: '1. Purpose', lines: ['What this protocol achieves.'], isExecution: false },
+      { heading: '2. Materials', lines: ['Reagents:', '• [Item]', '', 'Equipment:', '• [Item]'], isExecution: false },
+      { heading: '3. Procedure', lines: ['1. [Step instruction]', '2. [Step instruction]', '3. [Step instruction]'], isExecution: true },
+      { heading: '4. Notes', lines: ['[Additional information]'], isExecution: false }
+    ]
+  };
+
+  const sections = TEMPLATES[classification] || TEMPLATES['General'];
+  const escXml = s => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+
+  let body = '';
+  body += `<w:p><w:pPr><w:pStyle w:val="Title"/></w:pPr><w:r><w:t>[Protocol Title]</w:t></w:r></w:p>`;
+  body += `<w:p><w:r><w:rPr><w:color w:val="888888"/><w:sz w:val="20"/></w:rPr><w:t>Classification: ${escXml(classification)} | BenchTrace 4.0 Template</w:t></w:r></w:p>`;
+  body += `<w:p><w:r><w:t xml:space="preserve"> </w:t></w:r></w:p>`;
+
+  for (const section of sections) {
+    body += `<w:p><w:pPr><w:pStyle w:val="Heading1"/></w:pPr><w:r><w:t>${escXml(section.heading)}</w:t></w:r></w:p>`;
+    if (section.isExecution) {
+      body += `<w:p><w:r><w:rPr><w:color w:val="4F46E5"/><w:i/><w:sz w:val="18"/></w:rPr><w:t>BenchTrace extracts execution steps from this section. Use numbered subsections (3.1, 3.2) with bullet points for best results.</w:t></w:r></w:p>`;
+      body += `<w:p><w:r><w:t xml:space="preserve"> </w:t></w:r></w:p>`;
+    }
+    for (const line of section.lines) {
+      body += `<w:p><w:r><w:t xml:space="preserve">${escXml(line)}</w:t></w:r></w:p>`;
+    }
+    body += `<w:p><w:r><w:t xml:space="preserve"> </w:t></w:r></w:p>`;
+  }
+
+  const documentXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><w:body>${body}<w:sectPr><w:pgSz w:w="12240" w:h="15840"/><w:pgMar w:top="1440" w:right="1440" w:bottom="1440" w:left="1440"/></w:sectPr></w:body></w:document>`;
+  const stylesXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:docDefaults><w:rPrDefault><w:rPr><w:rFonts w:ascii="Calibri" w:hAnsi="Calibri"/><w:sz w:val="22"/></w:rPr></w:rPrDefault></w:docDefaults><w:style w:type="paragraph" w:default="1" w:styleId="Normal"><w:name w:val="Normal"/></w:style><w:style w:type="paragraph" w:styleId="Title"><w:name w:val="Title"/><w:pPr><w:jc w:val="center"/><w:spacing w:after="120"/></w:pPr><w:rPr><w:b/><w:sz w:val="56"/><w:szCs w:val="56"/><w:color w:val="1E293B"/></w:rPr></w:style><w:style w:type="paragraph" w:styleId="Heading1"><w:name w:val="heading 1"/><w:basedOn w:val="Normal"/><w:pPr><w:spacing w:before="360" w:after="120"/></w:pPr><w:rPr><w:b/><w:sz w:val="28"/><w:szCs w:val="28"/><w:color w:val="1E293B"/></w:rPr></w:style></w:styles>`;
+  const contentTypesXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/><Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/></Types>`;
+  const relsXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/></Relationships>`;
+  const wordRelsXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>`;
+
+  const enc = new TextEncoder();
+  const files = [
+    { name: '[Content_Types].xml', data: enc.encode(contentTypesXml) },
+    { name: '_rels/.rels', data: enc.encode(relsXml) },
+    { name: 'word/document.xml', data: enc.encode(documentXml) },
+    { name: 'word/styles.xml', data: enc.encode(stylesXml) },
+    { name: 'word/_rels/document.xml.rels', data: enc.encode(wordRelsXml) },
+  ];
+
+  const crc32 = (buf) => {
+    const table = new Uint32Array(256);
+    for (let i = 0; i < 256; i++) { let c = i; for (let j = 0; j < 8; j++) c = (c & 1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1); table[i] = c; }
+    let crc = 0xFFFFFFFF;
+    for (let i = 0; i < buf.length; i++) crc = table[(crc ^ buf[i]) & 0xFF] ^ (crc >>> 8);
+    return (crc ^ 0xFFFFFFFF) >>> 0;
+  };
+  const u16 = (n) => [n & 0xFF, (n >> 8) & 0xFF];
+  const u32 = (n) => [n & 0xFF, (n >> 8) & 0xFF, (n >> 16) & 0xFF, (n >> 24) & 0xFF];
+
+  const localHeaders = [], centralDir = [];
+  let offset = 0;
+  for (const file of files) {
+    const nameBytes = enc.encode(file.name);
+    const crc = crc32(file.data);
+    const size = file.data.length;
+    const localHeader = new Uint8Array([0x50,0x4B,0x03,0x04,0x14,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,...u32(crc),...u32(size),...u32(size),...u16(nameBytes.length),0x00,0x00,...nameBytes]);
+    localHeaders.push({ header: localHeader, data: file.data });
+    const centralEntry = new Uint8Array([0x50,0x4B,0x01,0x02,0x14,0x00,0x14,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,...u32(crc),...u32(size),...u32(size),...u16(nameBytes.length),0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,...u32(offset),...nameBytes]);
+    centralDir.push(centralEntry);
+    offset += localHeader.length + file.data.length;
+  }
+  const centralSize = centralDir.reduce((s, e) => s + e.length, 0);
+  const eocd = new Uint8Array([0x50,0x4B,0x05,0x06,0x00,0x00,0x00,0x00,...u16(files.length),...u16(files.length),...u32(centralSize),...u32(offset),0x00,0x00]);
+  const totalSize = localHeaders.reduce((s, f) => s + f.header.length + f.data.length, 0) + centralDir.reduce((s, e) => s + e.length, 0) + eocd.length;
+  const zip = new Uint8Array(totalSize);
+  let pos = 0;
+  for (const f of localHeaders) { zip.set(f.header, pos); pos += f.header.length; zip.set(f.data, pos); pos += f.data.length; }
+  for (const e of centralDir) { zip.set(e, pos); pos += e.length; }
+  zip.set(eocd, pos);
+
+  const blob = new Blob([zip], { type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `BenchTrace_${(classification || 'General').replace(/[\s\/]+/g, '_')}_Template.docx`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
 // ── Sector cards data ────────────────────────────────────────────────────────
 
 const SECTORS = [
@@ -254,6 +387,7 @@ export default function Import() {
 
   const [step, setStep] = useState(1);
   const [classification, setClassification] = useState("");
+  const [showParserGuide, setShowParserGuide] = useState(false);
   const [inputMode, setInputMode] = useState("upload"); // upload | paste
   const [file, setFile] = useState(null);
   const [pasteText, setPasteText] = useState("");
@@ -416,6 +550,15 @@ export default function Import() {
               </button>
             ))}
           </div>
+          {classification && (
+            <div style={{ marginTop: 20, padding: '14px 18px', background: '#f0f4ff', borderRadius: 10, border: '1px solid #c7d2fe', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16 }}>
+              <div>
+                <div style={{ fontSize: 13, fontWeight: 700, color: '#4338ca', marginBottom: 3 }}>Download {classification} Template</div>
+                <div style={{ fontSize: 12, color: '#6366f1' }}>Pre-structured .docx — optimised for BenchTrace parser. Fill it in and upload for best results.</div>
+              </div>
+              <button onClick={() => downloadSectorTemplate(classification)} style={{ padding: '8px 18px', background: '#6366f1', color: 'white', border: 'none', borderRadius: 7, fontSize: 13, fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0 }}>↓ Download Template</button>
+            </div>
+          )}
           <Button onClick={() => setStep(2)} disabled={!classification}>
             Continue <ChevronRight className="w-4 h-4 ml-1" />
           </Button>
@@ -434,6 +577,39 @@ export default function Import() {
                 {mode === "upload" ? "Upload File" : "Paste Text"}
               </button>
             ))}
+          </div>
+
+          {/* Parser guide */}
+          <div style={{ marginBottom: 0 }}>
+            <button onClick={() => setShowParserGuide(prev => !prev)}
+              style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '10px 14px', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: showParserGuide ? '8px 8px 0 0' : 8, cursor: 'pointer', textAlign: 'left', fontSize: 13, color: '#475569', fontWeight: 600 }}>
+              <span style={{ fontSize: 15 }}>ℹ</span>
+              <span>How BenchTrace detects your steps</span>
+              <span style={{ marginLeft: 'auto', fontSize: 12, color: '#94a3b8' }}>{showParserGuide ? '▲ hide' : '▼ show'}</span>
+            </button>
+            {showParserGuide && (
+              <div style={{ padding: '16px 18px', background: '#f8fafc', border: '1px solid #e2e8f0', borderTop: 'none', borderRadius: '0 0 8px 8px' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                  {[
+                    { icon: '📋', title: 'Numbered subsections → step group titles', example: '3.1 RNA Quality Assessment, 3.2 Reverse Transcription...', detail: 'Each numbered subsection becomes a step group label shown in the execution screen' },
+                    { icon: '•', title: 'Bullet points under subsections → individual steps', example: '• Measure RNA concentration\n• Assess RNA integrity', detail: 'Each bullet becomes one executable step. Use "Individual Steps" mode for this.' },
+                    { icon: '⏱', title: 'Time mentions → advisory timer auto-set', example: '"Incubate for 5 minutes", "centrifuge for 30 sec"', detail: 'Duration is extracted and set as an advisory countdown timer on that step' },
+                    { icon: '⚠', title: '"critical", "warning", "do not" → step flagged critical', example: '"Do not exceed 42°C", "Critical: maintain cold chain"', detail: 'Step is highlighted in red and operators are alerted during execution' },
+                    { icon: '🧪', title: 'Materials section → pre-run checklist', example: 'Reagents: RNA kit, SYBR Green...\nEquipment: Centrifuge, qPCR...', detail: 'Reagents and equipment are captured as checklist items with lot number and expiry fields' },
+                    { icon: '📄', title: 'Tip: use our template for best results', example: `Download the ${classification || 'sector'} template from Step 1`, detail: 'Templates are pre-structured with the exact section headers our parser expects' },
+                  ].map((item, i) => (
+                    <div key={i} style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
+                      <span style={{ fontSize: 16, flexShrink: 0, width: 24, textAlign: 'center', marginTop: 1 }}>{item.icon}</span>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ fontSize: 12, fontWeight: 700, color: '#1e293b', marginBottom: 2 }}>{item.title}</div>
+                        <div style={{ fontSize: 11, color: '#6366f1', fontFamily: 'monospace', background: '#eef2ff', padding: '2px 7px', borderRadius: 4, marginBottom: 3, whiteSpace: 'pre-line' }}>{item.example}</div>
+                        <div style={{ fontSize: 11, color: '#64748b' }}>{item.detail}</div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
 
           {inputMode === "upload" ? (
@@ -502,13 +678,41 @@ export default function Import() {
       {/* Step 4 — Review */}
       {step === 4 && parsed && (
         <div className="space-y-4">
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between" style={{ marginBottom: 12 }}>
             <h2 className="text-base font-semibold text-foreground">Review & Edit</h2>
-            <div className="flex items-center gap-2">
-              <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${CONFIDENCE_STYLES[parsed._confidence]}`}>
-                {parsed._confidence} confidence
+          </div>
+          <div style={{ marginBottom: 14 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 8 }}>
+              <span style={{ padding: '3px 10px', borderRadius: 99, fontSize: 11, fontWeight: 700, background: parsed._confidence === 'high' ? '#f0fdf4' : parsed._confidence === 'medium' ? '#fffbeb' : '#fef2f2', color: parsed._confidence === 'high' ? '#16a34a' : parsed._confidence === 'medium' ? '#d97706' : '#dc2626', border: `1px solid ${parsed._confidence === 'high' ? '#bbf7d0' : parsed._confidence === 'medium' ? '#fde68a' : '#fecaca'}` }}>
+                {parsed._confidence === 'high' ? '✓ High confidence' : parsed._confidence === 'medium' ? '⚠ Medium confidence' : '⚠ Low confidence'}
               </span>
+              {parsed._detected_section && (
+                <span style={{ fontSize: 11, color: '#6366f1', background: '#eef2ff', padding: '3px 10px', borderRadius: 99 }}>Execution section: "{parsed._detected_section}"</span>
+              )}
             </div>
+            {parsed._confidence !== 'high' && (
+              <div style={{ padding: '12px 14px', background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 8 }}>
+                <div style={{ fontSize: 12, fontWeight: 700, color: '#92400e', marginBottom: 8 }}>Parser feedback — please review carefully:</div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+                  {[
+                    { label: 'Execution section found', found: !!parsed._detected_section || (parsed.steps && parsed.steps.length > 0) },
+                    { label: 'Numbered subsections (3.1, 3.2...)', found: parsed.steps?.some(s => s.title) },
+                    { label: 'Materials / Reagents section', found: parsed.sections_json?.some(s => s.type === 'materials') },
+                    { label: 'Purpose / Objective section', found: parsed.sections_json?.some(s => s.type === 'purpose') },
+                  ].map((check, i) => (
+                    <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <span style={{ fontSize: 12, fontWeight: 700, color: check.found ? '#16a34a' : '#ef4444' }}>{check.found ? '✓' : '✗'}</span>
+                      <span style={{ fontSize: 12, color: check.found ? '#374151' : '#6b7280' }}>{check.label}</span>
+                    </div>
+                  ))}
+                </div>
+                <div style={{ marginTop: 10, paddingTop: 10, borderTop: '1px solid #fde68a', fontSize: 11, color: '#92400e' }}>
+                  <strong>Tip:</strong> For best results, download and use the <strong>{classification}</strong> template from Step 1.
+                  It's pre-structured with the exact section headers BenchTrace expects.
+                  <button onClick={() => setStep(1)} style={{ marginLeft: 8, fontSize: 11, color: '#6366f1', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 700, textDecoration: 'underline' }}>← Go back to download template</button>
+                </div>
+              </div>
+            )}
           </div>
 
           {error && (
