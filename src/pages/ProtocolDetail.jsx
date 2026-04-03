@@ -193,6 +193,7 @@ function StepCard({
   editingStepTitle, setEditingStepTitle,
   editingStepInstruction, setEditingStepInstruction,
   onSaveStepEdit,
+  confirmDeleteStepId, setConfirmDeleteStepId, onConfirmDelete,
 }) {
   const [showTimer, setShowTimer] = useState(false);
   const [timerSaving, setTimerSaving] = useState(false);
@@ -272,12 +273,20 @@ function StepCard({
                         onMouseLeave={e => e.target.style.opacity = 0.6}>
                         ⧉
                       </button>
-                      <button onClick={() => onDelete(step.id)} title="Delete step"
-                        style={{ background: "none", border: "none", cursor: "pointer", color: "#ef4444", fontSize: 16, padding: "2px 6px", borderRadius: 4, flexShrink: 0, opacity: 0.6 }}
-                        onMouseEnter={e => e.target.style.opacity = 1}
-                        onMouseLeave={e => e.target.style.opacity = 0.6}>
-                        ×
-                      </button>
+                      {confirmDeleteStepId === step.id ? (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '3px 8px', background: '#fef2f2', borderRadius: 6, border: '1px solid #fecaca' }}>
+                          <span style={{ fontSize: 11, color: '#dc2626', fontWeight: 600, whiteSpace: 'nowrap' }}>Delete?</span>
+                          <button onClick={() => onConfirmDelete(step.id)} style={{ padding: '2px 8px', background: '#ef4444', color: 'white', border: 'none', borderRadius: 4, fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>Yes</button>
+                          <button onClick={() => setConfirmDeleteStepId(null)} style={{ padding: '2px 8px', background: 'white', color: '#475569', border: '1px solid #e2e8f0', borderRadius: 4, fontSize: 11, cursor: 'pointer' }}>No</button>
+                        </div>
+                      ) : (
+                        <button onClick={() => onDelete(step.id)} title="Delete step"
+                          style={{ background: "none", border: "none", cursor: "pointer", color: "#ef4444", fontSize: 16, padding: "2px 6px", borderRadius: 4, flexShrink: 0, opacity: 0.5 }}
+                          onMouseEnter={e => e.currentTarget.style.opacity = 1}
+                          onMouseLeave={e => e.currentTarget.style.opacity = 0.5}>
+                          ×
+                        </button>
+                      )}
                     </>
                   )}
                 </div>
@@ -687,6 +696,8 @@ export default function ProtocolDetail() {
   const [editingStepId, setEditingStepId] = useState(null);
   const [editingStepTitle, setEditingStepTitle] = useState("");
   const [editingStepInstruction, setEditingStepInstruction] = useState("");
+  const [confirmDeleteStepId, setConfirmDeleteStepId] = useState(null);
+  const [stepError, setStepError] = useState("");
 
   // Checklist add form
   const [showAddItem, setShowAddItem] = useState(false);
@@ -743,8 +754,12 @@ export default function ProtocolDetail() {
     setEditingStepId(null);
   }
 
-  async function handleDeleteStep(stepId) {
-    if (!window.confirm("Delete this step? This cannot be undone.")) return;
+  function handleDeleteStep(stepId) {
+    setConfirmDeleteStepId(stepId);
+  }
+
+  async function handleConfirmDeleteStep(stepId) {
+    setConfirmDeleteStepId(null);
     try {
       await base44.entities.ProtocolStep.delete(stepId);
       const freshSteps = await base44.entities.ProtocolStep.filter({ protocol_id: protocol.id, organization_id: orgId });
@@ -754,7 +769,7 @@ export default function ProtocolDetail() {
       setSteps(reloaded.sort((a, b) => a.step_order - b.step_order));
     } catch(e) {
       console.error('Delete step failed:', e);
-      alert('Failed to delete step: ' + (e.message || 'Unknown error'));
+      setStepError('Failed to delete step: ' + (e.message || 'Unknown error'));
     }
   }
 
@@ -781,7 +796,7 @@ export default function ProtocolDetail() {
       setEditingStepInstruction("New step — click to edit");
     } catch(e) {
       console.error('Add step failed:', e);
-      alert('Failed to add step: ' + (e.message || 'Unknown error'));
+      setStepError('Failed to add step: ' + (e.message || 'Unknown error'));
     }
   }
 
@@ -810,7 +825,7 @@ export default function ProtocolDetail() {
       setSteps(reloaded.sort((a, b) => a.step_order - b.step_order));
     } catch(e) {
       console.error('Duplicate step failed:', e);
-      alert('Failed to duplicate step: ' + (e.message || 'Unknown error'));
+      setStepError('Failed to duplicate step: ' + (e.message || 'Unknown error'));
     }
   }
 
@@ -947,6 +962,12 @@ export default function ProtocolDetail() {
 
           {activeTab === "steps" && (
             <>
+              {stepError && (
+                <div style={{ padding: '8px 12px', background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 6, fontSize: 12, color: '#dc2626', marginBottom: 8, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span>{stepError}</span>
+                  <button onClick={() => setStepError('')} style={{ background: 'none', border: 'none', color: '#dc2626', cursor: 'pointer', fontSize: 14 }}>×</button>
+                </div>
+              )}
               <DragDropContext onDragEnd={handleDragEnd}>
                 <Droppable droppableId="steps">
                   {(provided) => (
@@ -977,6 +998,9 @@ export default function ProtocolDetail() {
                               editingStepInstruction={editingStepInstruction}
                               setEditingStepInstruction={setEditingStepInstruction}
                               onSaveStepEdit={handleSaveStepEdit}
+                              confirmDeleteStepId={confirmDeleteStepId}
+                              setConfirmDeleteStepId={setConfirmDeleteStepId}
+                              onConfirmDelete={handleConfirmDeleteStep}
                             />
                             {/* Insert button between steps */}
                             {index < sortedSteps.length - 1 && isAdmin && (
