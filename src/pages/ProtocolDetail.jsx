@@ -506,6 +506,14 @@ export default function ProtocolDetail() {
   const [settingsOpenStepId, setSettingsOpenStepId] = useState(null);
   const [savingSettings, setSavingSettings] = useState(false);
 
+  const [editingOverview, setEditingOverview] = useState(false);
+  const [editName, setEditName] = useState('');
+  const [editDescription, setEditDescription] = useState('');
+  const [editClassification, setEditClassification] = useState('');
+  const [editEstimatedDuration, setEditEstimatedDuration] = useState('');
+  const [savingOverview, setSavingOverview] = useState(false);
+  const [overviewError, setOverviewError] = useState('');
+
   const [confirmDeleteChecklistId, setConfirmDeleteChecklistId] = useState(null);
   const [editingChecklistId, setEditingChecklistId] = useState(null);
   const [editingChecklistText, setEditingChecklistText] = useState('');
@@ -707,6 +715,52 @@ export default function ProtocolDetail() {
     setAddingItem(false);
   }
 
+  const handleStartEditOverview = () => {
+    setEditName(protocol.name || '');
+    setEditDescription(protocol.description || '');
+    setEditClassification(protocol.classification || 'Academic Research');
+    setEditEstimatedDuration(protocol.estimated_duration_minutes ? String(protocol.estimated_duration_minutes) : '');
+    setOverviewError('');
+    setEditingOverview(true);
+  };
+
+  const handleSaveOverview = async () => {
+    if (!editName.trim()) { setOverviewError('Protocol name is required.'); return; }
+    setSavingOverview(true);
+    setOverviewError('');
+    try {
+      const user = await base44.auth.me();
+      const updatedSectionsJson = (protocol.sections_json || []).map(section =>
+        section.type === 'purpose'
+          ? { ...section, items: editDescription.trim() ? editDescription.trim().split('\n').filter(l => l.trim().length > 0) : [] }
+          : section
+      );
+      const hasPurpose = updatedSectionsJson.some(s => s.type === 'purpose');
+      if (!hasPurpose && editDescription.trim()) {
+        updatedSectionsJson.unshift({ id: 'sec_purpose', type: 'purpose', title: 'Purpose', order: -1, items: editDescription.trim().split('\n').filter(l => l.trim().length > 0), subsections: [] });
+      }
+      await base44.entities.Protocol.update(protocol.id, {
+        name: editName.trim(),
+        description: editDescription.trim(),
+        classification: editClassification,
+        estimated_duration_minutes: editEstimatedDuration ? parseInt(editEstimatedDuration) : null,
+        sections_json: updatedSectionsJson,
+      });
+      await base44.entities.AuditLog.create({
+        organization_id: orgId, entity_type: 'Protocol', entity_id: protocol.id,
+        event_type: 'protocol_updated', actor_user_id: user.id, actor_email: user.email,
+        metadata: { fields_updated: ['name', 'description', 'classification', 'estimated_duration_minutes'] },
+        created_at: new Date().toISOString(),
+      });
+      setProtocol(prev => ({ ...prev, name: editName.trim(), description: editDescription.trim(), classification: editClassification, estimated_duration_minutes: editEstimatedDuration ? parseInt(editEstimatedDuration) : null, sections_json: updatedSectionsJson }));
+      setEditingOverview(false);
+    } catch(e) {
+      setOverviewError('Failed to save. Please try again.');
+    } finally {
+      setSavingOverview(false);
+    }
+  };
+
   async function handleStartRun(proto, checklistData, runDetails) {
     const user = await base44.auth.me();
     const now = new Date().toISOString();
@@ -806,67 +860,145 @@ export default function ProtocolDetail() {
           </div>
 
           {activeTab === "overview" && (
-            <div className="space-y-3">
-              {/* Materials & Equipment — always from live checklistItems, never sections_json */}
+            <div>
+              {overviewError && (
+                <div style={{ padding: '8px 12px', background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 6, fontSize: 12, color: '#dc2626', marginBottom: 12, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span>{overviewError}</span>
+                  <button onClick={() => setOverviewError('')} style={{ background: 'none', border: 'none', color: '#dc2626', cursor: 'pointer', fontSize: 14 }}>×</button>
+                </div>
+              )}
+
+              {/* Protocol metadata card */}
+              <div style={{ background: 'white', borderRadius: 10, border: '1px solid #e2e8f0', padding: '16px', marginBottom: 16 }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Protocol Details</div>
+                  {isAdmin && !editingOverview && (
+                    <button onClick={handleStartEditOverview} style={{ padding: '5px 14px', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 6, fontSize: 12, cursor: 'pointer', color: '#475569', fontWeight: 600 }}>✏ Edit</button>
+                  )}
+                </div>
+
+                {!editingOverview && (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                    <div>
+                      <div style={{ fontSize: 10, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 3 }}>Name</div>
+                      <div style={{ fontSize: 15, fontWeight: 700, color: '#1e293b' }}>{protocol.name}</div>
+                    </div>
+                    {protocol.description && (
+                      <div>
+                        <div style={{ fontSize: 10, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 3 }}>Purpose / Description</div>
+                        <div style={{ fontSize: 13, color: '#475569', lineHeight: '1.6', whiteSpace: 'pre-line' }}>{protocol.description}</div>
+                      </div>
+                    )}
+                    <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap' }}>
+                      <div>
+                        <div style={{ fontSize: 10, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 3 }}>Classification</div>
+                        <span style={{ fontSize: 12, fontWeight: 700, padding: '3px 10px', borderRadius: 99, background: '#eef2ff', color: '#4338ca', border: '1px solid #c7d2fe' }}>{protocol.classification}</span>
+                      </div>
+                      {protocol.estimated_duration_minutes && (
+                        <div>
+                          <div style={{ fontSize: 10, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 3 }}>Est. Duration</div>
+                          <div style={{ fontSize: 13, color: '#1e293b', fontWeight: 600 }}>⏱ {protocol.estimated_duration_minutes} min</div>
+                        </div>
+                      )}
+                      <div>
+                        <div style={{ fontSize: 10, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 3 }}>Version</div>
+                        <div style={{ fontSize: 13, color: '#1e293b', fontWeight: 600 }}>v{protocol.version || 1}</div>
+                      </div>
+                      <div>
+                        <div style={{ fontSize: 10, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 3 }}>Status</div>
+                        <span style={{ fontSize: 12, fontWeight: 700, padding: '3px 10px', borderRadius: 99, background: protocol.status === 'active' ? '#f0fdf4' : protocol.status === 'archived' ? '#f1f5f9' : '#fffbeb', color: protocol.status === 'active' ? '#16a34a' : protocol.status === 'archived' ? '#64748b' : '#d97706', border: `1px solid ${protocol.status === 'active' ? '#bbf7d0' : protocol.status === 'archived' ? '#e2e8f0' : '#fde68a'}` }}>{protocol.status || 'draft'}</span>
+                      </div>
+                    </div>
+                    {protocol.compliance_tags && protocol.compliance_tags.length > 0 && (
+                      <div>
+                        <div style={{ fontSize: 10, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 5 }}>Compliance</div>
+                        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                          {protocol.compliance_tags.map(tag => (
+                            <span key={tag} style={{ fontSize: 11, fontWeight: 700, padding: '2px 9px', borderRadius: 99, background: '#fef3c7', color: '#92400e', border: '1px solid #fde68a' }}>{tag}</span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {editingOverview && (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                    <div>
+                      <label style={{ fontSize: 11, fontWeight: 700, color: '#374151', display: 'block', marginBottom: 5, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Protocol Name *</label>
+                      <input value={editName} onChange={e => setEditName(e.target.value)} placeholder="Protocol name" style={{ width: '100%', padding: '8px 12px', border: '1px solid #c7d2fe', borderRadius: 7, fontSize: 14, fontWeight: 600, boxSizing: 'border-box' }} />
+                    </div>
+                    <div>
+                      <label style={{ fontSize: 11, fontWeight: 700, color: '#374151', display: 'block', marginBottom: 5, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Purpose / Description</label>
+                      <textarea value={editDescription} onChange={e => setEditDescription(e.target.value)} placeholder="Describe the purpose and scope of this protocol..." rows={4} style={{ width: '100%', padding: '8px 12px', border: '1px solid #c7d2fe', borderRadius: 7, fontSize: 13, resize: 'vertical', boxSizing: 'border-box', fontFamily: 'inherit', lineHeight: '1.6' }} />
+                    </div>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                      <div>
+                        <label style={{ fontSize: 11, fontWeight: 700, color: '#374151', display: 'block', marginBottom: 5, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Classification</label>
+                        <select value={editClassification} onChange={e => setEditClassification(e.target.value)} style={{ width: '100%', padding: '8px 10px', border: '1px solid #c7d2fe', borderRadius: 7, fontSize: 13, background: 'white', boxSizing: 'border-box' }}>
+                          {['Academic Research','Clinical Diagnostic','GMP Manufacturing','ISO Accredited','CRO Study','Biotech Startup','General'].map(c => <option key={c} value={c}>{c}</option>)}
+                        </select>
+                      </div>
+                      <div>
+                        <label style={{ fontSize: 11, fontWeight: 700, color: '#374151', display: 'block', marginBottom: 5, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Est. Duration (minutes)</label>
+                        <input type="number" min="0" value={editEstimatedDuration} onChange={e => setEditEstimatedDuration(e.target.value)} placeholder="e.g. 45" style={{ width: '100%', padding: '8px 10px', border: '1px solid #c7d2fe', borderRadius: 7, fontSize: 13, boxSizing: 'border-box' }} />
+                      </div>
+                    </div>
+                    <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', paddingTop: 4 }}>
+                      <button onClick={() => { setEditingOverview(false); setOverviewError(''); }} disabled={savingOverview} style={{ padding: '7px 18px', background: 'white', border: '1px solid #e2e8f0', borderRadius: 7, fontSize: 13, cursor: 'pointer', color: '#475569' }}>Cancel</button>
+                      <button onClick={handleSaveOverview} disabled={savingOverview || !editName.trim()} style={{ padding: '7px 20px', background: savingOverview || !editName.trim() ? '#94a3b8' : '#6366f1', color: 'white', border: 'none', borderRadius: 7, fontSize: 13, fontWeight: 700, cursor: savingOverview || !editName.trim() ? 'not-allowed' : 'pointer' }}>{savingOverview ? 'Saving...' : '✓ Save Changes'}</button>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Non-materials, non-purpose sections from sections_json */}
+              {(protocol.sections_json || []).filter(s => s.type !== 'materials' && s.type !== 'purpose').map(section => {
+                const SECTION_CONFIG = {
+                  data_analysis: { icon: '📊', color: '#8b5cf6', border: '#c4b5fd', bg: '#faf5ff' },
+                  controls:      { icon: '✅', color: '#f59e0b', border: '#fde68a', bg: '#fffbeb' },
+                  risk:          { icon: '⚠️', color: '#ef4444', border: '#fecaca', bg: '#fef2f2' },
+                  general:       { icon: '📄', color: '#64748b', border: '#e2e8f0', bg: '#f8fafc' },
+                };
+                const cfg = SECTION_CONFIG[section.type] || SECTION_CONFIG.general;
+                if (!section.items || section.items.length === 0) return null;
+                return (
+                  <div key={section.id} style={{ background: cfg.bg, borderRadius: 10, border: `1px solid ${cfg.border}`, borderLeft: `4px solid ${cfg.color}`, padding: '14px 16px', marginBottom: 12 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                      <span>{cfg.icon}</span>
+                      <span style={{ fontSize: 11, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.06em' }}>{section.title}</span>
+                    </div>
+                    {section.items.map((item, i) => (
+                      <div key={i} style={{ fontSize: 13, color: '#475569', lineHeight: '1.6', marginBottom: 4, paddingLeft: 8, borderLeft: `2px solid ${cfg.border}` }}>{item}</div>
+                    ))}
+                  </div>
+                );
+              })}
+
+              {/* Materials — live from checklistItems */}
               {checklistItems.length > 0 && (
-                <div style={{
-                  background: 'white', borderRadius: 10,
-                  border: '1px solid #bbf7d0', borderLeft: '4px solid #10b981',
-                  padding: '14px 16px', marginBottom: 12
-                }}>
+                <div style={{ background: 'white', borderRadius: 10, border: '1px solid #bbf7d0', borderLeft: '4px solid #10b981', padding: '14px 16px', marginBottom: 12 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
-                    <span style={{ fontSize: 16 }}>🧪</span>
+                    <span>🧪</span>
                     <span style={{ fontSize: 11, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Materials & Equipment</span>
                     <span style={{ fontSize: 11, color: '#94a3b8' }}>({checklistItems.length} items)</span>
                   </div>
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12 }}>
-                    {checklistItems.filter(i => i.category === 'safety').length > 0 && (
-                      <div>
-                        <div style={{ fontSize: 10, fontWeight: 700, color: '#dc2626', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.05em' }}>🛡 Safety ({checklistItems.filter(i => i.category === 'safety').length})</div>
-                        {checklistItems.filter(i => i.category === 'safety').map(item => (
-                          <div key={item.id} style={{ fontSize: 12, color: '#475569', padding: '2px 0 2px 8px', borderLeft: '2px solid #fecaca', marginBottom: 3 }}>{item.item_text}</div>
-                        ))}
-                      </div>
-                    )}
-                    {checklistItems.filter(i => i.category === 'equipment').length > 0 && (
-                      <div>
-                        <div style={{ fontSize: 10, fontWeight: 700, color: '#1d4ed8', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.05em' }}>⚙️ Equipment ({checklistItems.filter(i => i.category === 'equipment').length})</div>
-                        {checklistItems.filter(i => i.category === 'equipment').map(item => (
-                          <div key={item.id} style={{ fontSize: 12, color: '#475569', padding: '2px 0 2px 8px', borderLeft: '2px solid #bfdbfe', marginBottom: 3 }}>{item.item_text}</div>
-                        ))}
-                      </div>
-                    )}
-                    {checklistItems.filter(i => i.category === 'reagent').length > 0 && (
-                      <div>
-                        <div style={{ fontSize: 10, fontWeight: 700, color: '#16a34a', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.05em' }}>🧪 Reagents ({checklistItems.filter(i => i.category === 'reagent').length})</div>
-                        {checklistItems.filter(i => i.category === 'reagent').map(item => (
-                          <div key={item.id} style={{ fontSize: 12, color: '#475569', padding: '2px 0 2px 8px', borderLeft: '2px solid #bbf7d0', marginBottom: 3 }}>{item.item_text}</div>
-                        ))}
-                      </div>
-                    )}
-                    {checklistItems.filter(i => i.category === 'other').length > 0 && (
-                      <div>
-                        <div style={{ fontSize: 10, fontWeight: 700, color: '#475569', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.05em' }}>📋 Other ({checklistItems.filter(i => i.category === 'other').length})</div>
-                        {checklistItems.filter(i => i.category === 'other').map(item => (
-                          <div key={item.id} style={{ fontSize: 12, color: '#475569', padding: '2px 0 2px 8px', borderLeft: '2px solid #e2e8f0', marginBottom: 3 }}>{item.item_text}</div>
-                        ))}
-                      </div>
-                    )}
+                    {[{cat:'safety',label:'🛡 Safety',color:'#dc2626',border:'#fecaca'},{cat:'equipment',label:'⚙️ Equipment',color:'#1d4ed8',border:'#bfdbfe'},{cat:'reagent',label:'🧪 Reagents',color:'#16a34a',border:'#bbf7d0'},{cat:'other',label:'📋 Other',color:'#475569',border:'#e2e8f0'}].map(({cat,label,color,border}) => {
+                      const items = checklistItems.filter(i => i.category === cat);
+                      if (items.length === 0) return null;
+                      return (
+                        <div key={cat}>
+                          <div style={{ fontSize: 10, fontWeight: 700, color, marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.05em' }}>{label} ({items.length})</div>
+                          {items.map(item => (
+                            <div key={item.id} style={{ fontSize: 12, color: '#475569', padding: '2px 0 2px 8px', borderLeft: `2px solid ${border}`, marginBottom: 3 }}>{item.item_text}</div>
+                          ))}
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
               )}
-              {/* Non-materials sections from sections_json */}
-              {(() => {
-                const nonMaterialSections = (protocol.sections_json || []).filter(s => s.type !== 'materials').sort((a, b) => a.order - b.order);
-                if (nonMaterialSections.length === 0 && checklistItems.length === 0) {
-                  return (
-                    <div className="bg-card border border-border rounded-lg p-8 text-center">
-                      <p className="text-sm text-muted-foreground">No overview sections. Import an SOP to populate this area.</p>
-                    </div>
-                  );
-                }
-                return nonMaterialSections.map(sec => <SectionCard key={sec.id} section={sec} />);
-              })()}
             </div>
           )}
 
