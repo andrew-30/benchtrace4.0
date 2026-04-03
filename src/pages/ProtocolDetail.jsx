@@ -698,6 +698,8 @@ export default function ProtocolDetail() {
   const [editingStepInstruction, setEditingStepInstruction] = useState("");
   const [confirmDeleteStepId, setConfirmDeleteStepId] = useState(null);
   const [stepError, setStepError] = useState("");
+  const [editingTimerStepId, setEditingTimerStepId] = useState(null);
+  const [savingTimer, setSavingTimer] = useState(null);
 
   // Checklist add form
   const [showAddItem, setShowAddItem] = useState(false);
@@ -730,6 +732,13 @@ export default function ProtocolDetail() {
     const updated = reordered.map((s, i) => ({ ...s, step_order: i + 1 }));
     setSteps(updated);
     await Promise.all(updated.map(s => base44.entities.ProtocolStep.update(s.id, { step_order: s.step_order })));
+  }
+
+  async function handleSaveTimer(stepId, timingMode, durationSeconds, toleranceLower, toleranceUpper) {
+    setSavingTimer(stepId);
+    await handleTimerSave(stepId, timingMode, durationSeconds, toleranceLower, toleranceUpper);
+    setEditingTimerStepId(null);
+    setSavingTimer(null);
   }
 
   async function handleTimerSave(stepId, timingMode, durationSeconds, toleranceLower, toleranceUpper) {
@@ -968,63 +977,154 @@ export default function ProtocolDetail() {
                   <button onClick={() => setStepError('')} style={{ background: 'none', border: 'none', color: '#dc2626', cursor: 'pointer', fontSize: 14 }}>×</button>
                 </div>
               )}
-              <DragDropContext onDragEnd={handleDragEnd}>
-                <Droppable droppableId="steps">
-                  {(provided) => (
-                    <div ref={provided.innerRef} {...provided.droppableProps}>
-                      {sortedSteps.length === 0 ? (
-                        <div className="bg-card border border-border rounded-lg p-8 text-center">
-                          <p className="text-sm text-muted-foreground">No steps yet.</p>
+              <div>
+                {(() => {
+                  const sortedSteps = [...steps].sort((a, b) => a.step_order - b.step_order);
+                  const rendered = [];
+                  let lastTitle = null;
+
+                  sortedSteps.forEach((step, index) => {
+                    const stepTitle = step.title?.trim() || null;
+                    const showGroupHeader = stepTitle && stepTitle !== lastTitle;
+
+                    if (showGroupHeader) {
+                      rendered.push(
+                        <div key={`header_${step.id}`} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 0 6px', marginTop: index === 0 ? 0 : 12 }}>
+                          <div style={{ flex: 1, height: 1, background: '#e0e7ff' }} />
+                          <span style={{ fontSize: 11, fontWeight: 700, color: '#6366f1', textTransform: 'uppercase', letterSpacing: '0.07em', whiteSpace: 'nowrap', padding: '2px 10px', background: '#eef2ff', borderRadius: 99 }}>
+                            {stepTitle}
+                          </span>
+                          <div style={{ flex: 1, height: 1, background: '#e0e7ff' }} />
                         </div>
-                      ) : (
-                        sortedSteps.map((step, index) => (
-                          <div key={step.id}>
-                            <StepCard
-                              step={step}
-                              index={index}
-                              isAdmin={isAdmin}
-                              onTimerSave={handleTimerSave}
-                              onTimerRemove={handleTimerRemove}
-                              editingMeasurementsStepId={editingMeasurementsStepId}
-                              setEditingMeasurementsStepId={setEditingMeasurementsStepId}
-                              onMeasurementSave={handleMeasurementSave}
-                              onDelete={handleDeleteStep}
-                              onDuplicate={handleDuplicateStep}
-                              onToggleCritical={handleToggleCritical}
-                              editingStepId={editingStepId}
-                              setEditingStepId={setEditingStepId}
-                              editingStepTitle={editingStepTitle}
-                              setEditingStepTitle={setEditingStepTitle}
-                              editingStepInstruction={editingStepInstruction}
-                              setEditingStepInstruction={setEditingStepInstruction}
-                              onSaveStepEdit={handleSaveStepEdit}
-                              confirmDeleteStepId={confirmDeleteStepId}
-                              setConfirmDeleteStepId={setConfirmDeleteStepId}
-                              onConfirmDelete={handleConfirmDeleteStep}
-                            />
-                            {/* Insert button between steps */}
-                            {index < sortedSteps.length - 1 && isAdmin && (
-                              <div style={{ display: "flex", alignItems: "center", gap: 8, margin: "2px 0" }}>
-                                <div style={{ flex: 1, height: 1, background: "#f1f5f9" }} />
-                                <button
-                                  onClick={() => handleAddStep(step.step_order)}
-                                  title="Insert step here"
-                                  style={{ fontSize: 11, color: "#94a3b8", background: "white", border: "1px solid #e2e8f0", borderRadius: 99, padding: "1px 10px", cursor: "pointer", transition: "all 0.15s" }}
-                                  onMouseEnter={e => { e.target.style.color = "#6366f1"; e.target.style.borderColor = "#6366f1"; }}
-                                  onMouseLeave={e => { e.target.style.color = "#94a3b8"; e.target.style.borderColor = "#e2e8f0"; }}>
-                                  + insert
-                                </button>
-                                <div style={{ flex: 1, height: 1, background: "#f1f5f9" }} />
-                              </div>
+                      );
+                      lastTitle = stepTitle;
+                    }
+
+                    rendered.push(
+                      <div key={step.id} style={{ background: step.is_critical ? '#fff8f8' : 'white', border: `1px solid ${step.is_critical ? '#fecaca' : '#e2e8f0'}`, borderRadius: 8, marginBottom: 6, overflow: 'hidden' }}>
+                        {/* Header row */}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 12px', borderBottom: editingStepId === step.id ? '1px solid #e0e7ff' : 'none' }}>
+                          <div style={{ width: 22, height: 22, borderRadius: '50%', flexShrink: 0, background: step.is_critical ? '#ef4444' : '#6366f1', color: 'white', fontSize: 10, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                            {step.step_order}
+                          </div>
+                          {editingStepId !== step.id && (
+                            <div
+                              onClick={() => { if (!isAdmin) return; setEditingStepId(step.id); setEditingStepTitle(step.title || ''); setEditingStepInstruction(step.instruction || ''); }}
+                              title={isAdmin ? 'Click to edit' : ''}
+                              style={{ flex: 1, fontSize: 13, color: '#1e293b', lineHeight: '1.5', whiteSpace: 'pre-line', cursor: isAdmin ? 'text' : 'default', padding: '2px 4px', borderRadius: 4, border: '1px solid transparent' }}
+                              onMouseEnter={e => { if (isAdmin) e.currentTarget.style.borderColor = '#e0e7ff'; }}
+                              onMouseLeave={e => e.currentTarget.style.borderColor = 'transparent'}
+                            >
+                              {step.instruction}
+                            </div>
+                          )}
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
+                            {isAdmin ? (
+                              <button onClick={() => handleToggleCritical(step)} title={step.is_critical ? 'Unmark critical' : 'Mark critical'}
+                                style={{ fontSize: 10, fontWeight: 700, padding: '2px 7px', borderRadius: 99, border: `1px solid ${step.is_critical ? '#fecaca' : '#e2e8f0'}`, background: step.is_critical ? '#fef2f2' : '#f8fafc', color: step.is_critical ? '#dc2626' : '#94a3b8', cursor: 'pointer' }}>
+                                {step.is_critical ? '⚠ CRITICAL' : '⚠'}
+                              </button>
+                            ) : step.is_critical && (
+                              <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 7px', borderRadius: 99, background: '#fef2f2', color: '#dc2626', border: '1px solid #fecaca' }}>⚠ CRITICAL</span>
+                            )}
+                            {step.timing_mode !== 'none' && step.expected_duration_seconds > 0 && editingTimerStepId !== step.id && (
+                              <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 7px', borderRadius: 99, background: step.timing_mode === 'strict' ? '#fef2f2' : '#eff6ff', color: step.timing_mode === 'strict' ? '#dc2626' : '#1d4ed8', border: `1px solid ${step.timing_mode === 'strict' ? '#fecaca' : '#bfdbfe'}` }}>
+                                ⏱ {step.expected_duration_seconds >= 3600 ? `${Math.floor(step.expected_duration_seconds/3600)}h${Math.floor((step.expected_duration_seconds%3600)/60) > 0 ? ` ${Math.floor((step.expected_duration_seconds%3600)/60)}m` : ''}` : step.expected_duration_seconds >= 60 ? `${Math.floor(step.expected_duration_seconds/60)}m` : `${step.expected_duration_seconds}s`}
+                              </span>
+                            )}
+                            {isAdmin && (
+                              <>
+                                <button onClick={() => handleDuplicateStep(step)} title="Duplicate" style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#6366f1', fontSize: 13, padding: '2px 5px', opacity: 0.5 }} onMouseEnter={e => e.currentTarget.style.opacity = 1} onMouseLeave={e => e.currentTarget.style.opacity = 0.5}>⧉</button>
+                                {confirmDeleteStepId === step.id ? (
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '2px 6px', background: '#fef2f2', borderRadius: 5, border: '1px solid #fecaca' }}>
+                                    <span style={{ fontSize: 10, color: '#dc2626', fontWeight: 600 }}>Delete?</span>
+                                    <button onClick={() => handleConfirmDeleteStep(step.id)} style={{ padding: '2px 7px', background: '#ef4444', color: 'white', border: 'none', borderRadius: 4, fontSize: 10, fontWeight: 700, cursor: 'pointer' }}>Yes</button>
+                                    <button onClick={() => setConfirmDeleteStepId(null)} style={{ padding: '2px 7px', background: 'white', color: '#475569', border: '1px solid #e2e8f0', borderRadius: 4, fontSize: 10, cursor: 'pointer' }}>No</button>
+                                  </div>
+                                ) : (
+                                  <button onClick={() => handleDeleteStep(step.id)} title="Delete" style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#ef4444', fontSize: 15, padding: '2px 5px', opacity: 0.5 }} onMouseEnter={e => e.currentTarget.style.opacity = 1} onMouseLeave={e => e.currentTarget.style.opacity = 0.5}>×</button>
+                                )}
+                              </>
                             )}
                           </div>
-                        ))
-                      )}
-                      {provided.placeholder}
-                    </div>
-                  )}
-                </Droppable>
-              </DragDropContext>
+                        </div>
+
+                        {/* Inline step editor */}
+                        {editingStepId === step.id && (
+                          <div style={{ padding: '10px 12px', background: '#f8fafc' }}>
+                            <div style={{ marginBottom: 6 }}>
+                              <label style={{ fontSize: 10, fontWeight: 700, color: '#64748b', display: 'block', marginBottom: 3 }}>GROUP TITLE (optional)</label>
+                              <input value={editingStepTitle} onChange={e => setEditingStepTitle(e.target.value)} placeholder="e.g. RNA Quality Assessment" style={{ width: '100%', padding: '5px 8px', border: '1px solid #c7d2fe', borderRadius: 6, fontSize: 12, boxSizing: 'border-box', fontWeight: 600 }} />
+                            </div>
+                            <div style={{ marginBottom: 8 }}>
+                              <label style={{ fontSize: 10, fontWeight: 700, color: '#64748b', display: 'block', marginBottom: 3 }}>INSTRUCTION *</label>
+                              <textarea value={editingStepInstruction} onChange={e => setEditingStepInstruction(e.target.value)} rows={3} style={{ width: '100%', padding: '6px 8px', border: '1px solid #c7d2fe', borderRadius: 6, fontSize: 13, resize: 'vertical', boxSizing: 'border-box', fontFamily: 'inherit' }} />
+                            </div>
+                            <div style={{ display: 'flex', gap: 8 }}>
+                              <button onClick={() => setEditingStepId(null)} style={{ padding: '5px 12px', background: 'white', border: '1px solid #e2e8f0', borderRadius: 6, fontSize: 12, cursor: 'pointer', color: '#475569' }}>Cancel</button>
+                              <button onClick={() => handleSaveStepEdit(step.id)} style={{ padding: '5px 14px', background: '#6366f1', color: 'white', border: 'none', borderRadius: 6, fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>Save</button>
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Timer editor */}
+                        {editingTimerStepId === step.id && (
+                          <div style={{ padding: '0 12px 12px' }}>
+                            <TimerEditor step={step} onSave={handleSaveTimer} onCancel={() => setEditingTimerStepId(null)} saving={savingTimer === step.id} />
+                          </div>
+                        )}
+
+                        {/* Timer controls */}
+                        {editingTimerStepId !== step.id && editingStepId !== step.id && isAdmin && (
+                          <div style={{ padding: '0 12px 8px', display: 'flex', gap: 8 }}>
+                            {step.timing_mode !== 'none' && step.expected_duration_seconds > 0 ? (
+                              <>
+                                <button onClick={() => setEditingTimerStepId(step.id)} style={{ fontSize: 10, color: '#6366f1', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>Edit timer</button>
+                                <button onClick={() => handleTimerRemove(step.id)} style={{ fontSize: 10, color: '#ef4444', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>Remove timer</button>
+                              </>
+                            ) : (
+                              <button onClick={() => setEditingTimerStepId(step.id)} style={{ fontSize: 11, color: '#94a3b8', background: 'none', border: '1px dashed #e2e8f0', borderRadius: 5, padding: '2px 8px', cursor: 'pointer' }}>⏱ Add Timer</button>
+                            )}
+                          </div>
+                        )}
+
+                        {/* Measurements */}
+                        {step.measurement_parameters?.length > 0 && editingMeasurementsStepId !== step.id && (
+                          <div style={{ padding: '0 12px 8px', display: 'flex', flexWrap: 'wrap', gap: 4, alignItems: 'center' }}>
+                            {step.measurement_parameters.map((param, i) => (
+                              <span key={i} style={{ fontSize: 10, fontWeight: 600, padding: '2px 8px', borderRadius: 99, background: '#f0fdf4', color: '#16a34a', border: '1px solid #bbf7d0' }}>
+                                📏 {param.name}{param.unit ? ` (${param.unit})` : ''}{param.min_value != null || param.max_value != null ? `: ${param.min_value ?? ''}–${param.max_value ?? ''}` : ''}{param.required ? ' *' : ''}
+                              </span>
+                            ))}
+                            {isAdmin && <button onClick={() => setEditingMeasurementsStepId(step.id)} style={{ fontSize: 10, color: '#94a3b8', background: 'none', border: 'none', cursor: 'pointer' }}>Edit</button>}
+                          </div>
+                        )}
+                        {(!step.measurement_parameters || step.measurement_parameters.length === 0) && editingMeasurementsStepId !== step.id && isAdmin && (
+                          <div style={{ padding: '0 12px 8px' }}>
+                            <button onClick={() => setEditingMeasurementsStepId(step.id)} style={{ fontSize: 11, color: '#94a3b8', background: 'none', border: '1px dashed #e2e8f0', borderRadius: 5, padding: '2px 8px', cursor: 'pointer' }}>📏 Add Measurement</button>
+                          </div>
+                        )}
+                        {editingMeasurementsStepId === step.id && (
+                          <div style={{ padding: '0 12px 12px' }}>
+                            <MeasurementEditor step={step} onSave={handleMeasurementSave} onCancel={() => setEditingMeasurementsStepId(null)} />
+                          </div>
+                        )}
+
+                        {/* Insert between steps */}
+                        {index < sortedSteps.length - 1 && isAdmin && (
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '2px 12px' }}>
+                            <div style={{ flex: 1, height: 1, background: '#f1f5f9' }} />
+                            <button onClick={() => handleAddStep(step.step_order)} style={{ fontSize: 10, color: '#94a3b8', background: 'white', border: '1px solid #e2e8f0', borderRadius: 99, padding: '1px 8px', cursor: 'pointer' }} onMouseEnter={e => { e.currentTarget.style.color = '#6366f1'; e.currentTarget.style.borderColor = '#6366f1'; }} onMouseLeave={e => { e.currentTarget.style.color = '#94a3b8'; e.currentTarget.style.borderColor = '#e2e8f0'; }}>+ insert</button>
+                            <div style={{ flex: 1, height: 1, background: '#f1f5f9' }} />
+                          </div>
+                        )}
+                      </div>
+                    );
+                  });
+
+                  return rendered;
+                })()}
+              </div>
 
               {isAdmin && (
                 <div className="mt-3">

@@ -602,14 +602,37 @@ export default function RunExecution() {
             </div>
           </div>
           <div style={{ flex: 1, overflowY: "auto", padding: "10px 10px" }}>
-            {mergedSteps.map((s, i) => (
-              <StepSidebarItem
-                key={s.stepRunId}
-                merged={s}
-                isCurrent={i === currentStepIndex}
-                onClick={() => setCurrentStepIndex(i)}
-              />
-            ))}
+            {mergedSteps.map((step, index) => {
+              const prevStep = index > 0 ? mergedSteps[index - 1] : null;
+              const showTitleLabel = step.title && step.title !== prevStep?.title;
+              return (
+                <div key={step.stepRunId || step.id}>
+                  {showTitleLabel && (
+                    <div style={{ fontSize: 9, fontWeight: 700, color: '#6366f1', textTransform: 'uppercase', letterSpacing: '0.06em', padding: '8px 10px 2px', opacity: 0.8 }}>
+                      {step.title}
+                    </div>
+                  )}
+                  <div
+                    onClick={() => (step.step_state === 'completed' || step.step_state === 'skipped') && setCurrentStepIndex(index)}
+                    style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 10px', borderRadius: 6, cursor: step.step_state === 'completed' || step.step_state === 'skipped' ? 'pointer' : 'default', background: index === currentStepIndex ? '#1e293b' : 'transparent', marginBottom: 2 }}>
+                    <span style={{ fontSize: 11, flexShrink: 0, color: step.step_state === 'completed' ? '#22c55e' : step.step_state === 'skipped' ? '#f59e0b' : index === currentStepIndex ? '#6366f1' : '#475569' }}>
+                      {step.step_state === 'completed' ? '✓' : step.step_state === 'skipped' ? '⏭' : index === currentStepIndex ? '▶' : '●'}
+                    </span>
+                    <span style={{ flex: 1, fontSize: 11, color: index === currentStepIndex ? 'white' : step.step_state === 'completed' ? '#64748b' : '#94a3b8', lineHeight: '1.3', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {(step.instruction || '').substring(0, 45)}{(step.instruction || '').length > 45 ? '...' : ''}
+                    </span>
+                    <span style={{ fontSize: 9, color: '#475569', flexShrink: 0 }}>{step.step_order}</span>
+                  </div>
+                  {step.timing_mode && step.timing_mode !== 'none' && step.expected_duration_seconds > 0 && (
+                    <div style={{ marginBottom: 2, marginLeft: 28 }}>
+                      <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 6px', borderRadius: 99, background: step.timing_mode === 'strict' ? 'rgba(239,68,68,0.15)' : 'rgba(99,102,241,0.15)', color: step.timing_mode === 'strict' ? '#f87171' : '#818cf8' }}>
+                        ⏱ {Math.round(step.expected_duration_seconds / 60)}m
+                      </span>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
           </div>
         </div>
       </div>
