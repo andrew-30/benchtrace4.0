@@ -11,379 +11,185 @@ import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/components/ui/use-toast";
 import { base44 } from "@/api/base44Client";
 
-// ─── Utilities ────────────────────────────────────────────────────────────────
-function secToHMS(sec) {
-  if (!sec) return { h: 0, m: 0, s: 0 };
-  return { h: Math.floor(sec / 3600), m: Math.floor((sec % 3600) / 60), s: sec % 60 };
-}
-
-function hmsToSec(h, m, s) {
-  return (parseInt(h) || 0) * 3600 + (parseInt(m) || 0) * 60 + (parseInt(s) || 0);
-}
-
-// ─── MeasurementEditor ────────────────────────────────────────────────────────
-function MeasurementEditor({ step, onSave, onCancel }) {
+// ─── StepSettingsPanel ───────────────────────────────────────────────────────
+function StepSettingsPanel({ step, onSave, onClose, saving }) {
+  const toHMS = (totalSec) => {
+    if (!totalSec || totalSec === 0) return { h: 0, m: 0, s: 0 };
+    return { h: Math.floor(totalSec / 3600), m: Math.floor((totalSec % 3600) / 60), s: totalSec % 60 };
+  };
+  const { h: initH, m: initM, s: initS } = toHMS(step.expected_duration_seconds);
+  const [h, setH] = useState(initH);
+  const [m, setM] = useState(initM);
+  const [s, setS] = useState(initS);
+  const [timingMode, setTimingMode] = useState(step.timing_mode || 'none');
+  const [tolLower, setTolLower] = useState(Math.round((step.tolerance_lower_seconds || 0) / 60));
+  const [tolUpper, setTolUpper] = useState(Math.round((step.tolerance_upper_seconds || 0) / 60));
   const [params, setParams] = useState(
     step.measurement_parameters && step.measurement_parameters.length > 0
       ? step.measurement_parameters.map(p => ({ ...p }))
-      : [{ name: "", unit: "", min_value: "", max_value: "", required: true }]
+      : []
   );
-  const [saving, setSaving] = useState(false);
+  const [isCritical, setIsCritical] = useState(step.is_critical || false);
 
-  function addParam() {
-    setParams(prev => [...prev, { name: "", unit: "", min_value: "", max_value: "", required: true }]);
-  }
-  function removeParam(idx) {
-    setParams(prev => prev.filter((_, i) => i !== idx));
-  }
-  function updateParam(idx, field, value) {
-    setParams(prev => prev.map((p, i) => i === idx ? { ...p, [field]: value } : p));
-  }
-  async function handleSave() {
-    setSaving(true);
-    const cleaned = params
-      .filter(p => p.name.trim().length > 0)
+  const totalSeconds = (parseInt(h) || 0) * 3600 + (parseInt(m) || 0) * 60 + (parseInt(s) || 0);
+
+  const fmtTime = (sec) => {
+    if (!sec || sec === 0) return '0:00';
+    const hh = Math.floor(sec / 3600);
+    const mm = Math.floor((sec % 3600) / 60);
+    const ss = sec % 60;
+    if (hh > 0) return `${hh}:${String(mm).padStart(2,'0')}:${String(ss).padStart(2,'0')}`;
+    return `${String(mm).padStart(2,'0')}:${String(ss).padStart(2,'0')}`;
+  };
+
+  const addParam = () => setParams(prev => [...prev, { name: '', unit: '', min_value: '', max_value: '', required: true }]);
+  const removeParam = (idx) => setParams(prev => prev.filter((_, i) => i !== idx));
+  const updateParam = (idx, field, value) => setParams(prev => prev.map((p, i) => i === idx ? { ...p, [field]: value } : p));
+
+  const handleSave = () => {
+    const cleanParams = params
+      .filter(p => p.name && p.name.trim().length > 0)
       .map(p => ({
         name: p.name.trim(),
-        unit: p.unit.trim() || "",
-        min_value: p.min_value !== "" && p.min_value != null ? parseFloat(p.min_value) : null,
-        max_value: p.max_value !== "" && p.max_value != null ? parseFloat(p.max_value) : null,
+        unit: (p.unit || '').trim(),
+        min_value: p.min_value !== '' && p.min_value != null ? parseFloat(p.min_value) : null,
+        max_value: p.max_value !== '' && p.max_value != null ? parseFloat(p.max_value) : null,
         required: p.required !== false,
       }));
-    await onSave(step.id, cleaned);
-    setSaving(false);
-  }
+    onSave(step.id, {
+      timing_mode: timingMode,
+      expected_duration_seconds: timingMode !== 'none' && totalSeconds > 0 ? totalSeconds : null,
+      tolerance_lower_seconds: timingMode === 'strict' ? tolLower * 60 : 0,
+      tolerance_upper_seconds: timingMode === 'strict' ? tolUpper * 60 : 0,
+      measurement_parameters: cleanParams,
+      is_critical: isCritical,
+    });
+  };
 
-  const inputStyle = { width: "100%", padding: "5px 7px", border: "1px solid #e2e8f0", borderRadius: 6, fontSize: 12, boxSizing: "border-box", background: "white" };
-
-  return (
-    <div style={{ marginTop: 10, padding: 12, background: "#f0fdf4", borderRadius: 8, border: "1px solid #bbf7d0" }}>
-      <div style={{ fontSize: 11, fontWeight: 700, color: "#16a34a", marginBottom: 10 }}>📏 MEASUREMENT PARAMETERS</div>
-      {params.map((param, idx) => (
-        <div key={idx} style={{ background: "white", borderRadius: 7, padding: 10, marginBottom: 8, border: "1px solid #e2e8f0" }}>
-          <div style={{ display: "flex", gap: 8, marginBottom: 6 }}>
-            <div style={{ flex: 2 }}>
-              <label style={{ fontSize: 10, fontWeight: 700, color: "#64748b", display: "block", marginBottom: 3 }}>PARAMETER NAME *</label>
-              <input value={param.name} placeholder="e.g. A260/A280 ratio" onChange={e => updateParam(idx, "name", e.target.value)} style={inputStyle} />
-            </div>
-            <div style={{ flex: 1 }}>
-              <label style={{ fontSize: 10, fontWeight: 700, color: "#64748b", display: "block", marginBottom: 3 }}>UNIT</label>
-              <input value={param.unit} placeholder="e.g. ng/µL" onChange={e => updateParam(idx, "unit", e.target.value)} style={inputStyle} />
-            </div>
-            <button onClick={() => removeParam(idx)} style={{ background: "none", border: "none", color: "#ef4444", cursor: "pointer", fontSize: 16, paddingTop: 18, flexShrink: 0 }}>×</button>
-          </div>
-          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-            <div style={{ flex: 1 }}>
-              <label style={{ fontSize: 10, fontWeight: 700, color: "#64748b", display: "block", marginBottom: 3 }}>MIN VALUE</label>
-              <input type="number" value={param.min_value ?? ""} placeholder="—" onChange={e => updateParam(idx, "min_value", e.target.value)} style={inputStyle} />
-            </div>
-            <div style={{ flex: 1 }}>
-              <label style={{ fontSize: 10, fontWeight: 700, color: "#64748b", display: "block", marginBottom: 3 }}>MAX VALUE</label>
-              <input type="number" value={param.max_value ?? ""} placeholder="—" onChange={e => updateParam(idx, "max_value", e.target.value)} style={inputStyle} />
-            </div>
-            <div style={{ display: "flex", alignItems: "center", gap: 6, paddingTop: 14 }}>
-              <input type="checkbox" id={`req_${idx}`} checked={param.required !== false} onChange={e => updateParam(idx, "required", e.target.checked)} />
-              <label htmlFor={`req_${idx}`} style={{ fontSize: 11, color: "#475569", cursor: "pointer" }}>Required</label>
-            </div>
-          </div>
-        </div>
-      ))}
-      <button onClick={addParam} style={{ width: "100%", padding: "7px", background: "white", border: "1px dashed #bbf7d0", borderRadius: 7, fontSize: 12, color: "#16a34a", fontWeight: 600, cursor: "pointer", marginBottom: 10 }}>+ Add Parameter</button>
-      <div style={{ display: "flex", gap: 8 }}>
-        <button onClick={onCancel} disabled={saving} style={{ flex: 1, padding: "7px", background: "white", border: "1px solid #e2e8f0", borderRadius: 7, fontSize: 12, cursor: "pointer", color: "#475569" }}>Cancel</button>
-        <button onClick={handleSave} disabled={saving || params.every(p => !p.name.trim())} style={{ flex: 2, padding: "7px", background: "#16a34a", color: "white", border: "none", borderRadius: 7, fontSize: 12, fontWeight: 700, cursor: "pointer", opacity: saving ? 0.7 : 1 }}>
-          {saving ? "Saving..." : "✓ Save Parameters"}
-        </button>
-      </div>
-    </div>
-  );
-}
-
-// ─── TimerEditor ──────────────────────────────────────────────────────────────
-function TimerEditor({ step, onSave, onCancel, saving }) {
-  const initial = secToHMS(step.expected_duration_seconds);
-  const [h, setH] = useState(initial.h);
-  const [m, setM] = useState(initial.m);
-  const [s, setS] = useState(initial.s);
-  const [mode, setMode] = useState(step.timing_mode !== "none" ? step.timing_mode : "advisory");
-  const [tolLower, setTolLower] = useState(step.tolerance_lower_seconds ? Math.floor(step.tolerance_lower_seconds / 60) : 0);
-  const [tolUpper, setTolUpper] = useState(step.tolerance_upper_seconds ? Math.floor(step.tolerance_upper_seconds / 60) : 0);
-
-  const totalSeconds = hmsToSec(h, m, s);
-
-  function setQuick(sec) {
-    const v = secToHMS(sec);
-    setH(v.h); setM(v.m); setS(v.s);
-  }
-
-  const QUICK = [
-    { label: "30s", sec: 30 }, { label: "1m", sec: 60 }, { label: "2m", sec: 120 },
-    { label: "5m", sec: 300 }, { label: "10m", sec: 600 }, { label: "30m", sec: 1800 }, { label: "1h", sec: 3600 },
-  ];
+  const inputNumStyle = { width: 52, padding: '6px 4px', border: '1px solid #e2e8f0', borderRadius: 6, fontSize: 14, textAlign: 'center', fontWeight: 700, background: 'white', boxSizing: 'border-box' };
+  const sectionStyle = { borderTop: '1px solid #f1f5f9', paddingTop: 14, marginTop: 14 };
 
   return (
-    <div className="mt-3 p-3 bg-muted/50 rounded-lg border border-border space-y-3">
-      <div className="flex items-center gap-2">
-        <div className="flex items-center gap-1">
-          <input type="number" min={0} max={99} value={h} onChange={e => setH(e.target.value)} className="w-14 text-center border border-input rounded px-2 py-1 text-sm bg-card" placeholder="HH" />
-          <span className="text-muted-foreground text-xs">h</span>
-        </div>
-        <div className="flex items-center gap-1">
-          <input type="number" min={0} max={59} value={m} onChange={e => setM(e.target.value)} className="w-14 text-center border border-input rounded px-2 py-1 text-sm bg-card" placeholder="MM" />
-          <span className="text-muted-foreground text-xs">m</span>
-        </div>
-        <div className="flex items-center gap-1">
-          <input type="number" min={0} max={59} value={s} onChange={e => setS(e.target.value)} className="w-14 text-center border border-input rounded px-2 py-1 text-sm bg-card" placeholder="SS" />
-          <span className="text-muted-foreground text-xs">s</span>
-        </div>
+    <div style={{ marginTop: 4, padding: '16px 16px 14px', background: '#f8fafc', border: '1px solid #e0e7ff', borderRadius: 10, borderTop: '3px solid #6366f1' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+        <div style={{ fontSize: 11, fontWeight: 800, color: '#6366f1', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Step Settings</div>
+        <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#94a3b8', fontSize: 18, lineHeight: 1, padding: '0 2px' }}>×</button>
       </div>
-      <div className="flex flex-wrap gap-1">
-        {QUICK.map(q => (
-          <button key={q.label} onClick={() => setQuick(q.sec)} className="text-xs px-2 py-1 rounded bg-card border border-border hover:bg-muted text-muted-foreground hover:text-foreground transition-colors">{q.label}</button>
-        ))}
-      </div>
-      <div className="flex items-center gap-2">
-        <span className="text-xs text-muted-foreground">Mode:</span>
-        <button onClick={() => setMode("advisory")} className={`text-xs px-2.5 py-1 rounded font-medium transition-colors ${mode === "advisory" ? "bg-blue-100 text-blue-700" : "bg-card border border-border text-muted-foreground"}`}>Advisory</button>
-        <button onClick={() => setMode("strict")} className={`text-xs px-2.5 py-1 rounded font-medium transition-colors ${mode === "strict" ? "bg-red-100 text-red-700" : "bg-card border border-border text-muted-foreground"}`}>Strict</button>
-      </div>
-      {mode === "strict" && (
-        <div>
-          <div style={{ fontSize: 11, fontWeight: 700, color: "#475569", marginBottom: 6 }}>TOLERANCE WINDOW</div>
-          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-            <div style={{ flex: 1 }}>
-              <label style={{ fontSize: 10, fontWeight: 700, color: "#64748b", display: "block", marginBottom: 4 }}>EARLY BY (min)</label>
-              <input type="number" min="0" max="60" value={tolLower} onChange={e => setTolLower(Math.max(0, parseInt(e.target.value) || 0))} style={{ width: "100%", padding: "5px 8px", border: "1px solid #e2e8f0", borderRadius: 6, fontSize: 13, textAlign: "center", fontWeight: 600, boxSizing: "border-box" }} />
-            </div>
-            <div style={{ fontSize: 12, color: "#94a3b8", paddingTop: 16 }}>←→</div>
-            <div style={{ flex: 1 }}>
-              <label style={{ fontSize: 10, fontWeight: 700, color: "#64748b", display: "block", marginBottom: 4 }}>LATE BY (min)</label>
-              <input type="number" min="0" max="60" value={tolUpper} onChange={e => setTolUpper(Math.max(0, parseInt(e.target.value) || 0))} style={{ width: "100%", padding: "5px 8px", border: "1px solid #e2e8f0", borderRadius: 6, fontSize: 13, textAlign: "center", fontWeight: 600, boxSizing: "border-box" }} />
-            </div>
-          </div>
-          {totalSeconds > 0 && (tolLower > 0 || tolUpper > 0) && (
-            <div style={{ marginTop: 8, padding: "5px 10px", background: "#fef2f2", borderRadius: 6, fontSize: 11, color: "#dc2626", fontWeight: 600 }}>
-              Acceptable window: {(() => {
-                const lower = totalSeconds - tolLower * 60;
-                const upper = totalSeconds + tolUpper * 60;
-                const fmt = (sec) => `${String(Math.floor(sec / 60)).padStart(2, "0")}:${String(sec % 60).padStart(2, "0")}`;
-                return `${fmt(Math.max(0, lower))} → ${fmt(upper)}`;
-              })()}
-            </div>
-          )}
-        </div>
-      )}
-      <div className="flex items-center gap-2 pt-1">
-        <Button size="sm" disabled={saving || totalSeconds <= 0} onClick={() => totalSeconds > 0 && onSave(step.id, mode, totalSeconds, tolLower * 60, tolUpper * 60)}>
-          {saving ? "Saving..." : "Save"}
-        </Button>
-        <Button size="sm" variant="ghost" onClick={onCancel}>Cancel</Button>
-      </div>
-    </div>
-  );
-}
 
-// ─── StepCard ─────────────────────────────────────────────────────────────────
-function StepCard({
-  step, index, isAdmin,
-  onTimerSave, onTimerRemove,
-  editingMeasurementsStepId, setEditingMeasurementsStepId, onMeasurementSave,
-  onDelete, onDuplicate, onToggleCritical,
-  editingStepId, setEditingStepId,
-  editingStepTitle, setEditingStepTitle,
-  editingStepInstruction, setEditingStepInstruction,
-  onSaveStepEdit,
-  confirmDeleteStepId, setConfirmDeleteStepId, onConfirmDelete,
-}) {
-  const [showTimer, setShowTimer] = useState(false);
-  const [timerSaving, setTimerSaving] = useState(false);
-  const hasTimer = step.timing_mode && step.timing_mode !== "none" && step.expected_duration_seconds;
-  const isEditingMeasurements = editingMeasurementsStepId === step.id;
-  const isEditingStep = editingStepId === step.id;
-
-  async function handleTimerSave(stepId, timingMode, durationSeconds, toleranceLower, toleranceUpper) {
-    setTimerSaving(true);
-    await onTimerSave(stepId, timingMode, durationSeconds, toleranceLower, toleranceUpper);
-    setTimerSaving(false);
-    setShowTimer(false);
-  }
-
-  return (
-    <Draggable draggableId={step.id} index={index}>
-      {(provided) => (
-        <div ref={provided.innerRef} {...provided.draggableProps}
-          className={`bg-card border rounded-lg p-4 ${step.is_critical ? "border-red-200" : "border-border"}`}>
-          <div className="flex items-start gap-3">
-            {isAdmin && (
-              <div {...provided.dragHandleProps} className="mt-0.5 text-muted-foreground/40 hover:text-muted-foreground cursor-grab">
-                <GripVertical className="w-4 h-4" />
+      {/* Timer */}
+      <div>
+        <div style={{ fontSize: 11, fontWeight: 700, color: '#374151', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Timer</div>
+        <div style={{ display: 'flex', gap: 6, marginBottom: 12, flexWrap: 'wrap' }}>
+          {[{ value: 'none', label: 'No Timer' }, { value: 'advisory', label: 'Advisory' }, { value: 'strict', label: 'Strict' }].map(opt => (
+            <button key={opt.value} onClick={() => setTimingMode(opt.value)}
+              style={{ padding: '5px 14px', borderRadius: 99, fontSize: 12, fontWeight: 600, cursor: 'pointer', border: 'none', background: timingMode === opt.value ? (opt.value === 'strict' ? '#dc2626' : opt.value === 'advisory' ? '#1d4ed8' : '#475569') : '#e2e8f0', color: timingMode === opt.value ? 'white' : '#64748b' }}>
+              {opt.label}
+            </button>
+          ))}
+          {timingMode !== 'none' && <span style={{ fontSize: 11, color: '#94a3b8', alignSelf: 'center', marginLeft: 4 }}>{timingMode === 'advisory' ? 'Informational countdown' : 'Flags deviation if outside window'}</span>}
+        </div>
+        {timingMode !== 'none' && (
+          <>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+              <div style={{ textAlign: 'center' }}>
+                <input type="number" min="0" max="23" value={h} onChange={e => setH(Math.max(0, parseInt(e.target.value) || 0))} style={inputNumStyle} />
+                <div style={{ fontSize: 9, color: '#94a3b8', marginTop: 2, fontWeight: 600 }}>HRS</div>
+              </div>
+              <span style={{ fontWeight: 700, color: '#94a3b8', paddingBottom: 14, fontSize: 16 }}>:</span>
+              <div style={{ textAlign: 'center' }}>
+                <input type="number" min="0" max="59" value={m} onChange={e => setM(Math.max(0, Math.min(59, parseInt(e.target.value) || 0)))} style={inputNumStyle} />
+                <div style={{ fontSize: 9, color: '#94a3b8', marginTop: 2, fontWeight: 600 }}>MIN</div>
+              </div>
+              <span style={{ fontWeight: 700, color: '#94a3b8', paddingBottom: 14, fontSize: 16 }}>:</span>
+              <div style={{ textAlign: 'center' }}>
+                <input type="number" min="0" max="59" value={s} onChange={e => setS(Math.max(0, Math.min(59, parseInt(e.target.value) || 0)))} style={inputNumStyle} />
+                <div style={{ fontSize: 9, color: '#94a3b8', marginTop: 2, fontWeight: 600 }}>SEC</div>
+              </div>
+              {totalSeconds > 0 && <span style={{ fontSize: 13, color: '#6366f1', fontWeight: 700, paddingBottom: 14, marginLeft: 4 }}>= {fmtTime(totalSeconds)}</span>}
+            </div>
+            <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', marginBottom: 12 }}>
+              {[30, 60, 120, 300, 600, 1800, 3600].map(sec => (
+                <button key={sec} onClick={() => { setH(Math.floor(sec/3600)); setM(Math.floor((sec%3600)/60)); setS(sec%60); }}
+                  style={{ padding: '3px 9px', borderRadius: 5, fontSize: 11, cursor: 'pointer', border: 'none', background: totalSeconds === sec ? '#6366f1' : '#e2e8f0', color: totalSeconds === sec ? 'white' : '#64748b', fontWeight: totalSeconds === sec ? 700 : 400 }}>
+                  {sec < 60 ? `${sec}s` : sec < 3600 ? `${sec/60}m` : `${sec/3600}h`}
+                </button>
+              ))}
+            </div>
+            {timingMode === 'strict' && (
+              <div style={{ padding: '10px 12px', background: '#fef2f2', borderRadius: 7, border: '1px solid #fecaca' }}>
+                <div style={{ fontSize: 10, fontWeight: 700, color: '#dc2626', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Tolerance Window</div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <div style={{ textAlign: 'center' }}>
+                    <div style={{ fontSize: 10, color: '#64748b', fontWeight: 600, marginBottom: 4 }}>EARLY BY (min)</div>
+                    <input type="number" min="0" max="60" value={tolLower} onChange={e => setTolLower(Math.max(0, parseInt(e.target.value) || 0))} style={{ ...inputNumStyle, borderColor: '#fecaca' }} />
+                  </div>
+                  <span style={{ color: '#94a3b8', fontSize: 12, paddingTop: 16 }}>←→</span>
+                  <div style={{ textAlign: 'center' }}>
+                    <div style={{ fontSize: 10, color: '#64748b', fontWeight: 600, marginBottom: 4 }}>LATE BY (min)</div>
+                    <input type="number" min="0" max="60" value={tolUpper} onChange={e => setTolUpper(Math.max(0, parseInt(e.target.value) || 0))} style={{ ...inputNumStyle, borderColor: '#fecaca' }} />
+                  </div>
+                  {totalSeconds > 0 && (tolLower > 0 || tolUpper > 0) && (
+                    <div style={{ fontSize: 11, color: '#dc2626', fontWeight: 600, paddingTop: 16 }}>OK: {fmtTime(Math.max(0, totalSeconds - tolLower * 60))} → {fmtTime(totalSeconds + tolUpper * 60)}</div>
+                  )}
+                </div>
               </div>
             )}
-            <div className="flex-1 min-w-0">
-              {/* Header row */}
-              <div className="flex items-start gap-2 mb-2">
-                <span className="shrink-0 w-6 h-6 rounded-full bg-primary text-primary-foreground text-xs font-bold flex items-center justify-center">
-                  {step.step_order}
-                </span>
-                {!isEditingStep && step.title && (
-                  <span className="text-xs font-semibold text-primary uppercase tracking-wide mt-0.5">{step.title}</span>
-                )}
-                <div className="flex items-center gap-1 ml-auto flex-wrap justify-end">
-                  {/* Critical toggle */}
-                  {isAdmin ? (
-                    <button
-                      onClick={() => onToggleCritical(step)}
-                      title={step.is_critical ? "Click to unmark critical" : "Click to mark critical"}
-                      style={{
-                        fontSize: 10, fontWeight: 700, padding: "2px 7px", borderRadius: 99,
-                        cursor: "pointer",
-                        background: step.is_critical ? "#fef2f2" : "#f8fafc",
-                        color: step.is_critical ? "#dc2626" : "#94a3b8",
-                        border: `1px solid ${step.is_critical ? "#fecaca" : "#e2e8f0"}`,
-                        transition: "all 0.15s",
-                      }}>
-                      {step.is_critical ? "⚠ CRITICAL" : "⚠ mark critical"}
-                    </button>
-                  ) : (
-                    step.is_critical && (
-                      <span style={{ fontSize: 10, fontWeight: 700, padding: "2px 7px", borderRadius: 99, background: "#fef2f2", color: "#dc2626", border: "1px solid #fecaca" }}>⚠ CRITICAL</span>
-                    )
-                  )}
-                  {/* Timer badge */}
-                  {hasTimer && (
-                    <span style={{
-                      fontSize: 10, fontWeight: 700, padding: "1px 7px", borderRadius: 99,
-                      background: step.timing_mode === "strict" ? "#fef2f2" : "#eff6ff",
-                      color: step.timing_mode === "strict" ? "#dc2626" : "#1d4ed8",
-                      border: `1px solid ${step.timing_mode === "strict" ? "#fecaca" : "#bfdbfe"}`,
-                    }}>
-                      ⏱ {step.expected_duration_seconds >= 3600
-                        ? `${Math.floor(step.expected_duration_seconds / 3600)}h${Math.floor((step.expected_duration_seconds % 3600) / 60) > 0 ? ` ${Math.floor((step.expected_duration_seconds % 3600) / 60)}m` : ""}`
-                        : step.expected_duration_seconds >= 60
-                        ? `${Math.floor(step.expected_duration_seconds / 60)}m`
-                        : `${step.expected_duration_seconds}s`}
-                    </span>
-                  )}
-                  {/* Duplicate & delete */}
-                  {isAdmin && (
-                    <>
-                      <button onClick={() => onDuplicate(step)} title="Duplicate step"
-                        style={{ background: "none", border: "none", cursor: "pointer", color: "#6366f1", fontSize: 13, padding: "2px 6px", borderRadius: 4, flexShrink: 0, opacity: 0.6 }}
-                        onMouseEnter={e => e.target.style.opacity = 1}
-                        onMouseLeave={e => e.target.style.opacity = 0.6}>
-                        ⧉
-                      </button>
-                      {confirmDeleteStepId === step.id ? (
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '3px 8px', background: '#fef2f2', borderRadius: 6, border: '1px solid #fecaca' }}>
-                          <span style={{ fontSize: 11, color: '#dc2626', fontWeight: 600, whiteSpace: 'nowrap' }}>Delete?</span>
-                          <button onClick={() => onConfirmDelete(step.id)} style={{ padding: '2px 8px', background: '#ef4444', color: 'white', border: 'none', borderRadius: 4, fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>Yes</button>
-                          <button onClick={() => setConfirmDeleteStepId(null)} style={{ padding: '2px 8px', background: 'white', color: '#475569', border: '1px solid #e2e8f0', borderRadius: 4, fontSize: 11, cursor: 'pointer' }}>No</button>
-                        </div>
-                      ) : (
-                        <button onClick={() => onDelete(step.id)} title="Delete step"
-                          style={{ background: "none", border: "none", cursor: "pointer", color: "#ef4444", fontSize: 16, padding: "2px 6px", borderRadius: 4, flexShrink: 0, opacity: 0.5 }}
-                          onMouseEnter={e => e.currentTarget.style.opacity = 1}
-                          onMouseLeave={e => e.currentTarget.style.opacity = 0.5}>
-                          ×
-                        </button>
-                      )}
-                    </>
-                  )}
-                </div>
+          </>
+        )}
+      </div>
+
+      {/* Measurements */}
+      <div style={sectionStyle}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: '#374151', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Measurement Parameters</div>
+          <button onClick={addParam} style={{ padding: '4px 12px', background: '#f0fdf4', color: '#16a34a', border: '1px solid #bbf7d0', borderRadius: 6, fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>+ Add</button>
+        </div>
+        {params.length === 0 && <div style={{ fontSize: 12, color: '#94a3b8', fontStyle: 'italic' }}>No measurement parameters. Click "+ Add" to define what operators should record.</div>}
+        {params.map((param, idx) => (
+          <div key={idx} style={{ background: 'white', border: '1px solid #e2e8f0', borderRadius: 7, padding: '10px 12px', marginBottom: 8 }}>
+            <div style={{ display: 'flex', gap: 8, marginBottom: 6 }}>
+              <input value={param.name} placeholder="Parameter name *" onChange={e => updateParam(idx, 'name', e.target.value)} style={{ flex: 2, padding: '5px 8px', border: '1px solid #e2e8f0', borderRadius: 5, fontSize: 12, boxSizing: 'border-box' }} />
+              <input value={param.unit} placeholder="Unit" onChange={e => updateParam(idx, 'unit', e.target.value)} style={{ flex: 1, padding: '5px 8px', border: '1px solid #e2e8f0', borderRadius: 5, fontSize: 12, boxSizing: 'border-box' }} />
+              <button onClick={() => removeParam(idx)} style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', fontSize: 16, flexShrink: 0 }}>×</button>
+            </div>
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: 9, fontWeight: 700, color: '#94a3b8', marginBottom: 2 }}>MIN</div>
+                <input type="number" value={param.min_value ?? ''} placeholder="—" onChange={e => updateParam(idx, 'min_value', e.target.value)} style={{ width: '100%', padding: '4px 6px', border: '1px solid #e2e8f0', borderRadius: 5, fontSize: 12, boxSizing: 'border-box' }} />
               </div>
-
-              {/* Instruction — editable or static */}
-              {isEditingStep ? (
-                <div style={{ marginTop: 6 }}>
-                  <input
-                    value={editingStepTitle}
-                    onChange={e => setEditingStepTitle(e.target.value)}
-                    placeholder="Step title (optional)"
-                    style={{ width: "100%", padding: "5px 8px", border: "1px solid #c7d2fe", borderRadius: 6, fontSize: 12, marginBottom: 6, boxSizing: "border-box", fontWeight: 600 }}
-                  />
-                  <textarea
-                    value={editingStepInstruction}
-                    onChange={e => setEditingStepInstruction(e.target.value)}
-                    rows={3}
-                    style={{ width: "100%", padding: "6px 8px", border: "1px solid #c7d2fe", borderRadius: 6, fontSize: 13, resize: "vertical", boxSizing: "border-box", fontFamily: "inherit" }}
-                  />
-                  <div style={{ display: "flex", gap: 8, marginTop: 6 }}>
-                    <button onClick={() => setEditingStepId(null)}
-                      style={{ padding: "5px 12px", background: "white", border: "1px solid #e2e8f0", borderRadius: 6, fontSize: 12, cursor: "pointer", color: "#475569" }}>
-                      Cancel
-                    </button>
-                    <button onClick={() => onSaveStepEdit(step.id)}
-                      style={{ padding: "5px 14px", background: "#6366f1", color: "white", border: "none", borderRadius: 6, fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
-                      Save
-                    </button>
-                  </div>
-                </div>
-              ) : (
-                <div
-                  onClick={() => {
-                    if (!isAdmin) return;
-                    setEditingStepId(step.id);
-                    setEditingStepTitle(step.title || "");
-                    setEditingStepInstruction(step.instruction || "");
-                  }}
-                  title={isAdmin ? "Click to edit" : ""}
-                  style={{
-                    fontSize: 13, color: "#374151", lineHeight: "1.6",
-                    whiteSpace: "pre-line", marginTop: 4,
-                    cursor: isAdmin ? "text" : "default",
-                    padding: "4px 6px", borderRadius: 5,
-                    border: "1px solid transparent",
-                    transition: "border-color 0.15s",
-                  }}
-                  onMouseEnter={e => { if (isAdmin) e.currentTarget.style.borderColor = "#e0e7ff"; }}
-                  onMouseLeave={e => e.currentTarget.style.borderColor = "transparent"}
-                >
-                  {step.instruction}
-                </div>
-              )}
-
-              {/* Timer controls */}
-              {isAdmin && !showTimer && !hasTimer && !isEditingStep && (
-                <button onClick={() => setShowTimer(true)} className="mt-2 text-xs text-muted-foreground border border-dashed border-border rounded px-2 py-1 hover:border-primary hover:text-primary transition-colors flex items-center gap-1">
-                  <Clock className="w-3 h-3" /> Add Timer
-                </button>
-              )}
-              {isAdmin && !showTimer && hasTimer && !isEditingStep && (
-                <div className="mt-2 flex items-center gap-2">
-                  <button onClick={() => setShowTimer(true)} className="text-xs text-blue-600 hover:underline">Edit</button>
-                  <button onClick={() => onTimerRemove(step.id)} className="text-xs text-red-500 hover:underline">Remove</button>
-                </div>
-              )}
-              {isAdmin && showTimer && (
-                <TimerEditor step={step} onSave={handleTimerSave} onCancel={() => setShowTimer(false)} saving={timerSaving} />
-              )}
-
-              {/* Measurement parameters */}
-              {step.measurement_parameters && step.measurement_parameters.length > 0 && !isEditingMeasurements && (
-                <div style={{ marginTop: 8, display: "flex", flexWrap: "wrap", gap: 4, alignItems: "center" }}>
-                  {step.measurement_parameters.map((param, i) => (
-                    <span key={i} style={{ fontSize: 10, fontWeight: 600, padding: "2px 8px", borderRadius: 99, background: "#f0fdf4", color: "#16a34a", border: "1px solid #bbf7d0" }}>
-                      📏 {param.name}{param.unit ? ` (${param.unit})` : ""}{param.min_value != null || param.max_value != null ? `: ${param.min_value ?? ""}–${param.max_value ?? ""}` : ""}{param.required && " *"}
-                    </span>
-                  ))}
-                  {isAdmin && (
-                    <button onClick={() => setEditingMeasurementsStepId(step.id)} style={{ fontSize: 10, color: "#94a3b8", background: "none", border: "none", cursor: "pointer" }}>Edit</button>
-                  )}
-                </div>
-              )}
-              {isAdmin && (!step.measurement_parameters || step.measurement_parameters.length === 0) && !isEditingMeasurements && !isEditingStep && (
-                <button onClick={() => setEditingMeasurementsStepId(step.id)} style={{ marginTop: 6, fontSize: 11, color: "#94a3b8", background: "none", border: "1px dashed #e2e8f0", borderRadius: 6, padding: "3px 10px", cursor: "pointer" }}>
-                  📏 Add Measurement
-                </button>
-              )}
-              {isEditingMeasurements && (
-                <MeasurementEditor step={step} onSave={onMeasurementSave} onCancel={() => setEditingMeasurementsStepId(null)} />
-              )}
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: 9, fontWeight: 700, color: '#94a3b8', marginBottom: 2 }}>MAX</div>
+                <input type="number" value={param.max_value ?? ''} placeholder="—" onChange={e => updateParam(idx, 'max_value', e.target.value)} style={{ width: '100%', padding: '4px 6px', border: '1px solid #e2e8f0', borderRadius: 5, fontSize: 12, boxSizing: 'border-box' }} />
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 5, paddingTop: 14 }}>
+                <input type="checkbox" id={`req_${idx}`} checked={param.required !== false} onChange={e => updateParam(idx, 'required', e.target.checked)} />
+                <label htmlFor={`req_${idx}`} style={{ fontSize: 11, color: '#475569', cursor: 'pointer' }}>Required</label>
+              </div>
             </div>
           </div>
+        ))}
+      </div>
+
+      {/* Critical toggle */}
+      <div style={sectionStyle}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <div>
+            <div style={{ fontSize: 11, fontWeight: 700, color: '#374151', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Critical Step</div>
+            <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 2 }}>Operators are alerted and step is highlighted in red during execution</div>
+          </div>
+          <button onClick={() => setIsCritical(prev => !prev)}
+            style={{ padding: '6px 16px', borderRadius: 99, fontSize: 12, fontWeight: 700, border: `1px solid ${isCritical ? '#fecaca' : '#e2e8f0'}`, cursor: 'pointer', background: isCritical ? '#fef2f2' : '#f1f5f9', color: isCritical ? '#dc2626' : '#64748b' }}>
+            {isCritical ? '⚠ Critical — click to remove' : 'Mark as Critical'}
+          </button>
         </div>
-      )}
-    </Draggable>
+      </div>
+
+      {/* Footer */}
+      <div style={{ display: 'flex', gap: 8, marginTop: 16, justifyContent: 'flex-end' }}>
+        <button onClick={onClose} disabled={saving} style={{ padding: '8px 18px', background: 'white', border: '1px solid #e2e8f0', borderRadius: 7, fontSize: 13, cursor: 'pointer', color: '#475569' }}>Cancel</button>
+        <button onClick={handleSave} disabled={saving} style={{ padding: '8px 22px', background: '#6366f1', color: 'white', border: 'none', borderRadius: 7, fontSize: 13, fontWeight: 700, cursor: saving ? 'not-allowed' : 'pointer', opacity: saving ? 0.7 : 1 }}>{saving ? 'Saving...' : '✓ Save Settings'}</button>
+      </div>
+    </div>
   );
 }
 
@@ -692,14 +498,13 @@ export default function ProtocolDetail() {
   const [publishing, setPublishing] = useState(false);
   const [showPreRunModal, setShowPreRunModal] = useState(false);
 
-  const [editingMeasurementsStepId, setEditingMeasurementsStepId] = useState(null);
   const [editingStepId, setEditingStepId] = useState(null);
   const [editingStepTitle, setEditingStepTitle] = useState("");
   const [editingStepInstruction, setEditingStepInstruction] = useState("");
   const [confirmDeleteStepId, setConfirmDeleteStepId] = useState(null);
   const [stepError, setStepError] = useState("");
-  const [editingTimerStepId, setEditingTimerStepId] = useState(null);
-  const [savingTimer, setSavingTimer] = useState(null);
+  const [settingsOpenStepId, setSettingsOpenStepId] = useState(null);
+  const [savingSettings, setSavingSettings] = useState(false);
 
   const [confirmDeleteChecklistId, setConfirmDeleteChecklistId] = useState(null);
   const [editingChecklistId, setEditingChecklistId] = useState(null);
@@ -743,28 +548,26 @@ export default function ProtocolDetail() {
     await Promise.all(updated.map(s => base44.entities.ProtocolStep.update(s.id, { step_order: s.step_order })));
   }
 
-  async function handleSaveTimer(stepId, timingMode, durationSeconds, toleranceLower, toleranceUpper) {
-    setSavingTimer(stepId);
-    await handleTimerSave(stepId, timingMode, durationSeconds, toleranceLower, toleranceUpper);
-    setEditingTimerStepId(null);
-    setSavingTimer(null);
-  }
-
-  async function handleTimerSave(stepId, timingMode, durationSeconds, toleranceLower, toleranceUpper) {
-    await base44.entities.ProtocolStep.update(stepId, { timing_mode: timingMode, expected_duration_seconds: durationSeconds || null, tolerance_lower_seconds: toleranceLower || 0, tolerance_upper_seconds: toleranceUpper || 0 });
-    setSteps(prev => prev.map(s => s.id === stepId ? { ...s, timing_mode: timingMode, expected_duration_seconds: durationSeconds || null, tolerance_lower_seconds: toleranceLower || 0, tolerance_upper_seconds: toleranceUpper || 0 } : s));
-  }
-
-  async function handleTimerRemove(stepId) {
-    await base44.entities.ProtocolStep.update(stepId, { timing_mode: "none", expected_duration_seconds: null, tolerance_lower_seconds: 0, tolerance_upper_seconds: 0 });
-    setSteps(prev => prev.map(s => s.id === stepId ? { ...s, timing_mode: "none", expected_duration_seconds: null, tolerance_lower_seconds: 0, tolerance_upper_seconds: 0 } : s));
-  }
-
-  async function handleMeasurementSave(stepId, parameters) {
-    await base44.entities.ProtocolStep.update(stepId, { measurement_parameters: parameters });
-    setSteps(prev => prev.map(s => s.id === stepId ? { ...s, measurement_parameters: parameters } : s));
-    setEditingMeasurementsStepId(null);
-  }
+  const handleSaveStepSettings = async (stepId, settings) => {
+    setSavingSettings(true);
+    try {
+      await base44.entities.ProtocolStep.update(stepId, {
+        timing_mode: settings.timing_mode,
+        expected_duration_seconds: settings.expected_duration_seconds,
+        tolerance_lower_seconds: settings.tolerance_lower_seconds,
+        tolerance_upper_seconds: settings.tolerance_upper_seconds,
+        measurement_parameters: settings.measurement_parameters,
+        is_critical: settings.is_critical,
+      });
+      const fresh = await base44.entities.ProtocolStep.filter({ protocol_id: protocol.id, organization_id: orgId });
+      setSteps(fresh.sort((a, b) => a.step_order - b.step_order));
+      setSettingsOpenStepId(null);
+    } catch(e) {
+      console.error('Settings save failed:', e);
+    } finally {
+      setSavingSettings(false);
+    }
+  };
 
   async function handleSaveStepEdit(stepId) {
     await base44.entities.ProtocolStep.update(stepId, { title: editingStepTitle.trim() || null, instruction: editingStepInstruction.trim() });
@@ -847,11 +650,7 @@ export default function ProtocolDetail() {
     }
   }
 
-  async function handleToggleCritical(step) {
-    const newValue = !step.is_critical;
-    await base44.entities.ProtocolStep.update(step.id, { is_critical: newValue });
-    setSteps(prev => prev.map(s => s.id === step.id ? { ...s, is_critical: newValue } : s));
-  }
+
 
   const handleDeleteChecklistItem = (itemId) => setConfirmDeleteChecklistId(itemId);
 
@@ -1052,11 +851,11 @@ export default function ProtocolDetail() {
                     rendered.push(
                       <div key={step.id} style={{ background: step.is_critical ? '#fff8f8' : 'white', border: `1px solid ${step.is_critical ? '#fecaca' : '#e2e8f0'}`, borderRadius: 8, marginBottom: 6, overflow: 'hidden' }}>
                         {/* Header row */}
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 12px', borderBottom: editingStepId === step.id ? '1px solid #e0e7ff' : 'none' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 12px' }}>
                           <div style={{ width: 22, height: 22, borderRadius: '50%', flexShrink: 0, background: step.is_critical ? '#ef4444' : '#6366f1', color: 'white', fontSize: 10, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                             {step.step_order}
                           </div>
-                          {editingStepId !== step.id && (
+                          {editingStepId !== step.id ? (
                             <div
                               onClick={() => { if (!isAdmin) return; setEditingStepId(step.id); setEditingStepTitle(step.title || ''); setEditingStepInstruction(step.instruction || ''); }}
                               title={isAdmin ? 'Click to edit' : ''}
@@ -1066,96 +865,63 @@ export default function ProtocolDetail() {
                             >
                               {step.instruction}
                             </div>
+                          ) : (
+                            <div style={{ flex: 1 }}>
+                              <input value={editingStepTitle} onChange={e => setEditingStepTitle(e.target.value)} placeholder="Group title (optional)" style={{ width: '100%', padding: '4px 7px', border: '1px solid #c7d2fe', borderRadius: 5, fontSize: 11, fontWeight: 600, marginBottom: 5, boxSizing: 'border-box' }} />
+                              <textarea value={editingStepInstruction} onChange={e => setEditingStepInstruction(e.target.value)} rows={2} style={{ width: '100%', padding: '5px 7px', border: '1px solid #c7d2fe', borderRadius: 5, fontSize: 13, resize: 'vertical', boxSizing: 'border-box', fontFamily: 'inherit' }} />
+                              <div style={{ display: 'flex', gap: 6, marginTop: 5 }}>
+                                <button onClick={() => setEditingStepId(null)} style={{ padding: '4px 10px', background: 'white', border: '1px solid #e2e8f0', borderRadius: 5, fontSize: 11, cursor: 'pointer', color: '#475569' }}>Cancel</button>
+                                <button onClick={() => handleSaveStepEdit(step.id)} style={{ padding: '4px 12px', background: '#6366f1', color: 'white', border: 'none', borderRadius: 5, fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>Save</button>
+                              </div>
+                            </div>
                           )}
                           <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
-                            {isAdmin ? (
-                              <button onClick={() => handleToggleCritical(step)} title={step.is_critical ? 'Unmark critical' : 'Mark critical'}
-                                style={{ fontSize: 10, fontWeight: 700, padding: '2px 7px', borderRadius: 99, border: `1px solid ${step.is_critical ? '#fecaca' : '#e2e8f0'}`, background: step.is_critical ? '#fef2f2' : '#f8fafc', color: step.is_critical ? '#dc2626' : '#94a3b8', cursor: 'pointer' }}>
-                                {step.is_critical ? '⚠ CRITICAL' : '⚠'}
-                              </button>
-                            ) : step.is_critical && (
+                            {step.is_critical && (
                               <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 7px', borderRadius: 99, background: '#fef2f2', color: '#dc2626', border: '1px solid #fecaca' }}>⚠ CRITICAL</span>
                             )}
-                            {step.timing_mode !== 'none' && step.expected_duration_seconds > 0 && editingTimerStepId !== step.id && (
+                            {step.timing_mode !== 'none' && step.expected_duration_seconds > 0 && (
                               <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 7px', borderRadius: 99, background: step.timing_mode === 'strict' ? '#fef2f2' : '#eff6ff', color: step.timing_mode === 'strict' ? '#dc2626' : '#1d4ed8', border: `1px solid ${step.timing_mode === 'strict' ? '#fecaca' : '#bfdbfe'}` }}>
                                 ⏱ {step.expected_duration_seconds >= 3600 ? `${Math.floor(step.expected_duration_seconds/3600)}h${Math.floor((step.expected_duration_seconds%3600)/60) > 0 ? ` ${Math.floor((step.expected_duration_seconds%3600)/60)}m` : ''}` : step.expected_duration_seconds >= 60 ? `${Math.floor(step.expected_duration_seconds/60)}m` : `${step.expected_duration_seconds}s`}
+                                {step.timing_mode === 'strict' && ' · S'}
                               </span>
                             )}
-                            {isAdmin && (
+                            {step.measurement_parameters?.length > 0 && (
+                              <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 7px', borderRadius: 99, background: '#f0fdf4', color: '#16a34a', border: '1px solid #bbf7d0' }}>📏 {step.measurement_parameters.length}</span>
+                            )}
+                            {isAdmin && editingStepId !== step.id && (
                               <>
-                                <button onClick={() => handleDuplicateStep(step)} title="Duplicate" style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#6366f1', fontSize: 13, padding: '2px 5px', opacity: 0.5 }} onMouseEnter={e => e.currentTarget.style.opacity = 1} onMouseLeave={e => e.currentTarget.style.opacity = 0.5}>⧉</button>
+                                <button onClick={() => setSettingsOpenStepId(settingsOpenStepId === step.id ? null : step.id)} title="Step settings"
+                                  style={{ background: settingsOpenStepId === step.id ? '#eef2ff' : 'none', border: `1px solid ${settingsOpenStepId === step.id ? '#c7d2fe' : 'transparent'}`, cursor: 'pointer', color: settingsOpenStepId === step.id ? '#6366f1' : '#94a3b8', fontSize: 14, padding: '3px 7px', borderRadius: 5 }}
+                                  onMouseEnter={e => { if (settingsOpenStepId !== step.id) { e.currentTarget.style.color = '#6366f1'; e.currentTarget.style.borderColor = '#c7d2fe'; }}}
+                                  onMouseLeave={e => { if (settingsOpenStepId !== step.id) { e.currentTarget.style.color = '#94a3b8'; e.currentTarget.style.borderColor = 'transparent'; }}}
+                                >⚙</button>
+                                <button onClick={() => handleDuplicateStep(step)} title="Duplicate"
+                                  style={{ background: 'none', border: '1px solid transparent', cursor: 'pointer', color: '#94a3b8', fontSize: 13, padding: '3px 7px', borderRadius: 5 }}
+                                  onMouseEnter={e => { e.currentTarget.style.color = '#6366f1'; e.currentTarget.style.borderColor = '#c7d2fe'; }}
+                                  onMouseLeave={e => { e.currentTarget.style.color = '#94a3b8'; e.currentTarget.style.borderColor = 'transparent'; }}
+                                >⧉</button>
                                 {confirmDeleteStepId === step.id ? (
-                                  <div style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '2px 6px', background: '#fef2f2', borderRadius: 5, border: '1px solid #fecaca' }}>
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '3px 8px', background: '#fef2f2', borderRadius: 5, border: '1px solid #fecaca' }}>
                                     <span style={{ fontSize: 10, color: '#dc2626', fontWeight: 600 }}>Delete?</span>
-                                    <button onClick={() => handleConfirmDeleteStep(step.id)} style={{ padding: '2px 7px', background: '#ef4444', color: 'white', border: 'none', borderRadius: 4, fontSize: 10, fontWeight: 700, cursor: 'pointer' }}>Yes</button>
-                                    <button onClick={() => setConfirmDeleteStepId(null)} style={{ padding: '2px 7px', background: 'white', color: '#475569', border: '1px solid #e2e8f0', borderRadius: 4, fontSize: 10, cursor: 'pointer' }}>No</button>
+                                    <button onClick={() => handleConfirmDeleteStep(step.id)} style={{ padding: '2px 8px', background: '#ef4444', color: 'white', border: 'none', borderRadius: 4, fontSize: 10, fontWeight: 700, cursor: 'pointer' }}>Yes</button>
+                                    <button onClick={() => setConfirmDeleteStepId(null)} style={{ padding: '2px 8px', background: 'white', color: '#475569', border: '1px solid #e2e8f0', borderRadius: 4, fontSize: 10, cursor: 'pointer' }}>No</button>
                                   </div>
                                 ) : (
-                                  <button onClick={() => handleDeleteStep(step.id)} title="Delete" style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#ef4444', fontSize: 15, padding: '2px 5px', opacity: 0.5 }} onMouseEnter={e => e.currentTarget.style.opacity = 1} onMouseLeave={e => e.currentTarget.style.opacity = 0.5}>×</button>
+                                  <button onClick={() => handleDeleteStep(step.id)} title="Delete"
+                                    style={{ background: 'none', border: '1px solid transparent', cursor: 'pointer', color: '#94a3b8', fontSize: 15, padding: '3px 7px', borderRadius: 5 }}
+                                    onMouseEnter={e => { e.currentTarget.style.color = '#ef4444'; e.currentTarget.style.borderColor = '#fecaca'; }}
+                                    onMouseLeave={e => { e.currentTarget.style.color = '#94a3b8'; e.currentTarget.style.borderColor = 'transparent'; }}
+                                  >×</button>
                                 )}
                               </>
                             )}
                           </div>
                         </div>
 
-                        {/* Inline step editor */}
-                        {editingStepId === step.id && (
-                          <div style={{ padding: '10px 12px', background: '#f8fafc' }}>
-                            <div style={{ marginBottom: 6 }}>
-                              <label style={{ fontSize: 10, fontWeight: 700, color: '#64748b', display: 'block', marginBottom: 3 }}>GROUP TITLE (optional)</label>
-                              <input value={editingStepTitle} onChange={e => setEditingStepTitle(e.target.value)} placeholder="e.g. RNA Quality Assessment" style={{ width: '100%', padding: '5px 8px', border: '1px solid #c7d2fe', borderRadius: 6, fontSize: 12, boxSizing: 'border-box', fontWeight: 600 }} />
-                            </div>
-                            <div style={{ marginBottom: 8 }}>
-                              <label style={{ fontSize: 10, fontWeight: 700, color: '#64748b', display: 'block', marginBottom: 3 }}>INSTRUCTION *</label>
-                              <textarea value={editingStepInstruction} onChange={e => setEditingStepInstruction(e.target.value)} rows={3} style={{ width: '100%', padding: '6px 8px', border: '1px solid #c7d2fe', borderRadius: 6, fontSize: 13, resize: 'vertical', boxSizing: 'border-box', fontFamily: 'inherit' }} />
-                            </div>
-                            <div style={{ display: 'flex', gap: 8 }}>
-                              <button onClick={() => setEditingStepId(null)} style={{ padding: '5px 12px', background: 'white', border: '1px solid #e2e8f0', borderRadius: 6, fontSize: 12, cursor: 'pointer', color: '#475569' }}>Cancel</button>
-                              <button onClick={() => handleSaveStepEdit(step.id)} style={{ padding: '5px 14px', background: '#6366f1', color: 'white', border: 'none', borderRadius: 6, fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>Save</button>
-                            </div>
-                          </div>
-                        )}
-
-                        {/* Timer editor */}
-                        {editingTimerStepId === step.id && (
+                        {/* Settings panel */}
+                        {settingsOpenStepId === step.id && (
                           <div style={{ padding: '0 12px 12px' }}>
-                            <TimerEditor step={step} onSave={handleSaveTimer} onCancel={() => setEditingTimerStepId(null)} saving={savingTimer === step.id} />
-                          </div>
-                        )}
-
-                        {/* Timer controls */}
-                        {editingTimerStepId !== step.id && editingStepId !== step.id && isAdmin && (
-                          <div style={{ padding: '0 12px 8px', display: 'flex', gap: 8 }}>
-                            {step.timing_mode !== 'none' && step.expected_duration_seconds > 0 ? (
-                              <>
-                                <button onClick={() => setEditingTimerStepId(step.id)} style={{ fontSize: 10, color: '#6366f1', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>Edit timer</button>
-                                <button onClick={() => handleTimerRemove(step.id)} style={{ fontSize: 10, color: '#ef4444', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>Remove timer</button>
-                              </>
-                            ) : (
-                              <button onClick={() => setEditingTimerStepId(step.id)} style={{ fontSize: 11, color: '#94a3b8', background: 'none', border: '1px dashed #e2e8f0', borderRadius: 5, padding: '2px 8px', cursor: 'pointer' }}>⏱ Add Timer</button>
-                            )}
-                          </div>
-                        )}
-
-                        {/* Measurements */}
-                        {step.measurement_parameters?.length > 0 && editingMeasurementsStepId !== step.id && (
-                          <div style={{ padding: '0 12px 8px', display: 'flex', flexWrap: 'wrap', gap: 4, alignItems: 'center' }}>
-                            {step.measurement_parameters.map((param, i) => (
-                              <span key={i} style={{ fontSize: 10, fontWeight: 600, padding: '2px 8px', borderRadius: 99, background: '#f0fdf4', color: '#16a34a', border: '1px solid #bbf7d0' }}>
-                                📏 {param.name}{param.unit ? ` (${param.unit})` : ''}{param.min_value != null || param.max_value != null ? `: ${param.min_value ?? ''}–${param.max_value ?? ''}` : ''}{param.required ? ' *' : ''}
-                              </span>
-                            ))}
-                            {isAdmin && <button onClick={() => setEditingMeasurementsStepId(step.id)} style={{ fontSize: 10, color: '#94a3b8', background: 'none', border: 'none', cursor: 'pointer' }}>Edit</button>}
-                          </div>
-                        )}
-                        {(!step.measurement_parameters || step.measurement_parameters.length === 0) && editingMeasurementsStepId !== step.id && isAdmin && (
-                          <div style={{ padding: '0 12px 8px' }}>
-                            <button onClick={() => setEditingMeasurementsStepId(step.id)} style={{ fontSize: 11, color: '#94a3b8', background: 'none', border: '1px dashed #e2e8f0', borderRadius: 5, padding: '2px 8px', cursor: 'pointer' }}>📏 Add Measurement</button>
-                          </div>
-                        )}
-                        {editingMeasurementsStepId === step.id && (
-                          <div style={{ padding: '0 12px 12px' }}>
-                            <MeasurementEditor step={step} onSave={handleMeasurementSave} onCancel={() => setEditingMeasurementsStepId(null)} />
+                            <StepSettingsPanel step={step} onSave={handleSaveStepSettings} onClose={() => setSettingsOpenStepId(null)} saving={savingSettings} />
                           </div>
                         )}
 
