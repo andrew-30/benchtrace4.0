@@ -701,6 +701,15 @@ export default function ProtocolDetail() {
   const [editingTimerStepId, setEditingTimerStepId] = useState(null);
   const [savingTimer, setSavingTimer] = useState(null);
 
+  const [confirmDeleteChecklistId, setConfirmDeleteChecklistId] = useState(null);
+  const [editingChecklistId, setEditingChecklistId] = useState(null);
+  const [editingChecklistText, setEditingChecklistText] = useState('');
+  const [editingChecklistCategory, setEditingChecklistCategory] = useState('other');
+  const [addingChecklistItem, setAddingChecklistItem] = useState(false);
+  const [newChecklistText, setNewChecklistText] = useState('');
+  const [newChecklistCategory, setNewChecklistCategory] = useState('reagent');
+  const [checklistError, setChecklistError] = useState('');
+
   // Checklist add form
   const [showAddItem, setShowAddItem] = useState(false);
   const [newItemText, setNewItemText] = useState("");
@@ -843,6 +852,46 @@ export default function ProtocolDetail() {
     await base44.entities.ProtocolStep.update(step.id, { is_critical: newValue });
     setSteps(prev => prev.map(s => s.id === step.id ? { ...s, is_critical: newValue } : s));
   }
+
+  const handleDeleteChecklistItem = (itemId) => setConfirmDeleteChecklistId(itemId);
+
+  const handleConfirmDeleteChecklistItem = async (itemId) => {
+    setConfirmDeleteChecklistId(null);
+    try {
+      await base44.entities.ProtocolChecklistItem.delete(itemId);
+      const fresh = await base44.entities.ProtocolChecklistItem.filter({ protocol_id: protocol.id, organization_id: orgId });
+      setChecklistItems(fresh.sort((a, b) => (a.item_order || 0) - (b.item_order || 0)));
+    } catch(e) {
+      setChecklistError('Failed to delete item. Please try again.');
+    }
+  };
+
+  const handleSaveChecklistEdit = async (itemId) => {
+    if (!editingChecklistText.trim()) return;
+    try {
+      await base44.entities.ProtocolChecklistItem.update(itemId, { item_text: editingChecklistText.trim(), category: editingChecklistCategory });
+      const fresh = await base44.entities.ProtocolChecklistItem.filter({ protocol_id: protocol.id, organization_id: orgId });
+      setChecklistItems(fresh.sort((a, b) => (a.item_order || 0) - (b.item_order || 0)));
+      setEditingChecklistId(null);
+    } catch(e) {
+      setChecklistError('Failed to save. Please try again.');
+    }
+  };
+
+  const handleAddChecklistItem = async () => {
+    if (!newChecklistText.trim()) return;
+    try {
+      const maxOrder = checklistItems.reduce((max, i) => Math.max(max, i.item_order || 0), 0);
+      await base44.entities.ProtocolChecklistItem.create({ organization_id: orgId, protocol_id: protocol.id, item_text: newChecklistText.trim(), category: newChecklistCategory, item_order: maxOrder + 1 });
+      const fresh = await base44.entities.ProtocolChecklistItem.filter({ protocol_id: protocol.id, organization_id: orgId });
+      setChecklistItems(fresh.sort((a, b) => (a.item_order || 0) - (b.item_order || 0)));
+      setNewChecklistText('');
+      setNewChecklistCategory('reagent');
+      setAddingChecklistItem(false);
+    } catch(e) {
+      setChecklistError('Failed to add item. Please try again.');
+    }
+  };
 
   async function handleAddItem() {
     if (!newItemText.trim()) return;
@@ -1138,43 +1187,100 @@ export default function ProtocolDetail() {
           )}
 
           {activeTab === "checklist" && (
-            <div className="space-y-4">
-              {Object.keys(grouped).length === 0 ? (
-                <div className="bg-card border border-border rounded-lg p-8 text-center">
-                  <p className="text-sm text-muted-foreground">No checklist items yet.</p>
+            <div>
+              {checklistError && (
+                <div style={{ padding: '8px 12px', background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 6, fontSize: 12, color: '#dc2626', marginBottom: 12, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span>{checklistError}</span>
+                  <button onClick={() => setChecklistError('')} style={{ background: 'none', border: 'none', color: '#dc2626', cursor: 'pointer', fontSize: 14 }}>×</button>
                 </div>
-              ) : (
-                Object.entries(grouped).map(([cat, items]) => (
-                  <div key={cat} className="bg-card border border-border rounded-lg p-4">
-                    <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-2 capitalize">{cat}</h3>
-                    <div className="divide-y divide-border">
-                      {items.map(item => <ChecklistItemRow key={item.id} item={item} />)}
-                    </div>
-                  </div>
-                ))
               )}
-              {isAdmin && (
-                <div className="mt-2">
-                  {!showAddItem ? (
-                    <button onClick={() => setShowAddItem(true)} className="w-full text-sm text-muted-foreground border border-dashed border-border rounded-lg px-4 py-3 hover:border-primary hover:text-primary transition-colors flex items-center justify-center gap-2">
-                      <Plus className="w-4 h-4" /> Add Item
-                    </button>
-                  ) : (
-                    <div className="bg-card border border-border rounded-lg p-4 space-y-3">
-                      <p className="text-sm font-medium text-foreground">New Checklist Item</p>
-                      <Input placeholder="Item text" value={newItemText} onChange={e => setNewItemText(e.target.value)} />
-                      <select value={newItemCategory} onChange={e => setNewItemCategory(e.target.value)} className="w-full border border-input rounded-md px-3 py-2 text-sm bg-card text-foreground">
-                        <option value="safety">Safety</option>
-                        <option value="equipment">Equipment</option>
-                        <option value="reagent">Reagent</option>
-                        <option value="other">Other</option>
-                      </select>
-                      <div className="flex gap-2">
-                        <Button size="sm" onClick={handleAddItem} disabled={addingItem || !newItemText.trim()}>{addingItem ? "Adding..." : "Add Item"}</Button>
-                        <Button size="sm" variant="ghost" onClick={() => setShowAddItem(false)}>Cancel</Button>
-                      </div>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+                <div style={{ fontSize: 13, fontWeight: 700, color: '#1e293b' }}>Checklist Items ({checklistItems.length})</div>
+                {isAdmin && !addingChecklistItem && (
+                  <button onClick={() => setAddingChecklistItem(true)} style={{ padding: '6px 14px', background: '#6366f1', color: 'white', border: 'none', borderRadius: 7, fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>+ Add Item</button>
+                )}
+              </div>
+              {addingChecklistItem && (
+                <div style={{ padding: '14px 16px', background: '#f0f4ff', border: '1px solid #c7d2fe', borderRadius: 8, marginBottom: 14 }}>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: '#4338ca', marginBottom: 10 }}>NEW CHECKLIST ITEM</div>
+                  <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
+                    <select value={newChecklistCategory} onChange={e => setNewChecklistCategory(e.target.value)} style={{ padding: '7px 10px', border: '1px solid #c7d2fe', borderRadius: 6, fontSize: 12, background: 'white', flexShrink: 0 }}>
+                      <option value="safety">Safety</option>
+                      <option value="equipment">Equipment</option>
+                      <option value="reagent">Reagent</option>
+                      <option value="other">Other</option>
+                    </select>
+                    <input value={newChecklistText} onChange={e => setNewChecklistText(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleAddChecklistItem()} placeholder="e.g. RNA extraction kit — Lot#, Expiry" autoFocus style={{ flex: 1, padding: '7px 10px', border: '1px solid #c7d2fe', borderRadius: 6, fontSize: 13, boxSizing: 'border-box' }} />
+                  </div>
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    <button onClick={() => { setAddingChecklistItem(false); setNewChecklistText(''); }} style={{ padding: '6px 14px', background: 'white', border: '1px solid #e2e8f0', borderRadius: 6, fontSize: 12, cursor: 'pointer', color: '#475569' }}>Cancel</button>
+                    <button onClick={handleAddChecklistItem} disabled={!newChecklistText.trim()} style={{ padding: '6px 16px', background: newChecklistText.trim() ? '#6366f1' : '#94a3b8', color: 'white', border: 'none', borderRadius: 6, fontSize: 12, fontWeight: 700, cursor: newChecklistText.trim() ? 'pointer' : 'not-allowed' }}>Add Item</button>
+                  </div>
+                </div>
+              )}
+              {['safety', 'equipment', 'reagent', 'other'].map(category => {
+                const categoryItems = checklistItems.filter(item => item.category === category);
+                if (categoryItems.length === 0) return null;
+                const CATEGORY_CONFIG = {
+                  safety:    { label: 'Safety',    icon: '🛡', color: '#dc2626', bg: '#fef2f2', border: '#fecaca', badge: '#fee2e2' },
+                  equipment: { label: 'Equipment', icon: '⚙️',  color: '#1d4ed8', bg: '#eff6ff', border: '#bfdbfe', badge: '#dbeafe' },
+                  reagent:   { label: 'Reagents',  icon: '🧪', color: '#16a34a', bg: '#f0fdf4', border: '#bbf7d0', badge: '#dcfce7' },
+                  other:     { label: 'Other',     icon: '📋', color: '#475569', bg: '#f8fafc', border: '#e2e8f0', badge: '#f1f5f9' },
+                };
+                const cfg = CATEGORY_CONFIG[category];
+                return (
+                  <div key={category} style={{ marginBottom: 16 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, paddingBottom: 6, borderBottom: `2px solid ${cfg.border}` }}>
+                      <span style={{ fontSize: 16 }}>{cfg.icon}</span>
+                      <span style={{ fontSize: 12, fontWeight: 700, color: cfg.color, textTransform: 'uppercase', letterSpacing: '0.06em' }}>{cfg.label}</span>
+                      <span style={{ fontSize: 10, fontWeight: 700, padding: '1px 7px', borderRadius: 99, background: cfg.badge, color: cfg.color }}>{categoryItems.length}</span>
                     </div>
-                  )}
+                    {categoryItems.map(item => (
+                      <div key={item.id} style={{ background: 'white', border: `1px solid ${cfg.border}`, borderLeft: `3px solid ${cfg.color}`, borderRadius: 7, marginBottom: 6, overflow: 'hidden' }}>
+                        {editingChecklistId !== item.id && confirmDeleteChecklistId !== item.id && (
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '9px 12px' }}>
+                            <span style={{ fontSize: 14, flexShrink: 0 }}>{cfg.icon}</span>
+                            <span style={{ flex: 1, fontSize: 13, color: '#1e293b' }}>{item.item_text}</span>
+                            {isAdmin && (
+                              <div style={{ display: 'flex', gap: 4, flexShrink: 0 }}>
+                                <button onClick={() => { setEditingChecklistId(item.id); setEditingChecklistText(item.item_text); setEditingChecklistCategory(item.category); }} title="Edit item" style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#6366f1', fontSize: 12, padding: '2px 6px', borderRadius: 4, opacity: 0.6 }} onMouseEnter={e => e.currentTarget.style.opacity = 1} onMouseLeave={e => e.currentTarget.style.opacity = 0.6}>✏</button>
+                                <button onClick={() => handleDeleteChecklistItem(item.id)} title="Delete item" style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#ef4444', fontSize: 15, padding: '2px 6px', borderRadius: 4, opacity: 0.6 }} onMouseEnter={e => e.currentTarget.style.opacity = 1} onMouseLeave={e => e.currentTarget.style.opacity = 0.6}>×</button>
+                              </div>
+                            )}
+                          </div>
+                        )}
+                        {confirmDeleteChecklistId === item.id && (
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '9px 12px', background: '#fef2f2' }}>
+                            <span style={{ flex: 1, fontSize: 12, color: '#dc2626', fontWeight: 600 }}>Delete "{item.item_text.substring(0, 40)}{item.item_text.length > 40 ? '...' : ''}"?</span>
+                            <button onClick={() => handleConfirmDeleteChecklistItem(item.id)} style={{ padding: '4px 12px', background: '#ef4444', color: 'white', border: 'none', borderRadius: 5, fontSize: 11, fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap' }}>Yes, delete</button>
+                            <button onClick={() => setConfirmDeleteChecklistId(null)} style={{ padding: '4px 12px', background: 'white', color: '#475569', border: '1px solid #e2e8f0', borderRadius: 5, fontSize: 11, cursor: 'pointer', whiteSpace: 'nowrap' }}>Cancel</button>
+                          </div>
+                        )}
+                        {editingChecklistId === item.id && (
+                          <div style={{ padding: '10px 12px', background: '#f8fafc' }}>
+                            <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
+                              <select value={editingChecklistCategory} onChange={e => setEditingChecklistCategory(e.target.value)} style={{ padding: '6px 8px', border: '1px solid #c7d2fe', borderRadius: 6, fontSize: 12, background: 'white', flexShrink: 0 }}>
+                                <option value="safety">Safety</option>
+                                <option value="equipment">Equipment</option>
+                                <option value="reagent">Reagent</option>
+                                <option value="other">Other</option>
+                              </select>
+                              <input value={editingChecklistText} onChange={e => setEditingChecklistText(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleSaveChecklistEdit(item.id)} autoFocus style={{ flex: 1, padding: '6px 10px', border: '1px solid #c7d2fe', borderRadius: 6, fontSize: 13, boxSizing: 'border-box' }} />
+                            </div>
+                            <div style={{ display: 'flex', gap: 8 }}>
+                              <button onClick={() => setEditingChecklistId(null)} style={{ padding: '5px 12px', background: 'white', border: '1px solid #e2e8f0', borderRadius: 6, fontSize: 12, cursor: 'pointer', color: '#475569' }}>Cancel</button>
+                              <button onClick={() => handleSaveChecklistEdit(item.id)} disabled={!editingChecklistText.trim()} style={{ padding: '5px 14px', background: editingChecklistText.trim() ? '#6366f1' : '#94a3b8', color: 'white', border: 'none', borderRadius: 6, fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>Save</button>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                );
+              })}
+              {checklistItems.length === 0 && (
+                <div style={{ textAlign: 'center', padding: '40px 20px', color: '#94a3b8', fontSize: 13 }}>
+                  No checklist items yet.{isAdmin && <span> Click "+ Add Item" to add reagents, equipment and safety items.</span>}
                 </div>
               )}
             </div>
