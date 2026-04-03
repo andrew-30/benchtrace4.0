@@ -97,6 +97,10 @@
       "type": "string",
       "title": "Signed Off By User ID"
     },
+    "signed_off_by_name": {
+      "type": "string",
+      "title": "Signed Off By Name"
+    },
     "result_status": {
       "type": "string",
       "title": "Result Status",

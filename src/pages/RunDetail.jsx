@@ -215,16 +215,17 @@ export default function RunDetail() {
     setSigningOff(true);
     const user = await base44.auth.me();
     const now = new Date().toISOString();
+    const signatoryName = user.full_name || user.email;
     await base44.entities.Run.update(run.id, {
       run_state: "signed", is_signed_off: true, signed_off_at: now,
-      signed_off_by_user_id: user.id, result_status: selectedResult,
+      signed_off_by_user_id: user.id, signed_off_by_name: signatoryName, result_status: selectedResult,
     });
     await base44.entities.AuditLog.create({
       organization_id: orgId, entity_type: "Run", entity_id: run.id,
       event_type: "run_signed", actor_user_id: user.id, actor_email: user.email,
-      metadata: { result_status: selectedResult, signed_at: now }, created_at: now,
+      metadata: { result_status: selectedResult, signed_at: now, signed_by_name: signatoryName }, created_at: now,
     });
-    setRun(prev => ({ ...prev, run_state: "signed", is_signed_off: true, result_status: selectedResult }));
+    setRun(prev => ({ ...prev, run_state: "signed", is_signed_off: true, result_status: selectedResult, signed_off_by_name: signatoryName, signed_off_at: now }));
     setSigningOff(false);
   }
 
@@ -396,8 +397,22 @@ export default function RunDetail() {
           )}
 
           {run.run_state === "signed" && (
-            <div style={{ background: "#f0fdf4", borderRadius: 10, border: "1px solid #bbf7d0", padding: "14px 20px", fontSize: 13, color: "#16a34a", fontWeight: 600 }}>
-              ✓ Signed off by {run.signed_off_by_user_id || "operator"} on {tzFmt(run.signed_off_at)}
+            <div style={{ padding: "14px 16px", background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: 8, display: "flex", alignItems: "center", gap: 10 }}>
+              <span style={{ fontSize: 20 }}>✓</span>
+              <div>
+                <div style={{ fontSize: 13, fontWeight: 700, color: "#16a34a" }}>Run signed off</div>
+                <div style={{ fontSize: 12, color: "#475569", marginTop: 2 }}>
+                  By <strong>{run.signed_off_by_name || run.signed_off_by_user_id || "Unknown"}</strong>
+                  {run.signed_off_at && <span> on {tzFmt(run.signed_off_at)}</span>}
+                </div>
+                {run.result_status && (
+                  <div style={{ marginTop: 6 }}>
+                    <span style={{ fontSize: 11, fontWeight: 700, padding: "2px 9px", borderRadius: 99, background: run.result_status === "pass" ? "#f0fdf4" : run.result_status === "fail" ? "#fef2f2" : "#fffbeb", color: run.result_status === "pass" ? "#16a34a" : run.result_status === "fail" ? "#dc2626" : "#d97706", border: `1px solid ${run.result_status === "pass" ? "#bbf7d0" : run.result_status === "fail" ? "#fecaca" : "#fde68a"}` }}>
+                      Result: {run.result_status === "pass" ? "✓ Pass" : run.result_status === "fail" ? "✗ Fail" : "— Pending"}
+                    </span>
+                  </div>
+                )}
+              </div>
             </div>
           )}
 
