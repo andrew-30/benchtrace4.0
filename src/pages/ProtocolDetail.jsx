@@ -807,13 +807,66 @@ export default function ProtocolDetail() {
 
           {activeTab === "overview" && (
             <div className="space-y-3">
-              {(protocol.sections_json || []).length === 0 ? (
-                <div className="bg-card border border-border rounded-lg p-8 text-center">
-                  <p className="text-sm text-muted-foreground">No overview sections. Import an SOP to populate this area.</p>
+              {/* Materials & Equipment — always from live checklistItems, never sections_json */}
+              {checklistItems.length > 0 && (
+                <div style={{
+                  background: 'white', borderRadius: 10,
+                  border: '1px solid #bbf7d0', borderLeft: '4px solid #10b981',
+                  padding: '14px 16px', marginBottom: 12
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+                    <span style={{ fontSize: 16 }}>🧪</span>
+                    <span style={{ fontSize: 11, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Materials & Equipment</span>
+                    <span style={{ fontSize: 11, color: '#94a3b8' }}>({checklistItems.length} items)</span>
+                  </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12 }}>
+                    {checklistItems.filter(i => i.category === 'safety').length > 0 && (
+                      <div>
+                        <div style={{ fontSize: 10, fontWeight: 700, color: '#dc2626', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.05em' }}>🛡 Safety ({checklistItems.filter(i => i.category === 'safety').length})</div>
+                        {checklistItems.filter(i => i.category === 'safety').map(item => (
+                          <div key={item.id} style={{ fontSize: 12, color: '#475569', padding: '2px 0 2px 8px', borderLeft: '2px solid #fecaca', marginBottom: 3 }}>{item.item_text}</div>
+                        ))}
+                      </div>
+                    )}
+                    {checklistItems.filter(i => i.category === 'equipment').length > 0 && (
+                      <div>
+                        <div style={{ fontSize: 10, fontWeight: 700, color: '#1d4ed8', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.05em' }}>⚙️ Equipment ({checklistItems.filter(i => i.category === 'equipment').length})</div>
+                        {checklistItems.filter(i => i.category === 'equipment').map(item => (
+                          <div key={item.id} style={{ fontSize: 12, color: '#475569', padding: '2px 0 2px 8px', borderLeft: '2px solid #bfdbfe', marginBottom: 3 }}>{item.item_text}</div>
+                        ))}
+                      </div>
+                    )}
+                    {checklistItems.filter(i => i.category === 'reagent').length > 0 && (
+                      <div>
+                        <div style={{ fontSize: 10, fontWeight: 700, color: '#16a34a', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.05em' }}>🧪 Reagents ({checklistItems.filter(i => i.category === 'reagent').length})</div>
+                        {checklistItems.filter(i => i.category === 'reagent').map(item => (
+                          <div key={item.id} style={{ fontSize: 12, color: '#475569', padding: '2px 0 2px 8px', borderLeft: '2px solid #bbf7d0', marginBottom: 3 }}>{item.item_text}</div>
+                        ))}
+                      </div>
+                    )}
+                    {checklistItems.filter(i => i.category === 'other').length > 0 && (
+                      <div>
+                        <div style={{ fontSize: 10, fontWeight: 700, color: '#475569', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.05em' }}>📋 Other ({checklistItems.filter(i => i.category === 'other').length})</div>
+                        {checklistItems.filter(i => i.category === 'other').map(item => (
+                          <div key={item.id} style={{ fontSize: 12, color: '#475569', padding: '2px 0 2px 8px', borderLeft: '2px solid #e2e8f0', marginBottom: 3 }}>{item.item_text}</div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
                 </div>
-              ) : (
-                (protocol.sections_json || []).sort((a, b) => a.order - b.order).map(sec => <SectionCard key={sec.id} section={sec} />)
               )}
+              {/* Non-materials sections from sections_json */}
+              {(() => {
+                const nonMaterialSections = (protocol.sections_json || []).filter(s => s.type !== 'materials').sort((a, b) => a.order - b.order);
+                if (nonMaterialSections.length === 0 && checklistItems.length === 0) {
+                  return (
+                    <div className="bg-card border border-border rounded-lg p-8 text-center">
+                      <p className="text-sm text-muted-foreground">No overview sections. Import an SOP to populate this area.</p>
+                    </div>
+                  );
+                }
+                return nonMaterialSections.map(sec => <SectionCard key={sec.id} section={sec} />);
+              })()}
             </div>
           )}
 
