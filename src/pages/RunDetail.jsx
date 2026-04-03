@@ -1,95 +1,211 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, AlertTriangle, CheckCircle, Clock } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { useToast } from "@/components/ui/use-toast";
+import { ArrowLeft } from "lucide-react";
 import { base44 } from "@/api/base44Client";
 
-function fmtTs(iso) {
-  if (!iso) return "—";
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+function tzFmt(dateStr, timeOnly = false) {
+  if (!dateStr) return "—";
   const tz = localStorage.getItem("bt_tz") || "UTC";
-  return new Intl.DateTimeFormat("en-GB", {
-    timeZone: tz, day: "2-digit", month: "short", year: "numeric",
-    hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false,
-  }).format(new Date(iso));
+  try {
+    const opts = timeOnly
+      ? { timeZone: tz, hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false }
+      : { timeZone: tz, day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false };
+    return new Intl.DateTimeFormat("en-GB", opts).format(new Date(dateStr));
+  } catch (e) { return dateStr; }
 }
 
-function fmtDuration(startIso, endIso) {
-  if (!startIso || !endIso) return "—";
-  const diff = Math.floor((new Date(endIso) - new Date(startIso)) / 1000);
-  const h = Math.floor(diff / 3600);
-  const m = Math.floor((diff % 3600) / 60);
-  const s = diff % 60;
+function fmtRelative(dateStr) {
+  if (!dateStr) return "";
+  const diff = Math.floor((Date.now() - new Date(dateStr).getTime()) / 1000);
+  if (diff < 60) return `${diff}s ago`;
+  if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
+  if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
+  return `${Math.floor(diff / 86400)}d ago`;
+}
+
+function fmtDuration(startStr, endStr) {
+  if (!startStr || !endStr) return "—";
+  const totalSec = Math.floor((new Date(endStr) - new Date(startStr)) / 1000);
+  const h = Math.floor(totalSec / 3600);
+  const m = Math.floor((totalSec % 3600) / 60);
+  const s = totalSec % 60;
   if (h > 0) return `${h}h ${m}m ${s}s`;
   if (m > 0) return `${m}m ${s}s`;
   return `${s}s`;
 }
 
-const STATE_STYLES = {
-  in_progress: "bg-blue-50 text-blue-700 border border-blue-200",
-  completed: "bg-emerald-50 text-emerald-700 border border-emerald-200",
-  signed: "bg-primary/10 text-primary border border-primary/20",
-  abandoned: "bg-slate-100 text-slate-500 border border-slate-200",
-};
+function fmtElapsed(sec) {
+  if (!sec) return "—";
+  const m = Math.floor(sec / 60);
+  const s = sec % 60;
+  return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+}
 
-const STATE_LABELS = {
-  in_progress: "In Progress", completed: "Completed",
-  signed: "Signed", abandoned: "Abandoned",
-};
+// ─── Sub-components ────────────────────────────────────────────────────────────
+function StateBadge({ state }) {
+  const cfg = {
+    in_progress: { bg: "#eff6ff", color: "#1d4ed8", border: "#bfdbfe", label: "In Progress" },
+    completed:   { bg: "#f0fdf4", color: "#16a34a", border: "#bbf7d0", label: "Completed" },
+    signed:      { bg: "#eef2ff", color: "#4338ca", border: "#c7d2fe", label: "Signed" },
+    abandoned:   { bg: "#f8fafc", color: "#64748b", border: "#e2e8f0", label: "Abandoned" },
+  };
+  const c = cfg[state] || cfg.completed;
+  return (
+    <span style={{ fontSize: 11, fontWeight: 700, padding: "3px 10px", borderRadius: 99, background: c.bg, color: c.color, border: `1px solid ${c.border}` }}>
+      {c.label}
+    </span>
+  );
+}
 
-const EVENT_STYLES = {
-  run_started: "bg-blue-50 text-blue-700",
-  run_completed: "bg-emerald-50 text-emerald-700",
-  run_abandoned: "bg-red-50 text-red-700",
-  run_signed: "bg-primary/10 text-primary",
-  step_completed: "bg-gray-100 text-gray-600",
-};
+function SeverityBadge({ severity }) {
+  const cfg = {
+    high:   { bg: "#fef2f2", color: "#dc2626", border: "#fecaca", label: "HIGH" },
+    medium: { bg: "#fffbeb", color: "#d97706", border: "#fde68a", label: "MED" },
+    low:    { bg: "#f8fafc", color: "#64748b", border: "#e2e8f0", label: "LOW" },
+  };
+  const c = cfg[severity] || cfg.low;
+  return (
+    <span style={{ fontSize: 10, fontWeight: 800, padding: "2px 7px", borderRadius: 4, background: c.bg, color: c.color, border: `1px solid ${c.border}` }}>
+      {c.label}
+    </span>
+  );
+}
+
+function AuditBadge({ eventType }) {
+  const cfg = {
+    run_started:        { bg: "#eff6ff", color: "#1d4ed8" },
+    step_completed:     { bg: "#f0fdf4", color: "#16a34a" },
+    run_completed:      { bg: "#eef2ff", color: "#4338ca" },
+    run_signed:         { bg: "#eef2ff", color: "#4338ca" },
+    deviation_created:  { bg: "#fffbeb", color: "#d97706" },
+    deviation_resolved: { bg: "#f0fdf4", color: "#16a34a" },
+    run_abandoned:      { bg: "#f8fafc", color: "#64748b" },
+  };
+  const c = cfg[eventType] || { bg: "#f8fafc", color: "#64748b" };
+  const label = (eventType || "").replace(/_/g, " ");
+  return (
+    <span style={{ fontSize: 10, fontWeight: 700, padding: "2px 8px", borderRadius: 4, background: c.bg, color: c.color, textTransform: "capitalize" }}>
+      {label}
+    </span>
+  );
+}
 
 function MetaRow({ label, value }) {
   return (
-    <div className="flex justify-between items-center py-2 border-b border-border last:border-0">
-      <span className="text-sm text-muted-foreground">{label}</span>
-      <span className="text-sm font-medium text-foreground">{value || "—"}</span>
+    <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+      <div style={{ fontSize: 10, fontWeight: 700, color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.05em" }}>{label}</div>
+      <div style={{ fontSize: 13, color: "#1e293b", fontWeight: 500 }}>{value || "—"}</div>
     </div>
   );
 }
 
+function AddDeviationForm({ stepRun, onSave, onCancel }) {
+  const [desc, setDesc] = useState("");
+  const [severity, setSeverity] = useState("low");
+  const [saving, setSaving] = useState(false);
+
+  async function handleSubmit() {
+    if (!desc.trim()) return;
+    setSaving(true);
+    await onSave(stepRun, desc, severity);
+    setSaving(false);
+  }
+
+  return (
+    <div style={{ padding: "12px 14px", background: "#fffbeb", border: "1px solid #fde68a", borderRadius: 8, marginTop: 8 }}>
+      <div style={{ fontSize: 11, fontWeight: 700, color: "#92400e", marginBottom: 10 }}>LOG DEVIATION — Step {stepRun.step_order}</div>
+      <textarea
+        value={desc}
+        onChange={e => setDesc(e.target.value)}
+        placeholder="Describe what happened..."
+        rows={3}
+        style={{ width: "100%", padding: "8px 10px", border: "1px solid #fde68a", borderRadius: 6, fontSize: 13, resize: "none", boxSizing: "border-box", fontFamily: "inherit", marginBottom: 8 }}
+      />
+      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
+        <label style={{ fontSize: 11, fontWeight: 700, color: "#64748b" }}>Severity:</label>
+        {["low", "medium", "high"].map(s => (
+          <button key={s} onClick={() => setSeverity(s)}
+            style={{ padding: "4px 12px", borderRadius: 99, fontSize: 11, fontWeight: 700, cursor: "pointer", border: "none", background: severity === s ? (s === "high" ? "#dc2626" : s === "medium" ? "#d97706" : "#64748b") : "#e2e8f0", color: severity === s ? "white" : "#64748b" }}>
+            {s.charAt(0).toUpperCase() + s.slice(1)}
+          </button>
+        ))}
+      </div>
+      <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+        <button onClick={onCancel} style={{ padding: "6px 14px", background: "white", border: "1px solid #e2e8f0", borderRadius: 6, fontSize: 12, cursor: "pointer", color: "#475569" }}>Cancel</button>
+        <button onClick={handleSubmit} disabled={!desc.trim() || saving}
+          style={{ padding: "6px 16px", background: !desc.trim() || saving ? "#94a3b8" : "#d97706", color: "white", border: "none", borderRadius: 6, fontSize: 12, fontWeight: 700, cursor: !desc.trim() || saving ? "not-allowed" : "pointer" }}>
+          {saving ? "Saving..." : "Log Deviation"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ─── Main Page ────────────────────────────────────────────────────────────────
 export default function RunDetail() {
   const navigate = useNavigate();
-  const { toast } = useToast();
   const orgId = localStorage.getItem("bt_org_id");
-
-  const urlParams = new URLSearchParams(window.location.search);
-  const runId = urlParams.get("id");
+  const runId = new URLSearchParams(window.location.search).get("id");
 
   const [run, setRun] = useState(null);
   const [protocol, setProtocol] = useState(null);
-  const [stepRuns, setStepRuns] = useState([]);
-  const [protocolSteps, setProtocolSteps] = useState([]);
+  const [mergedSteps, setMergedSteps] = useState([]);
+  const [deviations, setDeviations] = useState([]);
   const [auditLogs, setAuditLogs] = useState([]);
-  const [activeTab, setActiveTab] = useState("overview");
   const [loading, setLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState("overview");
+  const [currentUser, setCurrentUser] = useState(null);
+
+  // Sign-off state
+  const [selectedResult, setSelectedResult] = useState("pass");
   const [signingOff, setSigningOff] = useState(false);
+
+  // Deviation state
+  const [addDeviationStepId, setAddDeviationStepId] = useState(null);
 
   useEffect(() => {
     async function load() {
       if (!runId) { navigate("/runs"); return; }
-      const runData = await base44.entities.Run.filter({ organization_id: orgId, id: runId });
+      const user = await base44.auth.me();
+      setCurrentUser(user);
+
+      const [runData, stepRunsData, devsData, logsData] = await Promise.all([
+        base44.entities.Run.filter({ organization_id: orgId, id: runId }),
+        base44.entities.StepRun.filter({ organization_id: orgId, run_id: runId }),
+        base44.entities.Deviation.filter({ organization_id: orgId, run_id: runId }),
+        base44.entities.AuditLog.filter({ organization_id: orgId }),
+      ]);
+
       if (!runData || runData.length === 0) { navigate("/runs"); return; }
       const r = runData[0];
       setRun(r);
+      setDeviations(devsData || []);
 
-      const [protos, srs, steps, logs] = await Promise.all([
-        base44.entities.Protocol.filter({ organization_id: orgId, id: r.protocol_id }),
-        base44.entities.StepRun.filter({ organization_id: orgId, run_id: runId }, "step_order"),
-        base44.entities.ProtocolStep.filter({ organization_id: orgId, protocol_id: r.protocol_id }, "step_order"),
-        base44.entities.AuditLog.filter({ organization_id: orgId, entity_id: runId }, "-created_at"),
-      ]);
+      const proto = await base44.entities.Protocol.filter({ organization_id: orgId, id: r.protocol_id });
+      setProtocol(proto?.[0] || null);
 
-      setProtocol(protos[0] || null);
-      setStepRuns(srs);
-      setProtocolSteps(steps);
-      setAuditLogs(logs);
+      const stepsData = await base44.entities.ProtocolStep.filter({ organization_id: orgId, protocol_id: r.protocol_id });
+
+      const merged = (stepRunsData || [])
+        .sort((a, b) => a.step_order - b.step_order)
+        .map(sr => ({
+          ...stepsData.find(s => s.id === sr.step_id),
+          ...sr,
+          stepRunId: sr.id,
+        }));
+      setMergedSteps(merged);
+
+      // Filter logs to this run
+      const stepRunIds = new Set((stepRunsData || []).map(sr => sr.id));
+      const devIds = new Set((devsData || []).map(d => d.id));
+      const filtered = (logsData || []).filter(l =>
+        l.entity_id === runId ||
+        (l.entity_type === "StepRun" && stepRunIds.has(l.entity_id)) ||
+        (l.entity_type === "Deviation" && devIds.has(l.entity_id))
+      ).sort((a, b) => new Date(b.created_at || b.created_date) - new Date(a.created_at || a.created_date));
+      setAuditLogs(filtered);
+
       setLoading(false);
     }
     load();
@@ -99,28 +215,35 @@ export default function RunDetail() {
     setSigningOff(true);
     const user = await base44.auth.me();
     const now = new Date().toISOString();
-
     await base44.entities.Run.update(run.id, {
-      run_state: "signed",
-      is_signed_off: true,
-      signed_off_at: now,
-      signed_off_by_user_id: user.id,
+      run_state: "signed", is_signed_off: true, signed_off_at: now,
+      signed_off_by_user_id: user.id, result_status: selectedResult,
     });
-
     await base44.entities.AuditLog.create({
-      organization_id: orgId,
-      entity_type: "Run",
-      entity_id: run.id,
-      event_type: "run_signed",
-      actor_user_id: user.id,
-      actor_email: user.email,
-      metadata: { signed_at: now },
-      created_at: now,
+      organization_id: orgId, entity_type: "Run", entity_id: run.id,
+      event_type: "run_signed", actor_user_id: user.id, actor_email: user.email,
+      metadata: { result_status: selectedResult, signed_at: now }, created_at: now,
     });
-
-    setRun(p => ({ ...p, run_state: "signed", is_signed_off: true, signed_off_at: now }));
+    setRun(prev => ({ ...prev, run_state: "signed", is_signed_off: true, result_status: selectedResult }));
     setSigningOff(false);
-    toast({ title: "Run signed off", description: "The run has been successfully signed." });
+  }
+
+  async function handleAddDeviation(stepRun, description, severity) {
+    const user = await base44.auth.me();
+    const now = new Date().toISOString();
+    const deviation = await base44.entities.Deviation.create({
+      organization_id: orgId, run_id: run.id, step_run_id: stepRun.stepRunId,
+      step_order: stepRun.step_order, step_instruction: stepRun.instruction,
+      description: description.trim(), deviation_type: "operator_noted",
+      severity, status: "open", created_by_id: user.id, created_at: now, archived: false,
+    });
+    await base44.entities.AuditLog.create({
+      organization_id: orgId, entity_type: "Deviation", entity_id: deviation.id,
+      event_type: "deviation_created", actor_user_id: user.id, actor_email: user.email,
+      metadata: { step_order: stepRun.step_order, severity, run_id: run.id }, created_at: now,
+    });
+    setDeviations(prev => [...prev, deviation]);
+    setAddDeviationStepId(null);
   }
 
   if (loading) {
@@ -131,200 +254,303 @@ export default function RunDetail() {
     );
   }
 
-  const mergedSteps = stepRuns.map(sr => ({
-    ...protocolSteps.find(s => s.id === sr.step_id) || {},
-    ...sr,
-  }));
-
-  const checklistEntries = run.checklist_completed ? Object.values(run.checklist_completed) : [];
-  const verifiedCount = checklistEntries.filter(e => e?.verified).length;
-
-  const shortId = run.id.slice(-8).toUpperCase();
+  const completedCount = mergedSteps.filter(s => s.step_state === "completed" || s.step_state === "skipped").length;
+  const openDevs = deviations.filter(d => d.status === "open");
+  const resolvedDevs = deviations.filter(d => d.status === "resolved");
 
   return (
-    <div className="space-y-4 max-w-5xl">
-      <button onClick={() => navigate("/runs")}
-        className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground">
+    <div className="space-y-4 max-w-4xl">
+      <button onClick={() => navigate("/runs")} className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground">
         <ArrowLeft className="w-4 h-4" /> Back to Runs
       </button>
 
+      {/* Header */}
       <div className="bg-card border border-border rounded-lg p-5">
-        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
+        <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
-            <h1 className="text-xl font-bold text-foreground">{protocol?.name || "Unknown Protocol"}</h1>
-            <p className="text-sm text-muted-foreground mt-1">Run #{shortId} · Operator: {run.operator_name || "—"}</p>
-            <p className="text-xs text-muted-foreground mt-0.5">Started: {fmtTs(run.run_started_at)}</p>
-          </div>
-          <div className="flex items-center gap-2 flex-wrap">
-            <span className={`text-sm px-3 py-1 rounded-full font-semibold ${STATE_STYLES[run.run_state] || "bg-gray-100 text-gray-600"}`}>
-              {STATE_LABELS[run.run_state] || run.run_state}
-            </span>
-            {run.run_state === "in_progress" && (
-              <Button size="sm" onClick={() => navigate(`/run-execution?id=${run.id}`)}>
-                Resume Run
-              </Button>
-            )}
+            <div style={{ fontSize: 11, fontWeight: 700, color: "#94a3b8", marginBottom: 4 }}>
+              {protocol?.name || "Protocol"}
+            </div>
+            <div style={{ fontSize: 18, fontWeight: 700, color: "#1e293b", marginBottom: 8 }}>
+              Run #{(run.id || "").slice(-8).toUpperCase()}
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+              <StateBadge state={run.run_state} />
+              <span style={{ fontSize: 12, color: "#64748b" }}>
+                Operator: <strong>{run.operator_name || "—"}</strong>
+              </span>
+              <span style={{ fontSize: 12, color: "#64748b" }}>
+                {tzFmt(run.run_started_at)}
+              </span>
+            </div>
           </div>
         </div>
       </div>
 
+      {/* Tabs */}
       <div className="flex items-center gap-1 bg-muted rounded-lg p-1 w-fit">
         {["overview", "steps", "audit"].map(tab => (
           <button key={tab} onClick={() => setActiveTab(tab)}
             className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors capitalize ${activeTab === tab ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}>
-            {tab === "audit" ? "Audit Trail" : tab === "steps" ? `Steps (${stepRuns.length})` : "Overview"}
+            {tab === "audit" ? "Audit Trail" : tab.charAt(0).toUpperCase() + tab.slice(1)}
+            {tab === "steps" && ` (${mergedSteps.length})`}
           </button>
         ))}
       </div>
 
-      {/* Overview */}
+      {/* ── TAB: OVERVIEW ─────────────────────────────────────────────────────── */}
       {activeTab === "overview" && (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          <div className="bg-card border border-border rounded-lg p-4">
-            <h3 className="text-sm font-semibold text-foreground mb-3">Run Details</h3>
-            <MetaRow label="Started" value={fmtTs(run.run_started_at)} />
-            <MetaRow label="Ended" value={fmtTs(run.run_ended_at)} />
-            <MetaRow label="Duration" value={fmtDuration(run.run_started_at, run.run_ended_at)} />
-            <MetaRow label="Operator" value={run.operator_name} />
-            <MetaRow label="Sample Reference" value={run.sample_reference} />
-            <MetaRow label="Instrument ID" value={run.instrument_id} />
-            {run.temperature != null && (
-              <MetaRow label="Temperature" value={`${run.temperature}°${run.temperature_unit === "fahrenheit" ? "F" : "C"}`} />
-            )}
-            {run.humidity != null && <MetaRow label="Humidity" value={`${run.humidity}%`} />}
-          </div>
-
-          <div className="space-y-4">
-            <div className="bg-card border border-border rounded-lg p-4">
-              <h3 className="text-sm font-semibold text-foreground mb-3">Result</h3>
-              <div className="flex items-center gap-2 mb-4">
-                <span className={`text-sm px-3 py-1 rounded-full font-semibold capitalize ${
-                  run.result_status === "pass" ? "bg-emerald-50 text-emerald-700" :
-                  run.result_status === "fail" ? "bg-red-50 text-red-700" :
-                  "bg-gray-100 text-gray-500"
-                }`}>
-                  {run.result_status || "pending"}
-                </span>
-                <span className="text-xs text-muted-foreground">
-                  {mergedSteps.filter(s => s.deviation_flagged).length} deviation(s)
-                </span>
-              </div>
-
-              {run.run_state === "completed" && !run.is_signed_off && (
-                <Button className="w-full" onClick={handleSignOff} disabled={signingOff}>
-                  {signingOff ? "Signing..." : "Sign Off Run"}
-                </Button>
-              )}
-              {run.is_signed_off && (
-                <div className="text-sm text-muted-foreground space-y-1">
-                  <p className="text-emerald-600 font-semibold">✓ Signed off</p>
-                  <p>At: {fmtTs(run.signed_off_at)}</p>
-                </div>
-              )}
+        <div className="space-y-4">
+          {/* Metadata grid */}
+          <div style={{ background: "white", borderRadius: 10, border: "1px solid #e2e8f0", padding: "16px 20px" }}>
+            <div style={{ fontSize: 11, fontWeight: 700, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 14 }}>Run Details</div>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(180px, 1fr))", gap: 16 }}>
+              <MetaRow label="Started" value={tzFmt(run.run_started_at)} />
+              <MetaRow label="Ended" value={run.run_ended_at ? tzFmt(run.run_ended_at) : "—"} />
+              <MetaRow label="Duration" value={run.run_ended_at ? fmtDuration(run.run_started_at, run.run_ended_at) : "In progress"} />
+              <MetaRow label="Operator" value={run.operator_name} />
+              <MetaRow label="Sample Ref" value={run.sample_reference} />
+              <MetaRow label="Instrument" value={run.instrument_id} />
+              <MetaRow label="Temperature" value={run.temperature ? `${run.temperature}°${run.temperature_unit === "fahrenheit" ? "F" : "C"}` : null} />
+              <MetaRow label="Humidity" value={run.humidity != null ? `${run.humidity}%` : null} />
             </div>
-
-            {checklistEntries.length > 0 && (
-              <div className="bg-card border border-border rounded-lg p-4">
-                <h3 className="text-sm font-semibold text-foreground mb-2">Pre-Run Checklist</h3>
-                <p className="text-sm text-muted-foreground">{verifiedCount} of {checklistEntries.length} items verified</p>
-                <div className="mt-2 h-2 bg-muted rounded-full overflow-hidden">
-                  <div className="h-full bg-emerald-500 rounded-full" style={{ width: `${checklistEntries.length > 0 ? (verifiedCount / checklistEntries.length) * 100 : 0}%` }} />
-                </div>
-              </div>
-            )}
-
             {run.context_notes && (
-              <div className="bg-card border border-border rounded-lg p-4">
-                <h3 className="text-sm font-semibold text-foreground mb-2">Notes</h3>
-                <p className="text-sm text-muted-foreground whitespace-pre-line">{run.context_notes}</p>
+              <div style={{ marginTop: 14, padding: "10px 12px", background: "#f8fafc", borderRadius: 7, fontSize: 13, color: "#475569" }}>
+                <span style={{ fontWeight: 700, color: "#64748b" }}>Notes: </span>{run.context_notes}
               </div>
             )}
           </div>
-        </div>
-      )}
 
-      {/* Steps */}
-      {activeTab === "steps" && (
-        <div className="space-y-3">
-          {mergedSteps.map((s, i) => (
-            <div key={s.id} className={`bg-card border rounded-lg p-4 ${s.deviation_flagged ? "border-amber-200" : "border-border"}`}>
-              <div className="flex items-start gap-3">
-                <span className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold shrink-0 mt-0.5 ${
-                  s.step_state === "completed" ? "bg-emerald-100 text-emerald-700" :
-                  s.step_state === "skipped" ? "bg-amber-100 text-amber-700" :
-                  "bg-muted text-muted-foreground"
-                }`}>
-                  {s.step_state === "completed" ? "✓" : s.step_state === "skipped" ? "⏭" : s.step_order}
-                </span>
-                <div className="flex-1 min-w-0">
-                  {s.title && <p className="text-xs font-semibold text-primary uppercase mb-1">{s.title}</p>}
-                  <p className="text-sm text-foreground leading-relaxed">{s.instruction}</p>
-
-                  <div className="flex flex-wrap gap-3 mt-2 text-xs text-muted-foreground">
-                    {s.step_completed_at && (
-                      <span className="flex items-center gap-1">
-                        <Clock className="w-3 h-3" /> {fmtTs(s.step_completed_at)}
-                      </span>
-                    )}
-                    {s.timer_elapsed_seconds != null && s.expected_duration_seconds > 0 && (
-                      <span className={`font-medium ${
-                        Math.abs(s.timer_elapsed_seconds - s.expected_duration_seconds) > (s.tolerance_upper_seconds || 0)
-                          ? "text-amber-600" : "text-emerald-600"
-                      }`}>
-                        {Math.floor(s.timer_elapsed_seconds / 60)}m {s.timer_elapsed_seconds % 60}s
-                        {" "}(target: {Math.floor(s.expected_duration_seconds / 60)}m)
-                      </span>
-                    )}
-                    {s.deviation_flagged && (
-                      <span className="flex items-center gap-1 text-amber-600 font-semibold">
-                        <AlertTriangle className="w-3 h-3" /> Deviation
-                      </span>
-                    )}
-                  </div>
-
-                  {s.measurement_values && Object.keys(s.measurement_values).length > 0 && (
-                    <div className="mt-2 flex flex-wrap gap-2">
-                      {Object.entries(s.measurement_values).map(([k, v]) => (
-                        <span key={k} className="text-xs px-2 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-200">
-                          {k}: {v}
-                        </span>
-                      ))}
-                    </div>
-                  )}
-
-                  {s.notes && (
-                    <p className="mt-2 text-xs text-muted-foreground italic bg-muted/40 rounded px-2 py-1">{s.notes}</p>
-                  )}
+          {/* Progress summary */}
+          <div style={{ background: "white", borderRadius: 10, border: "1px solid #e2e8f0", padding: "16px 20px" }}>
+            <div style={{ fontSize: 11, fontWeight: 700, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 14 }}>Progress</div>
+            <div style={{ display: "flex", gap: 24, flexWrap: "wrap" }}>
+              <div>
+                <div style={{ fontSize: 10, fontWeight: 700, color: "#94a3b8", textTransform: "uppercase", marginBottom: 4 }}>Steps Completed</div>
+                <div style={{ fontSize: 20, fontWeight: 700, color: "#1e293b" }}>{completedCount} <span style={{ fontSize: 13, color: "#94a3b8" }}>/ {mergedSteps.length}</span></div>
+              </div>
+              <div>
+                <div style={{ fontSize: 10, fontWeight: 700, color: "#94a3b8", textTransform: "uppercase", marginBottom: 4 }}>Deviations</div>
+                <div style={{ fontSize: 14, fontWeight: 600, color: openDevs.length > 0 ? "#dc2626" : "#16a34a" }}>
+                  {openDevs.length > 0 ? `${openDevs.length} open` : "None"}{resolvedDevs.length > 0 ? `, ${resolvedDevs.length} resolved` : ""}
                 </div>
               </div>
+              <div>
+                <div style={{ fontSize: 10, fontWeight: 700, color: "#94a3b8", textTransform: "uppercase", marginBottom: 4 }}>Result</div>
+                <span style={{
+                  fontSize: 12, fontWeight: 700, padding: "3px 10px", borderRadius: 99,
+                  background: run.result_status === "pass" ? "#f0fdf4" : run.result_status === "fail" ? "#fef2f2" : "#f8fafc",
+                  color: run.result_status === "pass" ? "#16a34a" : run.result_status === "fail" ? "#dc2626" : "#64748b",
+                  border: `1px solid ${run.result_status === "pass" ? "#bbf7d0" : run.result_status === "fail" ? "#fecaca" : "#e2e8f0"}`
+                }}>
+                  {(run.result_status || "pending").toUpperCase()}
+                </span>
+              </div>
             </div>
-          ))}
-        </div>
-      )}
 
-      {/* Audit Trail */}
-      {activeTab === "audit" && (
-        <div className="bg-card border border-border rounded-lg overflow-hidden">
-          {auditLogs.length === 0 ? (
-            <div className="p-8 text-center text-sm text-muted-foreground">No audit entries yet.</div>
-          ) : (
-            <div className="divide-y divide-border">
-              {auditLogs.map(log => (
-                <div key={log.id} className="flex items-start gap-3 px-4 py-3">
-                  <span className={`text-xs px-2 py-0.5 rounded font-semibold whitespace-nowrap mt-0.5 ${EVENT_STYLES[log.event_type] || "bg-gray-100 text-gray-600"}`}>
-                    {log.event_type?.replace(/_/g, " ")}
-                  </span>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-xs text-muted-foreground">{log.actor_email}</p>
-                    {log.metadata && Object.keys(log.metadata).length > 0 && (
-                      <p className="text-xs text-muted-foreground/60 mt-0.5">
-                        {Object.entries(log.metadata).map(([k, v]) => `${k}: ${v}`).join(" · ")}
-                      </p>
-                    )}
+            {/* Progress bar */}
+            <div style={{ marginTop: 14, height: 6, background: "#f1f5f9", borderRadius: 99, overflow: "hidden" }}>
+              <div style={{ height: "100%", background: "#6366f1", borderRadius: 99, width: `${mergedSteps.length > 0 ? (completedCount / mergedSteps.length) * 100 : 0}%`, transition: "width 0.4s" }} />
+            </div>
+          </div>
+
+          {/* Open deviations summary */}
+          {openDevs.length > 0 && (
+            <div style={{ background: "#fffbeb", borderRadius: 10, border: "1px solid #fde68a", borderLeft: "4px solid #d97706", padding: "14px 16px" }}>
+              <div style={{ fontSize: 11, fontWeight: 700, color: "#92400e", marginBottom: 10 }}>⚠ Open Deviations ({openDevs.length})</div>
+              {openDevs.map(d => (
+                <div key={d.id} style={{ display: "flex", alignItems: "flex-start", gap: 8, marginBottom: 8, padding: "8px 10px", background: "white", borderRadius: 7, border: "1px solid #fde68a" }}>
+                  <SeverityBadge severity={d.severity} />
+                  <div>
+                    <div style={{ fontSize: 12, color: "#1e293b", fontWeight: 500 }}>{d.description}</div>
+                    {d.step_order && <div style={{ fontSize: 11, color: "#94a3b8", marginTop: 2 }}>Step {d.step_order}</div>}
                   </div>
-                  <span className="text-xs text-muted-foreground whitespace-nowrap">{fmtTs(log.created_at)}</span>
                 </div>
               ))}
+            </div>
+          )}
+
+          {/* Sign-off section */}
+          {run.run_state === "completed" && (
+            <div style={{ background: "white", borderRadius: 10, border: "1px solid #c7d2fe", padding: "20px" }}>
+              <div style={{ fontSize: 13, fontWeight: 700, color: "#1e293b", marginBottom: 6 }}>Ready to Sign Off</div>
+              <div style={{ fontSize: 13, color: "#64748b", marginBottom: 16 }}>Review the run and confirm all steps were completed correctly.</div>
+              <div style={{ marginBottom: 14 }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: "#64748b", marginBottom: 8 }}>RESULT</div>
+                <div style={{ display: "flex", gap: 8 }}>
+                  {["pass", "fail", "pending"].map(r => (
+                    <button key={r} onClick={() => setSelectedResult(r)}
+                      style={{ padding: "7px 18px", borderRadius: 7, fontSize: 12, fontWeight: 700, cursor: "pointer", border: "none",
+                        background: selectedResult === r ? (r === "pass" ? "#16a34a" : r === "fail" ? "#dc2626" : "#64748b") : "#f1f5f9",
+                        color: selectedResult === r ? "white" : "#64748b" }}>
+                      {r === "pass" ? "✓ Pass" : r === "fail" ? "✗ Fail" : "— Pending"}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <button onClick={handleSignOff} disabled={signingOff}
+                style={{ padding: "10px 24px", background: signingOff ? "#94a3b8" : "#6366f1", color: "white", border: "none", borderRadius: 7, fontSize: 13, fontWeight: 700, cursor: signingOff ? "not-allowed" : "pointer" }}>
+                {signingOff ? "Signing..." : "Sign Off Run →"}
+              </button>
+            </div>
+          )}
+
+          {run.run_state === "signed" && (
+            <div style={{ background: "#f0fdf4", borderRadius: 10, border: "1px solid #bbf7d0", padding: "14px 20px", fontSize: 13, color: "#16a34a", fontWeight: 600 }}>
+              ✓ Signed off by {run.signed_off_by_user_id || "operator"} on {tzFmt(run.signed_off_at)}
+            </div>
+          )}
+
+          {run.run_state === "abandoned" && (
+            <div style={{ background: "#f8fafc", borderRadius: 10, border: "1px solid #e2e8f0", padding: "14px 20px", fontSize: 13, color: "#64748b", fontWeight: 600 }}>
+              ✗ Run was abandoned
+              {run.context_notes && <div style={{ fontWeight: 400, fontSize: 12, marginTop: 4 }}>Reason: {run.context_notes}</div>}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── TAB: STEPS ──────────────────────────────────────────────────────── */}
+      {activeTab === "steps" && (
+        <div>
+          {(() => {
+            const rendered = [];
+            let lastTitle = null;
+            mergedSteps.forEach((step, idx) => {
+              const title = step.title?.trim() || null;
+              if (title && title !== lastTitle) {
+                rendered.push(
+                  <div key={`hdr_${idx}`} style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 0 6px", marginTop: idx === 0 ? 0 : 12 }}>
+                    <div style={{ flex: 1, height: 1, background: "#e0e7ff" }} />
+                    <span style={{ fontSize: 11, fontWeight: 700, color: "#6366f1", textTransform: "uppercase", letterSpacing: "0.07em", padding: "2px 10px", background: "#eef2ff", borderRadius: 99 }}>{title}</span>
+                    <div style={{ flex: 1, height: 1, background: "#e0e7ff" }} />
+                  </div>
+                );
+                lastTitle = title;
+              }
+
+              const stepDevs = deviations.filter(d => d.step_run_id === step.stepRunId);
+              const stateIcon = step.step_state === "completed" ? "✓" : step.step_state === "skipped" ? "⏭" : "●";
+              const stateColor = step.step_state === "completed" ? "#16a34a" : step.step_state === "skipped" ? "#f59e0b" : "#94a3b8";
+
+              // Timer check
+              let timerStatus = null;
+              if (step.timing_mode !== "none" && step.expected_duration_seconds > 0 && step.timer_elapsed_seconds != null) {
+                const lower = step.expected_duration_seconds - (step.tolerance_lower_seconds || 0);
+                const upper = step.expected_duration_seconds + (step.tolerance_upper_seconds || 0);
+                if (step.timer_elapsed_seconds >= lower && step.timer_elapsed_seconds <= upper) {
+                  timerStatus = { ok: true, label: "✓ On time" };
+                } else if (step.timer_elapsed_seconds < lower) {
+                  timerStatus = { ok: false, label: "⚠ Under time" };
+                } else {
+                  timerStatus = { ok: false, label: "⚠ Over time" };
+                }
+              }
+
+              rendered.push(
+                <div key={step.stepRunId} style={{ background: "white", border: "1px solid #e2e8f0", borderRadius: 8, marginBottom: 6, padding: "12px 14px" }}>
+                  <div style={{ display: "flex", alignItems: "flex-start", gap: 10 }}>
+                    <div style={{ width: 22, height: 22, borderRadius: "50%", flexShrink: 0, background: step.is_critical ? "#ef4444" : "#6366f1", color: "white", fontSize: 10, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", marginTop: 1 }}>
+                      {step.step_order}
+                    </div>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4, flexWrap: "wrap" }}>
+                        <span style={{ fontSize: 14, fontWeight: 700, color: stateColor }}>{stateIcon}</span>
+                        <span style={{ fontSize: 13, color: "#1e293b", lineHeight: "1.5", flex: 1 }}>{step.instruction}</span>
+                      </div>
+
+                      {/* Meta row */}
+                      <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginTop: 6, fontSize: 11, color: "#94a3b8" }}>
+                        {step.step_completed_at && (
+                          <span>Completed: <strong style={{ color: "#64748b" }}>{tzFmt(step.step_completed_at)}</strong></span>
+                        )}
+                        {step.timer_elapsed_seconds != null && (
+                          <span>Took: <strong style={{ color: "#64748b" }}>{fmtElapsed(step.timer_elapsed_seconds)}</strong>
+                            {step.expected_duration_seconds > 0 && <span> / target {fmtElapsed(step.expected_duration_seconds)}</span>}
+                          </span>
+                        )}
+                        {timerStatus && (
+                          <span style={{ fontWeight: 700, color: timerStatus.ok ? "#16a34a" : "#d97706" }}>{timerStatus.label}</span>
+                        )}
+                        {step.deviation_flagged && (
+                          <span style={{ fontWeight: 700, color: "#dc2626" }}>⚠ Deviation flagged</span>
+                        )}
+                      </div>
+
+                      {/* Measurements */}
+                      {step.measurement_values && Object.keys(step.measurement_values).length > 0 && (
+                        <div style={{ marginTop: 8, padding: "8px 10px", background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: 6 }}>
+                          <div style={{ fontSize: 10, fontWeight: 700, color: "#16a34a", marginBottom: 4 }}>MEASUREMENTS</div>
+                          {Object.entries(step.measurement_values).map(([k, v]) => (
+                            <div key={k} style={{ fontSize: 12, color: "#1e293b" }}><span style={{ color: "#64748b" }}>{k}:</span> {v}</div>
+                          ))}
+                        </div>
+                      )}
+
+                      {/* Notes */}
+                      {step.notes && (
+                        <div style={{ marginTop: 6, fontSize: 12, color: "#94a3b8", fontStyle: "italic" }}>{step.notes}</div>
+                      )}
+
+                      {/* Step deviations */}
+                      {stepDevs.map(d => (
+                        <div key={d.id} style={{ marginTop: 6, padding: "6px 10px", background: "#fffbeb", border: "1px solid #fde68a", borderRadius: 6, fontSize: 12, color: "#92400e", display: "flex", gap: 6, alignItems: "center" }}>
+                          <SeverityBadge severity={d.severity} />
+                          <span>{d.description}</span>
+                          {d.status === "resolved" && <span style={{ color: "#16a34a", marginLeft: 4 }}>✓ Resolved</span>}
+                        </div>
+                      ))}
+
+                      {/* Add deviation */}
+                      {(step.step_state === "completed" || step.step_state === "skipped") && addDeviationStepId !== step.stepRunId && (
+                        <button onClick={() => setAddDeviationStepId(step.stepRunId)}
+                          style={{ marginTop: 8, padding: "4px 12px", background: "white", border: "1px solid #fde68a", borderRadius: 6, fontSize: 11, fontWeight: 700, cursor: "pointer", color: "#d97706" }}>
+                          + Log Deviation
+                        </button>
+                      )}
+                      {addDeviationStepId === step.stepRunId && (
+                        <AddDeviationForm stepRun={step} onSave={handleAddDeviation} onCancel={() => setAddDeviationStepId(null)} />
+                      )}
+                    </div>
+                  </div>
+                </div>
+              );
+            });
+            return rendered;
+          })()}
+        </div>
+      )}
+
+      {/* ── TAB: AUDIT TRAIL ────────────────────────────────────────────────── */}
+      {activeTab === "audit" && (
+        <div>
+          {auditLogs.length === 0 ? (
+            <div style={{ textAlign: "center", padding: "40px 20px", color: "#94a3b8", fontSize: 13 }}>No audit entries for this run.</div>
+          ) : (
+            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+              {auditLogs.map(log => {
+                const ts = log.created_at || log.created_date;
+                const isMe = currentUser && log.actor_email === currentUser.email;
+                return (
+                  <div key={log.id} style={{ background: "white", border: "1px solid #e2e8f0", borderRadius: 8, padding: "10px 14px", display: "flex", gap: 12, alignItems: "flex-start" }}>
+                    <AuditBadge eventType={log.event_type} />
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontSize: 12, color: "#1e293b", fontWeight: 600 }}>
+                        {isMe ? "You" : (log.actor_email || "System")}
+                      </div>
+                      {log.metadata && Object.keys(log.metadata).length > 0 && (
+                        <div style={{ fontSize: 11, color: "#64748b", marginTop: 2 }}>
+                          {Object.entries(log.metadata).map(([k, v]) => `${k.replace(/_/g, " ")}: ${v}`).join(" · ")}
+                        </div>
+                      )}
+                    </div>
+                    <div style={{ textAlign: "right", flexShrink: 0 }}>
+                      <div style={{ fontSize: 11, color: "#1e293b", fontWeight: 500 }}>{tzFmt(ts)}</div>
+                      <div style={{ fontSize: 10, color: "#94a3b8" }}>{fmtRelative(ts)}</div>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           )}
         </div>

@@ -16,6 +16,7 @@ import Import from './pages/Import';
 import Runs from './pages/Runs';
 import RunExecution from './pages/RunExecution';
 import RunDetail from './pages/RunDetail';
+import Deviations from './pages/Deviations';
 
 const AuthenticatedApp = () => {
   const { isLoadingAuth, isLoadingPublicSettings, authError, navigateToLogin } = useAuth();
@@ -50,6 +51,7 @@ const AuthenticatedApp = () => {
         <Route path="/runs" element={<Runs />} />
         <Route path="/run-execution" element={<RunExecution />} />
         <Route path="/run-detail" element={<RunDetail />} />
+        <Route path="/deviations" element={<Deviations />} />
       </Route>
       <Route path="*" element={<PageNotFound />} />
     </Routes>

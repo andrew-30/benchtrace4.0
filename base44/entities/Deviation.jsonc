@@ -1,0 +1,97 @@
+{
+  "name": "Deviation",
+  "type": "object",
+  "properties": {
+    "organization_id": {
+      "type": "string",
+      "title": "Organization ID"
+    },
+    "run_id": {
+      "type": "string",
+      "title": "Run ID"
+    },
+    "step_run_id": {
+      "type": "string",
+      "title": "Step Run ID"
+    },
+    "step_order": {
+      "type": "integer",
+      "title": "Step Order"
+    },
+    "step_instruction": {
+      "type": "string",
+      "title": "Step Instruction"
+    },
+    "description": {
+      "type": "string",
+      "title": "Description"
+    },
+    "deviation_type": {
+      "type": "string",
+      "title": "Deviation Type",
+      "enum": [
+        "timer_exceeded",
+        "timer_short",
+        "measurement_out_of_range",
+        "operator_noted",
+        "other"
+      ],
+      "default": "other"
+    },
+    "severity": {
+      "type": "string",
+      "title": "Severity",
+      "enum": [
+        "low",
+        "medium",
+        "high"
+      ],
+      "default": "low"
+    },
+    "status": {
+      "type": "string",
+      "title": "Status",
+      "enum": [
+        "open",
+        "resolved"
+      ],
+      "default": "open"
+    },
+    "resolution_notes": {
+      "type": "string",
+      "title": "Resolution Notes"
+    },
+    "resolved_by_user_id": {
+      "type": "string",
+      "title": "Resolved By User ID"
+    },
+    "resolved_by_name": {
+      "type": "string",
+      "title": "Resolved By Name"
+    },
+    "resolved_at": {
+      "type": "string",
+      "format": "date-time",
+      "title": "Resolved At"
+    },
+    "created_by_id": {
+      "type": "string",
+      "title": "Created By ID"
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time",
+      "title": "Created At"
+    },
+    "archived": {
+      "type": "boolean",
+      "title": "Archived",
+      "default": false
+    }
+  },
+  "required": [
+    "organization_id",
+    "run_id",
+    "description"
+  ]
+}

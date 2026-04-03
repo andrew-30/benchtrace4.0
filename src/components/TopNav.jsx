@@ -48,6 +48,7 @@ export default function TopNav({ user }) {
             <NavLink to="/dashboard" label="Dashboard" />
             <NavLink to="/protocols" label="Protocols" />
             <NavLink to="/runs" label="Runs" />
+            <NavLink to="/deviations" label="Deviations" />
             <NavLink to="/settings" label="Settings" />
           </nav>
         </div>
@@ -75,6 +76,7 @@ export default function TopNav({ user }) {
         <NavLink to="/dashboard" label="Dashboard" />
         <NavLink to="/protocols" label="Protocols" />
         <NavLink to="/runs" label="Runs" />
+        <NavLink to="/deviations" label="Deviations" />
         <NavLink to="/settings" label="Settings" />
       </div>
     </header>

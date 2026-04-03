@@ -24,19 +24,23 @@ function PlanBadge({ plan }) {
 export default function Dashboard() {
   const { org } = useOutletContext();
   const orgId = localStorage.getItem("bt_org_id");
-  const [stats, setStats] = useState({ activeRuns: 0, protocols: 0, runsThisMonth: 0 });
+  const [stats, setStats] = useState({ activeRuns: 0, protocols: 0, openDeviations: 0, runsThisMonth: 0 });
 
   useEffect(() => {
     async function loadStats() {
-      const now = new Date();
-      const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
-      const [activeRuns, protocols, allRuns] = await Promise.all([
-        base44.entities.Run.filter({ organization_id: orgId, run_state: "in_progress" }),
-        base44.entities.Protocol.filter({ organization_id: orgId }),
+      const [runs, protocols, deviations] = await Promise.all([
         base44.entities.Run.filter({ organization_id: orgId }),
+        base44.entities.Protocol.filter({ organization_id: orgId }),
+        base44.entities.Deviation.filter({ organization_id: orgId, status: 'open', archived: false }),
       ]);
-      const runsThisMonth = allRuns.filter(r => r.run_started_at && r.run_started_at >= monthStart).length;
-      setStats({ activeRuns: activeRuns.length, protocols: protocols.length, runsThisMonth });
+      const thisMonth = new Date();
+      thisMonth.setDate(1); thisMonth.setHours(0, 0, 0, 0);
+      setStats({
+        activeRuns: runs.filter(r => r.run_state === 'in_progress').length,
+        protocols: protocols.length,
+        openDeviations: deviations.length,
+        runsThisMonth: runs.filter(r => r.run_started_at && new Date(r.run_started_at) >= thisMonth).length,
+      });
     }
     if (orgId) loadStats();
   }, [orgId]);
@@ -65,7 +69,7 @@ export default function Dashboard() {
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard label="Active Runs" value={String(stats.activeRuns)} icon={Activity} color="blue" />
         <StatCard label="Protocols" value={String(stats.protocols)} icon={FlaskConical} color="indigo" />
-        <StatCard label="Open Deviations" value="0" icon={AlertTriangle} color="amber" />
+        <StatCard label="Open Deviations" value={String(stats.openDeviations)} icon={AlertTriangle} color="amber" />
         <StatCard label="Runs This Month" value={String(stats.runsThisMonth)} icon={BarChart3} color="green" />
       </div>
 
