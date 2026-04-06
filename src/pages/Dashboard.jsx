@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useOutletContext } from "react-router-dom";
+import { useOutletContext, useNavigate } from "react-router-dom";
 import { Activity, FlaskConical, AlertTriangle, BarChart3, Clock } from "lucide-react";
 import StatCard from "../components/StatCard";
 import { base44 } from "@/api/base44Client";
@@ -22,6 +22,7 @@ function PlanBadge({ plan }) {
 }
 
 export default function Dashboard() {
+  const navigate = useNavigate();
   const { org } = useOutletContext();
   const orgId = localStorage.getItem("bt_org_id");
   const [stats, setStats] = useState({ activeRuns: 0, protocols: 0, openDeviations: 0, runsThisMonth: 0 });
@@ -71,6 +72,16 @@ export default function Dashboard() {
         <StatCard label="Protocols" value={String(stats.protocols)} icon={FlaskConical} color="indigo" />
         <StatCard label="Open Deviations" value={String(stats.openDeviations)} icon={AlertTriangle} color="amber" />
         <StatCard label="Runs This Month" value={String(stats.runsThisMonth)} icon={BarChart3} color="green" />
+        <div
+          onClick={() => navigate('/audit-readiness')}
+          style={{ cursor: 'pointer', padding: '20px', background: 'white', borderRadius: 10, border: '1px solid #e2e8f0', borderTop: '3px solid #6366f1' }}
+          onMouseEnter={e => e.currentTarget.style.boxShadow = '0 4px 12px rgba(99,102,241,0.12)'}
+          onMouseLeave={e => e.currentTarget.style.boxShadow = 'none'}
+        >
+          <div style={{ fontSize: 11, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>Audit Readiness</div>
+          <div style={{ fontSize: 26, fontWeight: 800, color: '#6366f1' }}>Check Score →</div>
+          <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 4 }}>5-point compliance check</div>
+        </div>
       </div>
 
       {/* Recent Activity */}

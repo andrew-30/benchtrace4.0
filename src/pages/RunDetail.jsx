@@ -273,23 +273,31 @@ export default function RunDetail() {
       {/* Header */}
       <div className="bg-card border border-border rounded-lg p-5">
         <div className="flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <div style={{ fontSize: 11, fontWeight: 700, color: "#94a3b8", marginBottom: 4 }}>
-              {protocol?.name || "Protocol"}
-            </div>
-            <div style={{ fontSize: 18, fontWeight: 700, color: "#1e293b", marginBottom: 8 }}>
-              Run #{(run.id || "").slice(-8).toUpperCase()}
-            </div>
-            <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-              <StateBadge state={run.run_state} />
-              <span style={{ fontSize: 12, color: "#64748b" }}>
-                Operator: <strong>{run.operator_name || "—"}</strong>
-              </span>
-              <span style={{ fontSize: 12, color: "#64748b" }}>
-                {tzFmt(run.run_started_at)}
-              </span>
-            </div>
+        <div>
+          <div style={{ fontSize: 11, fontWeight: 700, color: "#94a3b8", marginBottom: 4 }}>
+            {protocol?.name || "Protocol"}
           </div>
+          <div style={{ fontSize: 18, fontWeight: 700, color: "#1e293b", marginBottom: 8 }}>
+            Run #{(run.id || "").slice(-8).toUpperCase()}
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+            <StateBadge state={run.run_state} />
+            <span style={{ fontSize: 12, color: "#64748b" }}>
+              Operator: <strong>{run.operator_name || "—"}</strong>
+            </span>
+            <span style={{ fontSize: 12, color: "#64748b" }}>
+              {tzFmt(run.run_started_at)}
+            </span>
+          </div>
+        </div>
+        {['completed', 'signed'].includes(run?.run_state) && (
+          <button
+            onClick={() => navigate(`/audit-view?run_id=${run.id}`)}
+            style={{ padding: '7px 14px', background: '#1e293b', color: 'white', border: 'none', borderRadius: 7, fontSize: 12, fontWeight: 700, cursor: 'pointer' }}
+          >
+            🔍 Audit View
+          </button>
+        )}
         </div>
       </div>
 
