@@ -97,6 +97,18 @@ export default function AuditView() {
     const AMBER = [217, 119, 6];
     const WHITE = [255, 255, 255];
 
+    // Strip non-ASCII characters that jsPDF Helvetica cannot render
+    const safe = (str) => {
+      if (!str) return '';
+      return String(str)
+        .replace(/[\u2013\u2014]/g, '-')
+        .replace(/[\u2018\u2019]/g, "'")
+        .replace(/[\u201C\u201D]/g, '"')
+        .replace(/\u0394/g, 'Delta')
+        .replace(/\u00B0/g, 'deg')
+        .replace(/[^\x00-\x7F]/g, '');
+    };
+
     const checkPage = (neededSpace) => {
       if (y + neededSpace > pageH - margin) {
         doc.addPage();
@@ -105,8 +117,8 @@ export default function AuditView() {
         doc.rect(0, 0, pageW, 10, 'F');
         doc.setFontSize(7);
         doc.setTextColor(...GRAY);
-        doc.text('BenchTrace 4.0 — Audit Report', margin, 7);
-        doc.text(`Run ID: ${run.id.slice(-12)}`, pageW - margin, 7, { align: 'right' });
+        doc.text('BenchTrace 4.0 - Audit Report', margin, 7);
+        doc.text(`Run ID: ${(run.id || '').slice(-12)}`, pageW - margin, 7, { align: 'right' });
         y = 16;
       }
     };
@@ -118,7 +130,7 @@ export default function AuditView() {
       doc.setFontSize(9);
       doc.setTextColor(...WHITE);
       doc.setFont('helvetica', 'bold');
-      doc.text(title, margin + 4, y + 5.5);
+      doc.text(safe(title), margin + 4, y + 5.5);
       doc.setTextColor(...DARK);
       y += 12;
     };
@@ -129,10 +141,10 @@ export default function AuditView() {
       doc.setFontSize(8.5);
       doc.setFont('helvetica', 'bold');
       doc.setTextColor(...GRAY);
-      doc.text(key + ':', x, y);
+      doc.text(safe(key) + ':', x, y);
       doc.setFont('helvetica', 'normal');
       doc.setTextColor(...DARK);
-      const lines = doc.splitTextToSize(String(value || '—'), contentW - 45);
+      const lines = doc.splitTextToSize(safe(String(value || '--')), contentW - 45);
       doc.text(lines, x + 42, y);
       y += 5.5 * lines.length;
     };
@@ -142,10 +154,10 @@ export default function AuditView() {
       doc.setFontSize(9);
       doc.setFont('helvetica', 'bold');
       doc.setTextColor(...(verified ? GREEN : GRAY));
-      doc.text(verified ? '✓' : '○', margin + 2, y);
+      doc.text(verified ? '[OK]' : '[--]', margin + 2, y);
       doc.setFont('helvetica', 'normal');
       doc.setTextColor(...DARK);
-      const lines = doc.splitTextToSize(text, contentW - 60);
+      const lines = doc.splitTextToSize(safe(text), contentW - 60);
       doc.text(lines, margin + 10, y);
       let badgeX = margin + 10 + 80;
       if (lot) {
@@ -153,7 +165,7 @@ export default function AuditView() {
         doc.roundedRect(badgeX, y - 3.5, 30, 5, 1, 1, 'F');
         doc.setFontSize(7);
         doc.setTextColor(...GRAY);
-        doc.text(`Lot: ${lot}`, badgeX + 2, y);
+        doc.text(`Lot: ${safe(lot)}`, badgeX + 2, y);
         badgeX += 33;
       }
       if (expiry) {
@@ -161,7 +173,7 @@ export default function AuditView() {
         doc.roundedRect(badgeX, y - 3.5, 28, 5, 1, 1, 'F');
         doc.setFontSize(7);
         doc.setTextColor(...(expired ? RED : GREEN));
-        doc.text(expired ? 'EXPIRED' : `Exp: ${expiry}`, badgeX + 2, y);
+        doc.text(expired ? 'EXPIRED' : `Exp: ${safe(expiry)}`, badgeX + 2, y);
       }
       y += 5.5 * lines.length + 1;
     };
@@ -169,7 +181,7 @@ export default function AuditView() {
     const stepRow = (stepNum, state, instruction, completedAt, elapsed, devFlagged, measurements, notes) => {
       checkPage(14);
       const stateColor = state === 'completed' ? GREEN : state === 'skipped' ? AMBER : GRAY;
-      const stateIcon = state === 'completed' ? '✓' : state === 'skipped' ? '⏭' : '○';
+      const stateIcon = state === 'completed' ? '[OK]' : state === 'skipped' ? '[SKIP]' : '[--]';
       doc.setFillColor(...stateColor);
       doc.rect(margin, y - 3, 1.5, 8, 'F');
       doc.setFontSize(7.5);
@@ -178,14 +190,14 @@ export default function AuditView() {
       doc.text(`${stateIcon} ${stepNum}`, margin + 4, y);
       doc.setFont('helvetica', 'normal');
       doc.setTextColor(...DARK);
-      const instrLines = doc.splitTextToSize(instruction || '—', contentW - 18);
+      const instrLines = doc.splitTextToSize(safe(instruction || '--'), contentW - 18);
       doc.text(instrLines, margin + 14, y);
       y += 5 * instrLines.length;
       const subParts = [];
-      if (completedAt) subParts.push(`✓ ${tzFmt(completedAt)}`);
-      if (elapsed) subParts.push(`⏱ ${fmtElapsed(elapsed)}`);
-      if (devFlagged) subParts.push('⚠ DEVIATION');
-      if (notes) subParts.push(`Note: ${notes}`);
+      if (completedAt) subParts.push(`Done: ${tzFmt(completedAt)}`);
+      if (elapsed) subParts.push(`Time: ${fmtElapsed(elapsed)}`);
+      if (devFlagged) subParts.push('[!] DEVIATION');
+      if (notes) subParts.push(`Note: ${safe(notes)}`);
       if (subParts.length > 0) {
         doc.setFontSize(7.5);
         doc.setTextColor(...GRAY);
@@ -196,8 +208,8 @@ export default function AuditView() {
       if (measurements && Object.keys(measurements).length > 0) {
         doc.setFontSize(7.5);
         doc.setTextColor(...GREEN);
-        const mStr = Object.entries(measurements).map(([k, v]) => `${k}: ${v}`).join('  |  ');
-        doc.text(`📏 ${mStr}`, margin + 14, y);
+        const mStr = Object.entries(measurements).map(([k, v]) => `${safe(k)}: ${safe(v)}`).join('  |  ');
+        doc.text(`Meas: ${mStr}`, margin + 14, y);
         y += 4.5;
       }
       y += 2;
@@ -214,21 +226,21 @@ export default function AuditView() {
       doc.text((d.severity || 'low').toUpperCase(), margin + 4, y + 5.5);
       doc.setTextColor(...GRAY);
       doc.setFont('helvetica', 'normal');
-      doc.text(`Step ${d.step_order || '—'}  ·  ${(d.deviation_type || 'other').replace(/_/g, ' ')}`, margin + 26, y + 5.5);
+      doc.text(`Step ${d.step_order || '--'}  -  ${safe((d.deviation_type || 'other').replace(/_/g, ' '))}`, margin + 26, y + 5.5);
       const statusColor = d.status === 'resolved' ? GREEN : RED;
       doc.setTextColor(...statusColor);
       doc.setFont('helvetica', 'bold');
-      doc.text(d.status === 'resolved' ? '✓ RESOLVED' : 'OPEN', pageW - margin - 2, y + 5.5, { align: 'right' });
+      doc.text(d.status === 'resolved' ? '[RESOLVED]' : '[OPEN]', pageW - margin - 2, y + 5.5, { align: 'right' });
       y += 9;
       doc.setFontSize(8.5);
       doc.setFont('helvetica', 'normal');
       doc.setTextColor(...DARK);
-      const descLines = doc.splitTextToSize(d.description || '', contentW - 4);
+      const descLines = doc.splitTextToSize(safe(d.description || ''), contentW - 4);
       doc.text(descLines, margin + 2, y);
       y += 5 * descLines.length + 2;
       if (d.resolution_notes) {
         doc.setFillColor(240, 253, 244);
-        const resLines = doc.splitTextToSize(`Resolution: ${d.resolution_notes}`, contentW - 8);
+        const resLines = doc.splitTextToSize(`Resolution: ${safe(d.resolution_notes)}`, contentW - 8);
         doc.rect(margin + 2, y - 1, contentW - 4, resLines.length * 5 + 3, 'F');
         doc.setFontSize(8);
         doc.setTextColor(22, 101, 52);
@@ -238,13 +250,13 @@ export default function AuditView() {
       if (d.resolved_by_name) {
         doc.setFontSize(7.5);
         doc.setTextColor(...GRAY);
-        doc.text(`Resolved by: ${d.resolved_by_name}  on  ${tzFmt(d.resolved_at)}`, margin + 2, y);
+        doc.text(`Resolved by: ${safe(d.resolved_by_name)}  on  ${tzFmt(d.resolved_at)}`, margin + 2, y);
         y += 5;
       }
       y += 4;
     };
 
-    // ─── PAGE 1 HEADER
+    // --- PAGE 1 HEADER
     doc.setFillColor(...INDIGO);
     doc.rect(0, 0, pageW, 16, 'F');
     doc.setFontSize(13);
@@ -260,17 +272,17 @@ export default function AuditView() {
     doc.text(`Generated: ${new Date().toLocaleString()}   |   Run ID: ${run.id}`, margin, y);
     y += 8;
 
-    // ─── SECTION 1 — RUN SUMMARY
+    // --- SECTION 1 - RUN SUMMARY
     sectionHeader('1. RUN SUMMARY', DARK);
-    const stateLabel = run.run_state === 'signed' ? '✓ SIGNED' : run.run_state.toUpperCase();
-    [['Protocol', protocol?.name], ['Classification', protocol?.classification], ['Operator', run.operator_name], ['Started', tzFmt(run.run_started_at)], ['Ended', tzFmt(run.run_ended_at)], ['Duration', fmtDuration(run.run_started_at, run.run_ended_at)], ['Status', stateLabel], ['Result', (run.result_status || 'pending').toUpperCase()]].forEach(([k, v]) => kvRow(k, v));
-    if (run.sample_reference) kvRow('Sample Ref', run.sample_reference);
-    if (run.instrument_id) kvRow('Instrument', run.instrument_id);
-    if (run.temperature) kvRow('Temperature', `${run.temperature}°${run.temperature_unit === 'fahrenheit' ? 'F' : 'C'}`);
+    const stateLabel = run.run_state === 'signed' ? '[SIGNED]' : run.run_state.toUpperCase();
+    [['Protocol', safe(protocol?.name)], ['Classification', safe(protocol?.classification)], ['Operator', safe(run.operator_name)], ['Started', tzFmt(run.run_started_at)], ['Ended', tzFmt(run.run_ended_at)], ['Duration', fmtDuration(run.run_started_at, run.run_ended_at)], ['Status', stateLabel], ['Result', (run.result_status || 'pending').toUpperCase()]].forEach(([k, v]) => kvRow(k, v));
+    if (run.sample_reference) kvRow('Sample Ref', safe(run.sample_reference));
+    if (run.instrument_id) kvRow('Instrument', safe(run.instrument_id));
+    if (run.temperature) kvRow('Temperature', `${run.temperature}${run.temperature_unit === 'fahrenheit' ? 'F' : 'C'}`);
     if (run.humidity) kvRow('Humidity', `${run.humidity}%`);
     y += 4;
 
-    // ─── SECTION 2 — PRE-RUN VERIFICATION
+    // --- SECTION 2 - PRE-RUN VERIFICATION
     sectionHeader('2. PRE-RUN VERIFICATION', [22, 101, 52]);
     const verifiedCountPDF = checklistItems.filter(i => (run.checklist_completed || {})[i.id]?.verified).length;
     doc.setFontSize(8);
@@ -282,10 +294,11 @@ export default function AuditView() {
       if (!items.length) return;
       checkPage(8);
       const catColors = { safety: RED, equipment: [29, 78, 216], reagent: GREEN, other: GRAY };
+      const catLabels = { safety: 'SAFETY', equipment: 'EQUIPMENT', reagent: 'REAGENT', other: 'OTHER' };
       doc.setFontSize(8);
       doc.setFont('helvetica', 'bold');
       doc.setTextColor(...(catColors[cat] || GRAY));
-      doc.text(`${cat.toUpperCase()} (${items.length})`, margin, y);
+      doc.text(`${catLabels[cat]} (${items.length})`, margin, y);
       doc.setFont('helvetica', 'normal');
       y += 5;
       items.forEach(item => {
@@ -297,7 +310,7 @@ export default function AuditView() {
     });
     y += 2;
 
-    // ─── SECTION 3 — EXECUTION RECORD
+    // --- SECTION 3 - EXECUTION RECORD
     sectionHeader('3. EXECUTION RECORD', [67, 56, 202]);
     const mergedStepsForPDF = stepRuns.map(sr => ({ ...sr, ...(steps.find(s => s.id === sr.step_id) || {}), stepRunId: sr.id }));
     let lastTitlePDF = null;
@@ -310,7 +323,7 @@ export default function AuditView() {
         doc.setFontSize(8);
         doc.setFont('helvetica', 'bold');
         doc.setTextColor(...INDIGO);
-        doc.text(title.toUpperCase(), margin + 4, y + 4.5);
+        doc.text(safe(title).toUpperCase(), margin + 4, y + 4.5);
         doc.setFont('helvetica', 'normal');
         doc.setTextColor(...DARK);
         y += 10;
@@ -320,12 +333,12 @@ export default function AuditView() {
     });
     y += 4;
 
-    // ─── SECTION 4 — DEVIATIONS
+    // --- SECTION 4 - DEVIATIONS
     sectionHeader('4. DEVIATIONS', deviations.length > 0 ? [217, 119, 6] : [22, 163, 74]);
     if (deviations.length === 0) {
       doc.setFontSize(9);
       doc.setTextColor(...GREEN);
-      doc.text('✓ No deviations recorded in this run.', margin, y);
+      doc.text('No deviations recorded in this run.', margin, y);
       y += 8;
     } else {
       doc.setFontSize(8);
@@ -336,10 +349,10 @@ export default function AuditView() {
     }
     y += 2;
 
-    // ─── SECTION 5 — SIGN-OFF RECORD
+    // --- SECTION 5 - SIGN-OFF RECORD
     sectionHeader('5. SIGN-OFF RECORD', run.is_signed_off ? [67, 56, 202] : GRAY);
     if (run.is_signed_off) {
-      [['Signed by', run.signed_off_by_name || '—'], ['Date / Time', tzFmt(run.signed_off_at)], ['Result', (run.result_status || 'pending').toUpperCase()], ['Run ID', run.id]].forEach(([k, v]) => kvRow(k, v));
+      [['Signed by', safe(run.signed_off_by_name || '--')], ['Date / Time', tzFmt(run.signed_off_at)], ['Result', (run.result_status || 'pending').toUpperCase()], ['Run ID', run.id]].forEach(([k, v]) => kvRow(k, v));
       y += 4;
       doc.setFillColor(...LIGHT_GRAY);
       doc.rect(margin, y, contentW, 10, 'F');
@@ -350,11 +363,11 @@ export default function AuditView() {
     } else {
       doc.setFontSize(9);
       doc.setTextColor(...AMBER);
-      doc.text('⚠ This run has not yet been signed off.', margin, y);
+      doc.text('[!] This run has not yet been signed off.', margin, y);
       y += 8;
     }
 
-    // ─── FOOTER on all pages
+    // --- FOOTER on all pages
     const totalPages = doc.internal.getNumberOfPages();
     for (let i = 1; i <= totalPages; i++) {
       doc.setPage(i);
@@ -362,7 +375,7 @@ export default function AuditView() {
       doc.rect(0, pageH - 10, pageW, 10, 'F');
       doc.setFontSize(7);
       doc.setTextColor(...GRAY);
-      doc.text(`BenchTrace 4.0 Audit Report  |  ${protocol?.name || ''}  |  Generated: ${new Date().toLocaleDateString()}`, margin, pageH - 4);
+      doc.text(`BenchTrace 4.0 Audit Report  |  ${safe(protocol?.name || '')}  |  Generated: ${new Date().toLocaleDateString()}`, margin, pageH - 4);
       doc.text(`Page ${i} of ${totalPages}`, pageW - margin, pageH - 4, { align: 'right' });
     }
 
