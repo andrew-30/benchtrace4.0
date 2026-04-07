@@ -49,6 +49,7 @@ export default function TopNav({ user }) {
             <NavLink to="/protocols" label="Protocols" />
             <NavLink to="/runs" label="Runs" />
             <NavLink to="/deviations" label="Deviations" />
+            <NavLink to="/traceability" label="Traceability" />
             <NavLink to="/audit-readiness" label="Audit Readiness" />
             <NavLink to="/settings" label="Settings" />
           </nav>
@@ -60,6 +61,12 @@ export default function TopNav({ user }) {
               <div className="w-7 h-7 rounded-full bg-primary/10 flex items-center justify-center text-xs font-semibold text-primary">
                 {user?.email?.[0]?.toUpperCase() || "U"}
               </div>
+              {localStorage.getItem('bt_role') === 'admin' && (
+                <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 7px', borderRadius: 99, background: '#eef2ff', color: '#4338ca', border: '1px solid #c7d2fe' }}>ADMIN</span>
+              )}
+              {localStorage.getItem('bt_role') === 'member' && (
+                <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 7px', borderRadius: 99, background: '#f1f5f9', color: '#64748b', border: '1px solid #e2e8f0' }}>MEMBER</span>
+              )}
               <span className="hidden sm:inline">{user?.email || "User"}</span>
             </Button>
           </DropdownMenuTrigger>
@@ -78,6 +85,7 @@ export default function TopNav({ user }) {
         <NavLink to="/protocols" label="Protocols" />
         <NavLink to="/runs" label="Runs" />
         <NavLink to="/deviations" label="Deviations" />
+        <NavLink to="/traceability" label="Traceability" />
         <NavLink to="/audit-readiness" label="Audit Readiness" />
         <NavLink to="/settings" label="Settings" />
       </div>

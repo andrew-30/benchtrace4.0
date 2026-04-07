@@ -78,6 +78,7 @@ export default function Protocols() {
   const [loading, setLoading] = useState(true);
 
   const orgId = localStorage.getItem("bt_org_id");
+  const isAdmin = localStorage.getItem('bt_role') === 'admin';
 
   useEffect(() => {
     async function load() {
@@ -107,14 +108,18 @@ export default function Protocols() {
       <div className="flex items-center justify-between gap-4">
         <h1 className="text-xl font-semibold tracking-tight text-foreground">Protocols</h1>
         <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm" onClick={() => navigate("/import")}>
-            <Upload className="w-4 h-4 mr-1.5" />
-            Import SOP
-          </Button>
-          <Button size="sm" onClick={() => navigate("/import")}>
-            <Plus className="w-4 h-4 mr-1.5" />
-            New Protocol
-          </Button>
+          {isAdmin && (
+            <>
+              <Button variant="outline" size="sm" onClick={() => navigate("/import")}>
+                <Upload className="w-4 h-4 mr-1.5" />
+                Import SOP
+              </Button>
+              <Button size="sm" onClick={() => navigate("/import")}>
+                <Plus className="w-4 h-4 mr-1.5" />
+                New Protocol
+              </Button>
+            </>
+          )}
         </div>
       </div>
 

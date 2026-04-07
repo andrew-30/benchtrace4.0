@@ -832,6 +832,12 @@ export default function ProtocolDetail() {
 
   return (
     <div className="space-y-4">
+      {!isAdmin && (
+        <div style={{ padding: '8px 16px', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 7, marginBottom: 14, fontSize: 12, color: '#64748b', display: 'flex', alignItems: 'center', gap: 8 }}>
+          <span>👁</span>
+          <span>You have read-only access to this protocol. Contact your lab admin to make changes.</span>
+        </div>
+      )}
       <button onClick={() => navigate("/protocols")} className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors">
         <ArrowLeft className="w-4 h-4" /> Back to Protocols
       </button>
