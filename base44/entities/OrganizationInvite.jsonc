@@ -1,0 +1,59 @@
+{
+  "name": "OrganizationInvite",
+  "type": "object",
+  "properties": {
+    "organization_id": {
+      "type": "string",
+      "title": "Organization ID"
+    },
+    "invited_email": {
+      "type": "string",
+      "title": "Invited Email"
+    },
+    "invited_role": {
+      "type": "string",
+      "title": "Invited Role",
+      "enum": [
+        "admin",
+        "member"
+      ],
+      "default": "member"
+    },
+    "status": {
+      "type": "string",
+      "title": "Status",
+      "enum": [
+        "pending",
+        "accepted",
+        "revoked"
+      ],
+      "default": "pending"
+    },
+    "invited_by_user_id": {
+      "type": "string",
+      "title": "Invited By User ID"
+    },
+    "invited_by_name": {
+      "type": "string",
+      "title": "Invited By Name"
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time",
+      "title": "Created At"
+    },
+    "accepted_at": {
+      "type": "string",
+      "format": "date-time",
+      "title": "Accepted At"
+    },
+    "token": {
+      "type": "string",
+      "title": "Token"
+    }
+  },
+  "required": [
+    "organization_id",
+    "invited_email"
+  ]
+}

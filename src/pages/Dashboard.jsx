@@ -92,6 +92,18 @@ export default function Dashboard() {
           <div style={{ fontSize: 26, fontWeight: 800, color: '#1e293b' }}>Search →</div>
           <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 4 }}>Track lots across all runs</div>
         </div>
+        {localStorage.getItem('bt_role') === 'admin' && (
+          <div
+            onClick={() => navigate('/team')}
+            style={{ cursor: 'pointer', padding: '20px', background: 'white', borderRadius: 10, border: '1px solid #e2e8f0', borderTop: '3px solid #10b981' }}
+            onMouseEnter={e => e.currentTarget.style.boxShadow = '0 4px 12px rgba(16,185,129,0.1)'}
+            onMouseLeave={e => e.currentTarget.style.boxShadow = 'none'}
+          >
+            <div style={{ fontSize: 11, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>Team</div>
+            <div style={{ fontSize: 26, fontWeight: 800, color: '#10b981' }}>Manage →</div>
+            <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 4 }}>Members & invitations</div>
+          </div>
+        )}
       </div>
 
       {/* Recent Activity */}

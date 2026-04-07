@@ -110,6 +110,10 @@
         "pending"
       ],
       "default": "pending"
+    },
+    "signature_hash": {
+      "type": "string",
+      "title": "Signature Hash (SHA-256)"
     }
   },
   "required": [

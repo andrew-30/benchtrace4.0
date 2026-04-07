@@ -20,6 +20,7 @@ import Deviations from './pages/Deviations';
 import AuditView from './pages/AuditView';
 import AuditReadiness from './pages/AuditReadiness';
 import Traceability from './pages/Traceability';
+import Team from './pages/Team';
 
 const AuthenticatedApp = () => {
   const { isLoadingAuth, isLoadingPublicSettings, authError, navigateToLogin } = useAuth();
@@ -58,6 +59,7 @@ const AuthenticatedApp = () => {
         <Route path="/audit-view" element={<AuditView />} />
         <Route path="/audit-readiness" element={<AuditReadiness />} />
         <Route path="/traceability" element={<Traceability />} />
+        <Route path="/team" element={<Team />} />
       </Route>
       <Route path="*" element={<PageNotFound />} />
     </Routes>
