@@ -8,8 +8,8 @@ import UserNotRegisteredError from '@/components/UserNotRegisteredError';
 
 import AppLayout from './components/AppLayout';
 import Onboarding from './pages/Onboarding';
-import Dashboard from './pages/Dashboard';
-import Settings from './pages/Settings';
+import Dashboard from './pages/Dashboard.jsx';
+import Settings from './pages/Settings.jsx';
 import Protocols from './pages/Protocols';
 import ProtocolDetail from './pages/ProtocolDetail';
 import Import from './pages/Import';

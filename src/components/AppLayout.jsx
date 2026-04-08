@@ -76,6 +76,20 @@ export default function AppLayout() {
 
   return (
     <div className="min-h-screen bg-background">
+      <style>{`
+        * { box-sizing: border-box; }
+        @media (max-width: 768px) {
+          .stat-grid { grid-template-columns: repeat(2, 1fr) !important; }
+          .two-col { grid-template-columns: 1fr !important; }
+          .run-execution-sidebar { display: none !important; }
+          .run-execution-main { width: 100% !important; }
+          .page-content { padding: 16px 12px !important; }
+        }
+        @media (max-width: 480px) {
+          .stat-grid { grid-template-columns: repeat(2, 1fr) !important; }
+          .quick-actions { grid-template-columns: repeat(2, 1fr) !important; }
+        }
+      `}</style>
       <TopNav user={user} />
       <main className="max-w-7xl mx-auto px-6 py-6">
         <Outlet context={{ user, org, role, setOrg, setRole }} />
