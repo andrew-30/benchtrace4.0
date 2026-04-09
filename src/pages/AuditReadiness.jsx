@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { base44 } from "@/api/base44Client";
 
 function calculateReadinessScore(protocols, runs, deviations, protocolVersions) {
@@ -8,11 +9,13 @@ function calculateReadinessScore(protocols, runs, deviations, protocolVersions) 
   checks.push({
     label: 'Protocols published',
     description: 'All protocols have at least one published version snapshot',
-    score: protocols.length > 0 ? (published.length / protocols.length) * 100 : 0,
-    detail: `${published.length} of ${protocols.length} published`,
-    passed: protocols.length > 0 && published.length === protocols.length,
+    score: protocols.length === 0 ? 100 : (published.length / protocols.length) * 100,
+    detail: protocols.length === 0
+      ? 'No protocols yet — import your first protocol to get started'
+      : `${published.length} of ${protocols.length} protocol${protocols.length !== 1 ? 's' : ''} published`,
+    passed: protocols.length === 0 || published.length === protocols.length,
     weight: 20,
-    action: 'Publish all protocols via Protocol Detail → Publish Version',
+    action: 'Publish protocols via Protocol Detail → Publish Version',
   });
 
   const doneRuns = runs.filter(r => ['completed', 'signed'].includes(r.run_state));
@@ -21,7 +24,9 @@ function calculateReadinessScore(protocols, runs, deviations, protocolVersions) 
     label: 'Runs signed off',
     description: 'All completed runs have been reviewed and signed off',
     score: doneRuns.length > 0 ? (signedRuns.length / doneRuns.length) * 100 : 100,
-    detail: `${signedRuns.length} of ${doneRuns.length} signed`,
+    detail: doneRuns.length === 0
+      ? 'No completed runs yet — execute and sign off your first run'
+      : `${signedRuns.length} of ${doneRuns.length} signed`,
     passed: doneRuns.length === 0 || signedRuns.length === doneRuns.length,
     weight: 25,
     action: 'Open each completed run and sign off with Pass/Fail',
@@ -33,7 +38,9 @@ function calculateReadinessScore(protocols, runs, deviations, protocolVersions) 
     label: 'Deviations resolved',
     description: 'All logged deviations reviewed and resolved',
     score: totalDevs.length === 0 ? 100 : ((totalDevs.length - openDevs.length) / totalDevs.length) * 100,
-    detail: totalDevs.length === 0 ? 'No deviations recorded' : openDevs.length === 0 ? `All ${totalDevs.length} resolved` : `${openDevs.length} open`,
+    detail: totalDevs.length === 0
+      ? 'No deviations recorded — deviations are auto-flagged during runs'
+      : openDevs.length === 0 ? `All ${totalDevs.length} resolved` : `${openDevs.length} open`,
     passed: openDevs.length === 0,
     weight: 25,
     action: 'Resolve open deviations via Deviation Center',
@@ -44,7 +51,9 @@ function calculateReadinessScore(protocols, runs, deviations, protocolVersions) 
     label: 'Run results recorded',
     description: 'All signed runs have Pass or Fail result',
     score: signedRuns.length > 0 ? (signedWithResult.length / signedRuns.length) * 100 : 100,
-    detail: `${signedWithResult.length} of ${signedRuns.length} have result`,
+    detail: signedRuns.length === 0
+      ? 'No signed runs yet — sign off a run with Pass or Fail result'
+      : `${signedWithResult.length} of ${signedRuns.length} have result`,
     passed: signedRuns.length === 0 || signedWithResult.length === signedRuns.length,
     weight: 15,
     action: 'Re-sign runs and select Pass or Fail result',
@@ -54,9 +63,11 @@ function calculateReadinessScore(protocols, runs, deviations, protocolVersions) 
   checks.push({
     label: 'Lot numbers recorded',
     description: 'Runs have reagent lot numbers captured at pre-run time',
-    score: runs.length > 0 ? (runsWithLots.length / runs.length) * 100 : 0,
-    detail: `${runsWithLots.length} of ${runs.length} runs have lot numbers`,
-    passed: runs.length > 0 && runsWithLots.length === runs.length,
+    score: runs.length === 0 ? 100 : (runsWithLots.length / runs.length) * 100,
+    detail: runs.length === 0
+      ? 'No runs yet — start your first run to track lot numbers'
+      : `${runsWithLots.length} of ${runs.length} run${runs.length !== 1 ? 's' : ''} have lot numbers`,
+    passed: runs.length === 0 || runsWithLots.length === runs.length,
     weight: 15,
     action: 'Record lot numbers in Pre-Run checklist when starting runs',
   });
@@ -67,6 +78,7 @@ function calculateReadinessScore(protocols, runs, deviations, protocolVersions) 
 }
 
 export default function AuditReadiness() {
+  const navigate = useNavigate();
   const orgId = localStorage.getItem('bt_org_id');
   const [protocols, setProtocols] = useState([]);
   const [runs, setRuns] = useState([]);
@@ -103,6 +115,21 @@ export default function AuditReadiness() {
 
   return (
     <div style={{ maxWidth: 800, margin: '0 auto', padding: '0 0 40px', fontFamily: 'system-ui,sans-serif' }}>
+
+      {protocols.length === 0 && runs.length === 0 && (
+        <div style={{ padding: '16px 20px', background: '#f0f4ff', border: '1px solid #c7d2fe', borderRadius: 10, marginBottom: 20 }}>
+          <div style={{ fontSize: 13, fontWeight: 700, color: '#4338ca', marginBottom: 6 }}>Welcome to BenchTrace! 🎉</div>
+          <div style={{ fontSize: 12, color: '#475569', lineHeight: 1.6 }}>
+            Your audit readiness score starts at 100% — it tracks compliance gaps as you use BenchTrace. Start by importing your first protocol to begin tracking.
+          </div>
+          <button
+            onClick={() => navigate('/import')}
+            style={{ marginTop: 10, padding: '6px 16px', background: '#6366f1', color: 'white', border: 'none', borderRadius: 6, fontSize: 12, fontWeight: 700, cursor: 'pointer' }}
+          >
+            Import First Protocol →
+          </button>
+        </div>
+      )}
 
       <div style={{ marginBottom: 28 }}>
         <h1 style={{ fontSize: 22, fontWeight: 800, color: '#1e293b', margin: '0 0 4px' }}>Audit Readiness</h1>
