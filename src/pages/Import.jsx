@@ -368,15 +368,118 @@ function StepRow({ step, onDelete }) {
       <div className="flex-1 min-w-0">
         {step.title && <p className="text-xs font-semibold text-primary uppercase">{step.title}</p>}
         <p className="text-sm text-foreground whitespace-pre-line">{step.instruction}</p>
-        {step.is_critical && (
-          <span className="text-xs text-red-600 font-medium">Critical</span>
-        )}
+        <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', marginTop: 4 }}>
+          {step.is_critical && (
+            <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 6px', borderRadius: 99, background: '#fef2f2', color: '#dc2626', border: '1px solid #fecaca' }}>🔴 CRITICAL</span>
+          )}
+          {step.timing_mode === 'strict' && (
+            <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 6px', borderRadius: 99, background: '#fef2f2', color: '#dc2626', border: '1px solid #fecaca' }}>
+              ⏱ STRICT {step.expected_duration_seconds ? `${Math.round(step.expected_duration_seconds / 60)}min` : ''}
+            </span>
+          )}
+          {step.timing_mode === 'advisory' && (
+            <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 6px', borderRadius: 99, background: '#eff6ff', color: '#1d4ed8', border: '1px solid #bfdbfe' }}>
+              ⏱ ADVISORY {step.expected_duration_seconds ? `${step.expected_duration_seconds >= 60 ? Math.round(step.expected_duration_seconds / 60) + 'min' : step.expected_duration_seconds + 's'}` : ''}
+            </span>
+          )}
+          {step.requires_measurement && (
+            <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 6px', borderRadius: 99, background: '#faf5ff', color: '#7c3aed', border: '1px solid #e9d5ff' }}>📏 MEASURE</span>
+          )}
+        </div>
       </div>
       <button onClick={onDelete} className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive transition-all">
         <X className="w-4 h-4" />
       </button>
     </div>
   );
+}
+
+// ── Sector-aware AI prompts ─────────────────────────────────────────────────
+const SECTOR_AI_PROMPTS = {
+  'Academic Research': {
+    context: `This is an academic research protocol used in university or research institute labs. 
+Focus on: experimental steps, incubation times, centrifugation, PCR, gel electrophoresis, spectrophotometry.
+Timing: Use 'advisory' timer mode for incubations and reactions (researcher controls when to start).
+Critical steps: DNA/RNA handling, contamination prevention, temperature-sensitive steps.
+Measurements: absorbance (A260/A280), Ct values, band sizes, concentrations (µg/mL, ng/µL).
+Materials: reagents (enzymes, buffers, primers), equipment (thermocycler, centrifuge, gel apparatus).`,
+    examples: `Example step with timer: "Incubate at 65°C for 5 minutes" → timing_mode: "advisory", expected_duration_seconds: 300
+Example measurement: "Measure A260/A280 ratio" → requires_measurement: true, measurement_parameters: [{name: "A260/A280 ratio", unit: "ratio", min_value: 1.8, max_value: 2.1, required: true}]
+Example critical: "Do not vortex RNA" → is_critical: true`,
+  },
+  'GMP Manufacturing': {
+    context: `This is a GMP manufacturing protocol for pharmaceutical or biotech production.
+Focus on: batch manufacturing steps, critical control points, in-process testing, cleaning procedures.
+Timing: Use 'strict' timer mode with tolerance windows for time-critical manufacturing steps.
+Critical steps: ANY step mentioning "critical", "CCP", "must", "do not", mixing, sterilisation.
+Measurements: pH, temperature, yield %, purity %, osmolality, bioburden, endotoxin.
+Tolerance: Manufacturing steps typically allow ±10% time tolerance.
+Materials: raw materials (APIs, excipients), equipment (bioreactors, filtration, filling).`,
+    examples: `Example strict step: "Mix for exactly 30 minutes ± 5 minutes" → timing_mode: "strict", expected_duration_seconds: 1800, tolerance_lower_seconds: 300, tolerance_upper_seconds: 300
+Example measurement: "Check pH 7.2 ± 0.1" → requires_measurement: true, measurement_parameters: [{name: "pH", unit: "pH units", min_value: 7.1, max_value: 7.3, required: true}]`,
+  },
+  'Clinical Diagnostic': {
+    context: `This is a clinical diagnostic protocol used in hospital or diagnostic laboratory settings.
+Focus on: sample preparation, assay procedure, QC checks, result interpretation, reporting.
+Timing: Use 'strict' timer mode for incubations — clinical results depend on precise timing.
+Critical steps: QC failures, sample identification, reagent expiry checks, contamination prevention.
+Measurements: absorbance, concentration, positive/negative thresholds, reference ranges.
+Materials: clinical reagents (assay kits, controls, calibrators), diagnostic instruments.`,
+    examples: `Example clinical timer: "Incubate samples for exactly 30 minutes at 37°C" → timing_mode: "strict", expected_duration_seconds: 1800, tolerance_lower_seconds: 60, tolerance_upper_seconds: 60
+Example QC measurement: "Read absorbance at 450nm" → requires_measurement: true, measurement_parameters: [{name: "Absorbance", unit: "OD (450nm)", min_value: 0, max_value: 3, required: true}]`,
+  },
+  'ISO Accredited': {
+    context: `This is an ISO-accredited laboratory protocol requiring full measurement traceability.
+Focus on: measurement procedures, calibration steps, uncertainty estimation, QC checks.
+Timing: Use 'strict' timer mode for all timed steps — ISO requires precise timing documentation.
+Critical steps: calibration, reference standard handling, environmental conditions, sample integrity.
+Measurements: every measurement step requires defined units, ranges, and acceptance criteria.
+Materials: certified reference materials, calibrated equipment, accredited reagents.`,
+    examples: `Example ISO measurement: "Weigh sample to nearest 0.1mg" → requires_measurement: true, measurement_parameters: [{name: "Sample mass", unit: "mg", min_value: null, max_value: null, required: true}]`,
+  },
+  'CRO Study': {
+    context: `This is a CRO (Contract Research Organisation) study protocol following GCP/GLP guidelines.
+Focus on: study conduct procedures, sample collection, data recording, audit trail requirements.
+Timing: Use 'advisory' timer mode for most steps, 'strict' for pharmacokinetic sampling timepoints.
+Critical steps: timepoint collection, randomisation, blinding procedures, chain of custody.
+Measurements: vital signs, lab values, pharmacokinetic parameters, safety assessments.
+Materials: study drugs, study supplies, clinical equipment, sample collection kits.`,
+    examples: `Example PK timepoint: "Collect blood sample at exactly 2 hours post-dose ± 5 minutes" → timing_mode: "strict", expected_duration_seconds: 7200, tolerance_lower_seconds: 300, tolerance_upper_seconds: 300`,
+  },
+  'Biotech Startup': {
+    context: `This is a biotech startup protocol — likely a mix of research and early manufacturing.
+Focus on: cell culture, protein expression, purification, analytical characterisation.
+Timing: Use 'advisory' for research steps, 'strict' for fermentation and purification steps.
+Critical steps: sterility, cell viability, protein integrity, buffer preparation accuracy.
+Measurements: OD600 (cell density), protein concentration, purity %, binding affinity.
+Materials: cell lines, growth media, chromatography resins, analytical reagents.`,
+    examples: `Example cell culture timer: "Incubate cells for 24 hours" → timing_mode: "advisory", expected_duration_seconds: 86400`,
+  },
+  'General': {
+    context: `This is a general laboratory protocol. Extract all steps faithfully from the document.
+Timing: Use 'advisory' for informational timers, 'strict' for precise time-critical steps.
+Critical steps: any step with warnings, safety notices, or "must" language.
+Measurements: any step requiring recording a numeric value.
+Materials: any reagents, chemicals, equipment, or consumables listed.`,
+    examples: `Example: "Heat to 95°C for 5 minutes" → timing_mode: "advisory", expected_duration_seconds: 300`,
+  },
+};
+
+function validateAIProtocolOutput(result) {
+  const errors = [];
+  const warnings = [];
+  if (!result) { errors.push('AI returned no data'); return { errors, warnings }; }
+  if (!result.name || result.name.trim().length < 2) warnings.push('Protocol name is very short');
+  if (!result.steps || !Array.isArray(result.steps)) { errors.push('No steps array returned'); return { errors, warnings }; }
+  if (result.steps.length === 0) { errors.push('Zero steps extracted'); return { errors, warnings }; }
+  result.steps.forEach((s, i) => {
+    if (!s.instruction || s.instruction.trim().length < 3) errors.push(`Step ${i + 1} has no instruction`);
+    if (s.title && s.title.trim() === s.instruction?.trim()) warnings.push(`Step ${i + 1} title duplicates instruction`);
+    if (s.expected_duration_seconds < 0) errors.push(`Step ${i + 1} has negative duration`);
+    if (s.timing_mode && !['none', 'advisory', 'strict'].includes(s.timing_mode)) errors.push(`Step ${i + 1} has invalid timing_mode: ${s.timing_mode}`);
+    if (s.tolerance_lower_seconds < 0 || s.tolerance_upper_seconds < 0) warnings.push(`Step ${i + 1} has negative tolerance`);
+  });
+  return { errors, warnings };
 }
 
 // ── Confidence Gate Screen ──────────────────────────────────────────────────
@@ -509,85 +612,160 @@ export default function Import() {
     if (f) setFile(f);
   }
 
-  const handleAIParse = async (text) => {
+  const handleAIParse = async (extractedText) => {
     setAiParsing(true);
     setAiError('');
+
+    const sectorPrompt = SECTOR_AI_PROMPTS[classification] || SECTOR_AI_PROMPTS['General'];
+
     const granularityInstruction = stepGranularity === 'individual'
-      ? `IMPORTANT: Extract each bullet point or action as a SEPARATE individual step. Do NOT group multiple bullets under one step. If a subsection like "6.1 RNA Quality Assessment" has 3 bullet points → create 3 separate steps. Each bullet becomes its own step. The step title = subsection name (max 60 chars). The step instruction = the bullet text only (never repeat the title in the instruction). Total steps should equal total number of bullet points/actions.`
-      : `Extract subsections as grouped steps. Each subsection (e.g. "6.1 RNA Quality Assessment") becomes ONE step, with all its bullet points combined into the instruction text. Step title = subsection name. Instruction = all bullets joined.`;
-    const prompt = `You are a laboratory SOP parser. Extract structured protocol data from the document below.
+      ? `STEP GRANULARITY — INDIVIDUAL MODE:
+Extract each individual action or bullet point as a SEPARATE step.
+If a subsection "6.1 RNA Quality Assessment" has 3 bullet points → create 3 separate steps.
+Each bullet = its own step. Step title = subsection name (max 60 chars).
+Step instruction = the individual bullet text ONLY — never repeat the title.
+Total steps should equal total number of individual bullet points and actions.`
+      : `STEP GRANULARITY — GROUPED MODE:
+Extract each subsection as ONE grouped step.
+If "6.1 RNA Quality Assessment" has 3 bullets → combine into 1 step.
+Step title = subsection name (max 60 chars).
+Step instruction = all bullet points joined with newline characters.`;
 
-${granularityInstruction}
-
-Return ONLY valid JSON — no markdown, no backticks, no explanation. Just the raw JSON object:
+    const schemaDefinition = `OUTPUT SCHEMA — return ONLY this JSON structure, no markdown, no explanation:
 {
-  "name": "specific protocol name — never use generic titles like Standard Operating Procedure",
-  "description": "1-2 sentence plain text summary of what this protocol does",
-  "classification": "one of: Academic Research, Clinical Diagnostic, GMP Manufacturing, ISO Accredited, CRO Study, Biotech Startup, General",
-  "estimated_duration_minutes": number or null,
-  "compliance_tags": ["array of detected standards e.g. GMP, ISO, CLIA, 21 CFR Part 11, GLP"],
+  "name": "specific protocol name — never use generic titles like Standard Operating Procedure or SOP",
+  "description": "1-3 sentence plain text summary of what this protocol does and its purpose",
+  "classification": "one of exactly: Academic Research, Clinical Diagnostic, GMP Manufacturing, ISO Accredited, CRO Study, Biotech Startup, General",
+  "estimated_duration_minutes": null,
+  "compliance_tags": ["array of detected standards — GMP, GLP, ISO, CLIA, FDA, 21 CFR Part 11, ICH, USP"],
   "steps": [
     {
       "step_order": 1,
-      "title": "subsection or group name — max 60 chars",
-      "instruction": "action text only — NEVER copy or repeat the title here",
+      "title": "subsection or group name — max 60 chars, null if no clear group name",
+      "instruction": "the complete action text — NEVER copy or repeat the title here",
       "is_critical": false,
-      "estimated_duration_seconds": null,
-      "requires_measurement": false
+      "timing_mode": "none",
+      "expected_duration_seconds": null,
+      "tolerance_lower_seconds": 0,
+      "tolerance_upper_seconds": 0,
+      "requires_measurement": false,
+      "measurement_parameters": []
     }
   ],
   "checklist_items": [
     {
-      "item_text": "material or equipment name",
+      "item_text": "specific material, reagent, or equipment name",
       "category": "reagent or equipment or safety or other"
     }
   ]
 }
 
-Rules:
-- step title and instruction must NEVER be identical or duplicate each other
-- instruction = the action text only, not a copy of the title
-- is_critical = true if the text contains: critical, warning, caution, must not, do not, danger, immediately
-- Convert time mentions to seconds (5 minutes = 300, 1 hour = 3600, 30 seconds = 30)
-- requires_measurement = true if step involves measuring, recording, calculating a value
-- Extract ALL materials and equipment as checklist_items with correct categories
-- compliance_tags: detect GMP, GLP, ISO, CLIA, FDA, 21 CFR Part 11 from context
+TIMING RULES:
+- timing_mode "none": no specific time mentioned
+- timing_mode "advisory": time mentioned but operator controls start (incubations, reactions)
+- timing_mode "strict": time-critical, deviation has consequences (GMP, clinical, PK timepoints)
+- expected_duration_seconds: convert time to seconds (5min=300, 2h=7200, overnight=57600)
+- tolerance: only set for "strict" mode ("± 5min" → lower: 300, upper: 300)
 
-Document:
-${text.substring(0, 10000)}`;
+CRITICAL FLAG RULES:
+- is_critical = true if: critical, warning, caution, must not, do not, danger, immediately, NEVER, hazard
+
+MEASUREMENT RULES:
+- requires_measurement = true if step involves recording a numeric value
+- measurement_parameters: [{name, unit, min_value, max_value, required}]`;
+
+    const prompt = `You are BenchTrace AI — a specialised laboratory protocol formatter. Convert the protocol below into structured BenchTrace format with complete step metadata.
+
+SECTOR CONTEXT — ${classification}:
+${sectorPrompt.context}
+
+SECTOR EXAMPLES:
+${sectorPrompt.examples}
+
+${granularityInstruction}
+
+${schemaDefinition}
+
+IMPORTANT RULES:
+1. step title and instruction must NEVER be identical
+2. instruction is the actual action the operator performs
+3. Extract EVERY step — do not skip or summarise
+4. Be generous with checklist_items — extract everything mentioned
+5. name must be specific — not just "Protocol" or "SOP"
+
+PROTOCOL DOCUMENT:
+${extractedText.substring(0, 12000)}`;
+
     try {
       const responseText = await base44.integrations.Core.InvokeLLM({ prompt });
       const cleaned = responseText.replace(/```json\s*/gi, '').replace(/```\s*/gi, '').trim();
-      const aiResult = JSON.parse(cleaned);
-      if (!aiResult.steps || !Array.isArray(aiResult.steps)) throw new Error('AI did not return a valid steps array');
-      const normalisedSteps = aiResult.steps.map((s, i) => ({
-        ...s,
-        step_order: s.step_order || i + 1,
-        _id: `ai_s_${i}`,
-        title: (s.title || '').substring(0, 200),
-        instruction: s.instruction || s.title || '',
-        is_critical: s.is_critical || false,
-        estimated_duration_seconds: s.estimated_duration_seconds || null,
-        requires_measurement: s.requires_measurement || false,
-      }));
+      const jsonStart = cleaned.indexOf('{');
+      const jsonEnd = cleaned.lastIndexOf('}');
+      if (jsonStart === -1 || jsonEnd === -1) throw new Error('No JSON object found in AI response');
+      const aiResult = JSON.parse(cleaned.substring(jsonStart, jsonEnd + 1));
+
+      const { errors, warnings } = validateAIProtocolOutput(aiResult);
+      if (errors.length > 0) throw new Error(`AI output validation failed: ${errors.join(', ')}`);
+
+      const normalisedSteps = aiResult.steps.map((s, i) => {
+        const timingMode = ['none', 'advisory', 'strict'].includes(s.timing_mode) ? s.timing_mode : 'none';
+        const duration = (timingMode !== 'none' && s.expected_duration_seconds > 0) ? Math.round(s.expected_duration_seconds) : null;
+        const tolLower = timingMode === 'strict' ? Math.max(0, Math.round(s.tolerance_lower_seconds || 0)) : 0;
+        const tolUpper = timingMode === 'strict' ? Math.max(0, Math.round(s.tolerance_upper_seconds || 0)) : 0;
+        const measureParams = Array.isArray(s.measurement_parameters)
+          ? s.measurement_parameters.map(p => ({ name: p.name || '', unit: p.unit || '', min_value: p.min_value ?? null, max_value: p.max_value ?? null, required: p.required ?? true })).filter(p => p.name.length > 0)
+          : [];
+        return {
+          step_order: i + 1,
+          title: (s.title || '').substring(0, 200) || null,
+          instruction: (s.instruction || s.title || 'Step instruction').trim(),
+          is_critical: s.is_critical === true,
+          timing_mode: timingMode,
+          expected_duration_seconds: duration,
+          tolerance_lower_seconds: tolLower,
+          tolerance_upper_seconds: tolUpper,
+          requires_measurement: s.requires_measurement === true || measureParams.length > 0,
+          measurement_parameters: measureParams,
+          _id: `ai_s_${i}`,
+        };
+      });
+
+      const validCategories = ['reagent', 'equipment', 'safety', 'other'];
       const checklistItems = (aiResult.checklist_items || []).map((item, i) => ({
-        ...item,
+        item_text: (item.item_text || '').trim(),
+        category: validCategories.includes(item.category) ? item.category : 'other',
         _id: `ai_c_${i}`,
-        category: ['reagent', 'equipment', 'safety', 'other'].includes(item.category) ? item.category : 'other',
-      }));
+      })).filter(item => item.item_text.length > 2);
+
+      const timedSteps = normalisedSteps.filter(s => s.timing_mode !== 'none').length;
+      const criticalSteps = normalisedSteps.filter(s => s.is_critical).length;
+      const measurementSteps = normalisedSteps.filter(s => s.requires_measurement).length;
+
       const result = {
-        name: aiResult.name || 'Imported Protocol',
-        description: aiResult.description || '',
+        name: (aiResult.name || 'Imported Protocol').trim(),
+        description: (aiResult.description || '').trim(),
         classification: aiResult.classification || classification || 'General',
         estimated_duration_minutes: aiResult.estimated_duration_minutes || null,
-        compliance_tags: aiResult.compliance_tags || [],
+        compliance_tags: Array.isArray(aiResult.compliance_tags) ? aiResult.compliance_tags : [],
         steps: normalisedSteps,
         checklist_items: checklistItems,
         structured_materials: null,
+        sections_json: [],
         _confidence: 'high',
-        _detected_section: `AI Parsed (${stepGranularity === 'individual' ? 'individual steps' : 'grouped steps'})`,
-        _parser_mode: 'ai',
+        _parser_mode: 'ai_normalise',
+        _detected_section: `AI Normalised (${stepGranularity === 'individual' ? 'individual steps' : 'grouped steps'})`,
+        _ai_stats: {
+          total_steps: normalisedSteps.length,
+          timed_steps: timedSteps,
+          critical_steps: criticalSteps,
+          measurement_steps: measurementSteps,
+          checklist_items: checklistItems.length,
+          sector: classification,
+          granularity: stepGranularity,
+          warnings,
+        },
       };
+
       setParsed(result);
       setEditName(result.name);
       setEditDesc(result.description);
@@ -596,12 +774,24 @@ ${text.substring(0, 10000)}`;
       setEditSections([]);
       setEditSteps(result.steps);
       setEditChecklist(result.checklist_items);
+      setShowConfidenceGate(false);
       setStep(4);
+
     } catch (e) {
-      console.error('AI parse failed:', e);
-      setAiError(e.message?.includes('JSON')
-        ? 'AI returned an unexpected format. Try again or use the smart parser.'
-        : `AI parsing failed: ${e.message || 'Unknown error'}. Please try again.`);
+      console.error('AI normalisation failed:', e);
+      try {
+        const fallbackResult = parseProtocolDocument(extractedText, classification);
+        fallbackResult._ai_fallback = true;
+        fallbackResult._ai_error = e.message;
+        setParsed(fallbackResult);
+        setEditName(fallbackResult.name); setEditDesc(fallbackResult.description); setEditClass(fallbackResult.classification);
+        setEditDuration(fallbackResult.estimated_duration_minutes ? String(fallbackResult.estimated_duration_minutes) : '');
+        setEditSections(fallbackResult.sections_json || []); setEditSteps(fallbackResult.steps || []); setEditChecklist(fallbackResult.checklist_items || []);
+        if (fallbackResult._confidence === 'low') { setShowConfidenceGate(true); } else { setStep(4); }
+        setAiError(`AI parsing failed — using smart parser instead. (${e.message})`);
+      } catch (fallbackErr) {
+        setAiError(`Both AI and smart parser failed: ${e.message}. Please try a different file.`);
+      }
     } finally {
       setAiParsing(false);
     }
@@ -885,32 +1075,58 @@ ${text.substring(0, 10000)}`;
             </div>
           </div>
 
-          {/* AI Parser Controls */}
-          <div style={{ marginTop: 16, padding: '14px 16px', background: useAI ? '#eef2ff' : '#f8fafc', border: `1px solid ${useAI ? '#c7d2fe' : '#e2e8f0'}`, borderRadius: 10, transition: 'all 0.2s' }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: useAI ? 14 : 0 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                <span style={{ fontSize: 18 }}>✨</span>
-                <div>
-                  <div style={{ fontSize: 13, fontWeight: 700, color: '#1e293b' }}>
-                    AI Parse
-                    <span style={{ marginLeft: 6, fontSize: 10, fontWeight: 700, padding: '1px 7px', borderRadius: 99, background: '#6366f1', color: 'white' }}>RECOMMENDED</span>
-                  </div>
-                  <div style={{ fontSize: 11, color: '#64748b', marginTop: 1 }}>
-                    {useAI ? 'AI will read and extract your protocol intelligently' : 'Use AI for complex SOPs or when smart parser returns few steps'}
-                  </div>
+          {/* AI Normalisation Controls */}
+          <div style={{
+            marginTop: 16, padding: '16px',
+            background: useAI ? 'linear-gradient(135deg, #eef2ff, #f0f9ff)' : '#f8fafc',
+            border: `2px solid ${useAI ? '#6366f1' : '#e2e8f0'}`,
+            borderRadius: 12, transition: 'all 0.2s'
+          }}>
+            <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, marginBottom: useAI ? 16 : 0 }}>
+              <div style={{ flex: 1 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                  <span style={{ fontSize: 20 }}>✨</span>
+                  <span style={{ fontSize: 14, fontWeight: 800, color: '#1e293b' }}>AI Protocol Normaliser</span>
+                  <span style={{ fontSize: 10, fontWeight: 800, padding: '2px 8px', borderRadius: 99, background: '#6366f1', color: 'white', letterSpacing: '0.05em' }}>RECOMMENDED</span>
+                </div>
+                <div style={{ fontSize: 12, color: '#64748b', lineHeight: 1.5 }}>
+                  {useAI
+                    ? `AI will read your document and convert it to BenchTrace format — automatically setting timers, critical flags, and measurements for ${classification} protocols.`
+                    : 'AI reads any protocol format and converts it intelligently. Works with prose, unusual formatting, and complex SOPs.'
+                  }
                 </div>
               </div>
-              <div onClick={() => setUseAI(prev => !prev)} style={{ width: 44, height: 24, borderRadius: 99, cursor: 'pointer', background: useAI ? '#6366f1' : '#cbd5e1', position: 'relative', flexShrink: 0, transition: 'background 0.2s' }}>
-                <div style={{ position: 'absolute', top: 3, left: useAI ? 23 : 3, width: 18, height: 18, borderRadius: '50%', background: 'white', boxShadow: '0 1px 3px rgba(0,0,0,0.2)', transition: 'left 0.2s' }} />
+              <div
+                onClick={() => { setUseAI(prev => !prev); setAiError(''); }}
+                style={{ width: 48, height: 26, borderRadius: 99, cursor: 'pointer', background: useAI ? '#6366f1' : '#cbd5e1', position: 'relative', flexShrink: 0, marginTop: 2, transition: 'background 0.2s', boxShadow: useAI ? '0 0 12px rgba(99,102,241,0.4)' : 'none' }}
+              >
+                <div style={{ position: 'absolute', top: 3, left: useAI ? 25 : 3, width: 20, height: 20, borderRadius: '50%', background: 'white', boxShadow: '0 1px 4px rgba(0,0,0,0.2)', transition: 'left 0.2s' }} />
               </div>
             </div>
             {useAI && (
               <div>
+                <div style={{ padding: '8px 12px', background: 'rgba(99,102,241,0.08)', border: '1px solid rgba(99,102,241,0.2)', borderRadius: 8, marginBottom: 12, fontSize: 11, color: '#4338ca' }}>
+                  🎯 Sector-tuned for <strong>{classification}</strong> — AI knows what to look for in {classification} protocols
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 8, marginBottom: 14 }}>
+                  {[
+                    { icon: '⏱', label: 'Auto-detect timers', desc: 'Sets advisory/strict mode + seconds' },
+                    { icon: '🔴', label: 'Flag critical steps', desc: 'Warnings, must/do-not steps' },
+                    { icon: '📏', label: 'Extract measurements', desc: 'pH, OD, concentration ranges' },
+                    { icon: '🧪', label: 'Build materials list', desc: 'Reagents, equipment, safety' },
+                  ].map(item => (
+                    <div key={item.label} style={{ padding: '8px 10px', background: 'white', borderRadius: 7, border: '1px solid #e0e7ff' }}>
+                      <div style={{ fontSize: 14, marginBottom: 3 }}>{item.icon}</div>
+                      <div style={{ fontSize: 11, fontWeight: 700, color: '#1e293b', marginBottom: 2 }}>{item.label}</div>
+                      <div style={{ fontSize: 10, color: '#64748b', lineHeight: 1.4 }}>{item.desc}</div>
+                    </div>
+                  ))}
+                </div>
                 <div style={{ fontSize: 11, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 8 }}>Step Granularity</div>
                 <div style={{ display: 'flex', gap: 8 }}>
                   {[
-                    { value: 'individual', icon: '◉', label: 'Individual Steps', desc: 'Each bullet point = one step — best for detailed execution tracking' },
-                    { value: 'grouped', icon: '⊞', label: 'Grouped Steps', desc: 'Each subsection = one step — best for complex multi-part procedures' },
+                    { value: 'individual', icon: '◉', label: 'Individual Steps', desc: 'Each bullet = one step — best for detailed execution' },
+                    { value: 'grouped', icon: '⊞', label: 'Grouped Steps', desc: 'Each subsection = one step — best for complex procedures' },
                   ].map(opt => (
                     <button key={opt.value} onClick={() => setStepGranularity(opt.value)}
                       style={{ flex: 1, padding: '10px 12px', borderRadius: 8, cursor: 'pointer', fontSize: 12, textAlign: 'left', border: `2px solid ${stepGranularity === opt.value ? '#6366f1' : '#e2e8f0'}`, background: stepGranularity === opt.value ? '#eef2ff' : 'white', color: stepGranularity === opt.value ? '#4338ca' : '#64748b', transition: 'all 0.15s' }}>
@@ -919,31 +1135,35 @@ ${text.substring(0, 10000)}`;
                     </button>
                   ))}
                 </div>
-                <div style={{ marginTop: 10, padding: '8px 12px', background: 'rgba(99,102,241,0.08)', borderRadius: 6, fontSize: 11, color: '#4338ca' }}>
-                  💡 AI Parse reads your full document context — it works well even with non-standard formatting, continuous prose, and unusual section names.
-                </div>
               </div>
             )}
           </div>
 
           {aiParsing && (
-            <div style={{ marginTop: 12, padding: '14px 16px', background: '#f0f4ff', border: '1px solid #c7d2fe', borderRadius: 10, display: 'flex', alignItems: 'center', gap: 12 }}>
-              <div style={{ width: 20, height: 20, borderRadius: '50%', border: '2px solid #c7d2fe', borderTop: '2px solid #6366f1', animation: 'spin 1s linear infinite', flexShrink: 0 }} />
-              <div>
-                <div style={{ fontSize: 13, fontWeight: 700, color: '#4338ca' }}>AI is reading your protocol...</div>
-                <div style={{ fontSize: 11, color: '#6366f1', marginTop: 2 }}>Extracting steps, materials, and compliance tags</div>
+            <div style={{ marginTop: 12, padding: '16px', background: 'linear-gradient(135deg, #eef2ff, #f0f9ff)', border: '1px solid #c7d2fe', borderRadius: 12 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 10 }}>
+                <div style={{ width: 22, height: 22, borderRadius: '50%', border: '2px solid #c7d2fe', borderTop: '2px solid #6366f1', animation: 'bt-spin 1s linear infinite', flexShrink: 0 }} />
+                <div>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: '#4338ca' }}>AI is normalising your protocol...</div>
+                  <div style={{ fontSize: 11, color: '#6366f1', marginTop: 1 }}>Reading steps, detecting timers, extracting measurements for {classification}</div>
+                </div>
+              </div>
+              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                {['Reading document structure', 'Detecting timed steps', 'Flagging critical steps', 'Extracting materials'].map((label, i) => (
+                  <span key={i} style={{ fontSize: 10, padding: '2px 8px', borderRadius: 99, background: 'rgba(99,102,241,0.15)', color: '#4338ca', fontWeight: 600 }}>{label}</span>
+                ))}
               </div>
             </div>
           )}
 
           {aiError && (
-            <div style={{ marginTop: 12, padding: '12px 14px', background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 8, fontSize: 12, color: '#dc2626' }}>
+            <div style={{ marginTop: 12, padding: '12px 14px', background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 8, fontSize: 12, color: '#92400e' }}>
               ⚠ {aiError}
-              <button onClick={() => setAiError('')} style={{ marginLeft: 8, background: 'none', border: 'none', color: '#dc2626', cursor: 'pointer', fontSize: 12, fontWeight: 700 }}>Dismiss</button>
+              <button onClick={() => setAiError('')} style={{ marginLeft: 8, background: 'none', border: 'none', color: '#92400e', cursor: 'pointer', fontSize: 12, fontWeight: 700 }}>×</button>
             </div>
           )}
 
-          <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+          <style>{`@keyframes bt-spin { to { transform: rotate(360deg); } }`}</style>
 
           <div className="flex gap-3">
             <Button variant="outline" onClick={() => setStep(1)}>Back</Button>
@@ -970,14 +1190,37 @@ ${text.substring(0, 10000)}`;
             <h2 className="text-base font-semibold text-foreground">Review & Edit</h2>
           </div>
 
-          {/* AI parse badge */}
-          {parsed?._parser_mode === 'ai' && (
-            <div style={{ padding: '10px 14px', background: '#eef2ff', border: '1px solid #c7d2fe', borderRadius: 8, marginBottom: 16, display: 'flex', alignItems: 'center', gap: 10 }}>
-              <span style={{ fontSize: 18 }}>✨</span>
-              <div>
-                <div style={{ fontSize: 13, fontWeight: 700, color: '#4338ca' }}>AI Parsed — {parsed._detected_section}</div>
-                <div style={{ fontSize: 11, color: '#6366f1' }}>{parsed.steps?.length} steps extracted · High confidence · Review before saving</div>
+          {/* AI Normalisation stats badge */}
+          {parsed?._parser_mode === 'ai_normalise' && parsed?._ai_stats && (
+            <div style={{ padding: '14px 16px', background: 'linear-gradient(135deg, #eef2ff, #f0f9ff)', border: '1px solid #c7d2fe', borderRadius: 10, marginBottom: 16 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+                <span style={{ fontSize: 18 }}>✨</span>
+                <div>
+                  <div style={{ fontSize: 13, fontWeight: 800, color: '#4338ca' }}>AI Normalised — {parsed._ai_stats.sector} Protocol</div>
+                  <div style={{ fontSize: 11, color: '#6366f1' }}>{parsed._detected_section} · Review and save when ready</div>
+                </div>
               </div>
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                {[
+                  { icon: '📋', label: 'Steps', value: parsed._ai_stats.total_steps, color: '#6366f1' },
+                  { icon: '⏱', label: 'Timed', value: parsed._ai_stats.timed_steps, color: '#3b82f6' },
+                  { icon: '🔴', label: 'Critical', value: parsed._ai_stats.critical_steps, color: '#dc2626' },
+                  { icon: '📏', label: 'Measurements', value: parsed._ai_stats.measurement_steps, color: '#8b5cf6' },
+                  { icon: '🧪', label: 'Materials', value: parsed._ai_stats.checklist_items, color: '#10b981' },
+                ].map(stat => (
+                  <div key={stat.label} style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '4px 10px', background: 'white', borderRadius: 99, border: '1px solid #e0e7ff' }}>
+                    <span style={{ fontSize: 12 }}>{stat.icon}</span>
+                    <span style={{ fontSize: 11, fontWeight: 700, color: stat.color }}>{stat.value}</span>
+                    <span style={{ fontSize: 10, color: '#64748b' }}>{stat.label}</span>
+                  </div>
+                ))}
+              </div>
+              {parsed._ai_stats.warnings?.length > 0 && (
+                <div style={{ marginTop: 8, padding: '6px 10px', background: '#fffbeb', borderRadius: 6, fontSize: 11, color: '#92400e' }}>⚠ {parsed._ai_stats.warnings.join(' · ')}</div>
+              )}
+              {parsed._ai_fallback && (
+                <div style={{ marginTop: 6, fontSize: 11, color: '#d97706' }}>⚡ AI failed — smart parser used as fallback</div>
+              )}
             </div>
           )}
 
