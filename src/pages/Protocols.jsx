@@ -22,10 +22,16 @@ const CLASS_STYLES = {
   "General": "bg-gray-100 text-gray-600",
 };
 
-function ProtocolCard({ protocol, stepCounts, onView, onArchive, onRestore, confirmArchiveId, setConfirmArchiveId, archivingId, activeRunCounts }) {
+function ProtocolCard({
+  protocol, stepCounts, onView,
+  onArchive, onRestore, onDelete,
+  confirmArchiveId, setConfirmArchiveId, archivingId, activeRunCounts,
+  confirmDeleteId, setConfirmDeleteId, deletingId, runCountsByProtocol,
+}) {
   const count = stepCounts[protocol.id] || 0;
   const sc = STATUS_CONFIG[protocol.status] || STATUS_CONFIG.draft;
   const isAdmin = localStorage.getItem('bt_role') === 'admin';
+  const runCount = runCountsByProtocol[protocol.id] || 0;
 
   return (
     <div
@@ -64,76 +70,142 @@ function ProtocolCard({ protocol, stepCounts, onView, onArchive, onRestore, conf
             {protocol.estimated_duration_minutes}m
           </span>
         )}
+        {/* Run count badge for draft protocols */}
+        {protocol.status === 'draft' && isAdmin && (
+          <span style={{ fontSize: 10, color: '#94a3b8', fontStyle: 'italic' }}>
+            {runCount > 0
+              ? `${runCount} run${runCount !== 1 ? 's' : ''} linked — archive only`
+              : 'No runs — can delete'}
+          </span>
+        )}
       </div>
 
-      <div className="pt-1 border-t border-border flex flex-wrap justify-between items-center gap-2">
-        <div className="flex flex-wrap gap-2 items-center">
-          {/* Archive control — active or draft, admin only */}
-          {(protocol.status === 'active' || protocol.status === 'draft') && isAdmin && (
-            <>
-              {confirmArchiveId === protocol.id ? (
-                <div
-                  style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', padding: '6px 10px', background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 7 }}
-                  onClick={e => e.stopPropagation()}
-                >
-                  {activeRunCounts[protocol.id] > 0 ? (
-                    <span style={{ fontSize: 11, color: '#dc2626', fontWeight: 600 }}>
-                      ⚠ {activeRunCounts[protocol.id]} run{activeRunCounts[protocol.id] !== 1 ? 's' : ''} in progress — new runs will be blocked
-                    </span>
-                  ) : (
-                    <span style={{ fontSize: 11, color: '#dc2626', fontWeight: 600 }}>
-                      Archive this protocol?
-                    </span>
-                  )}
-                  <button
-                    onClick={() => onArchive(protocol.id)}
-                    disabled={archivingId === protocol.id}
-                    style={{ padding: '3px 12px', background: '#ef4444', color: 'white', border: 'none', borderRadius: 5, fontSize: 11, fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap' }}
-                  >
-                    {archivingId === protocol.id ? 'Archiving...' : 'Yes, Archive'}
-                  </button>
-                  <button
-                    onClick={() => setConfirmArchiveId(null)}
-                    style={{ padding: '3px 10px', background: 'white', color: '#475569', border: '1px solid #e2e8f0', borderRadius: 5, fontSize: 11, cursor: 'pointer', whiteSpace: 'nowrap' }}
-                  >
-                    Cancel
-                  </button>
-                </div>
-              ) : (
-                <button
-                  onClick={e => { e.stopPropagation(); setConfirmArchiveId(protocol.id); }}
-                  style={{ padding: '4px 10px', background: '#f8fafc', color: '#94a3b8', border: '1px solid #e2e8f0', borderRadius: 6, fontSize: 11, cursor: 'pointer', fontWeight: 600 }}
-                  onMouseEnter={e => { e.currentTarget.style.color = '#ef4444'; e.currentTarget.style.borderColor = '#fecaca'; e.currentTarget.style.background = '#fef2f2'; }}
-                  onMouseLeave={e => { e.currentTarget.style.color = '#94a3b8'; e.currentTarget.style.borderColor = '#e2e8f0'; e.currentTarget.style.background = '#f8fafc'; }}
-                >
-                  Archive
-                </button>
-              )}
-            </>
-          )}
+      <div className="pt-1 border-t border-border flex flex-col gap-2">
+        <div className="flex flex-wrap gap-2 items-center justify-between">
+          <div className="flex flex-wrap gap-2 items-center">
 
-          {/* Restore button — archived, admin only */}
-          {protocol.status === 'archived' && isAdmin && (
-            <button
-              onClick={async (e) => {
-                e.stopPropagation();
-                try {
-                  await base44.entities.Protocol.update(protocol.id, { status: 'draft' });
-                  onRestore(protocol.id);
-                } catch(err) {
-                  console.error('Restore failed:', err);
-                }
-              }}
-              style={{ padding: '4px 10px', background: '#f0fdf4', color: '#16a34a', border: '1px solid #bbf7d0', borderRadius: 6, fontSize: 11, cursor: 'pointer', fontWeight: 600 }}
-            >
-              Restore to Draft
-            </button>
-          )}
+            {/* Archive control — active or draft, admin only */}
+            {(protocol.status === 'active' || protocol.status === 'draft') && isAdmin && (
+              <>
+                {confirmArchiveId === protocol.id ? (
+                  <div
+                    style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', padding: '6px 10px', background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 7 }}
+                    onClick={e => e.stopPropagation()}
+                  >
+                    {activeRunCounts[protocol.id] > 0 ? (
+                      <span style={{ fontSize: 11, color: '#dc2626', fontWeight: 600 }}>
+                        ⚠ {activeRunCounts[protocol.id]} run{activeRunCounts[protocol.id] !== 1 ? 's' : ''} in progress — new runs will be blocked
+                      </span>
+                    ) : (
+                      <span style={{ fontSize: 11, color: '#dc2626', fontWeight: 600 }}>
+                        Archive this protocol?
+                      </span>
+                    )}
+                    <button
+                      onClick={() => onArchive(protocol.id)}
+                      disabled={archivingId === protocol.id}
+                      style={{ padding: '3px 12px', background: '#ef4444', color: 'white', border: 'none', borderRadius: 5, fontSize: 11, fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap' }}
+                    >
+                      {archivingId === protocol.id ? 'Archiving...' : 'Yes, Archive'}
+                    </button>
+                    <button
+                      onClick={() => setConfirmArchiveId(null)}
+                      style={{ padding: '3px 10px', background: 'white', color: '#475569', border: '1px solid #e2e8f0', borderRadius: 5, fontSize: 11, cursor: 'pointer', whiteSpace: 'nowrap' }}
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    onClick={e => { e.stopPropagation(); setConfirmArchiveId(protocol.id); }}
+                    style={{ padding: '4px 10px', background: '#f8fafc', color: '#94a3b8', border: '1px solid #e2e8f0', borderRadius: 6, fontSize: 11, cursor: 'pointer', fontWeight: 600 }}
+                    onMouseEnter={e => { e.currentTarget.style.color = '#ef4444'; e.currentTarget.style.borderColor = '#fecaca'; e.currentTarget.style.background = '#fef2f2'; }}
+                    onMouseLeave={e => { e.currentTarget.style.color = '#94a3b8'; e.currentTarget.style.borderColor = '#e2e8f0'; e.currentTarget.style.background = '#f8fafc'; }}
+                  >
+                    Archive
+                  </button>
+                )}
+              </>
+            )}
+
+            {/* Delete button — ONLY for draft protocols with zero runs, admin only */}
+            {protocol.status === 'draft' && isAdmin && runCount === 0 && (
+              <>
+                {confirmDeleteId === protocol.id ? (
+                  <div
+                    onClick={e => e.stopPropagation()}
+                    style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', padding: '8px 12px', background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 8 }}
+                  >
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontSize: 12, fontWeight: 700, color: '#dc2626', marginBottom: 2 }}>
+                        Permanently delete this draft?
+                      </div>
+                      <div style={{ fontSize: 11, color: '#ef4444' }}>
+                        This will also delete all steps, checklist items, and versions. This cannot be undone.
+                      </div>
+                    </div>
+                    <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+                      <button
+                        onClick={() => onDelete(protocol.id)}
+                        disabled={deletingId === protocol.id}
+                        style={{ padding: '5px 14px', background: '#ef4444', color: 'white', border: 'none', borderRadius: 6, fontSize: 12, fontWeight: 700, cursor: deletingId === protocol.id ? 'not-allowed' : 'pointer', whiteSpace: 'nowrap' }}
+                      >
+                        {deletingId === protocol.id ? 'Deleting...' : 'Yes, Delete'}
+                      </button>
+                      <button
+                        onClick={() => setConfirmDeleteId(null)}
+                        style={{ padding: '5px 12px', background: 'white', color: '#475569', border: '1px solid #e2e8f0', borderRadius: 6, fontSize: 12, cursor: 'pointer', whiteSpace: 'nowrap' }}
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <button
+                    onClick={e => { e.stopPropagation(); setConfirmDeleteId(protocol.id); }}
+                    style={{ padding: '4px 10px', background: '#f8fafc', color: '#94a3b8', border: '1px solid #e2e8f0', borderRadius: 6, fontSize: 11, cursor: 'pointer', fontWeight: 600 }}
+                    onMouseEnter={e => { e.currentTarget.style.color = '#dc2626'; e.currentTarget.style.borderColor = '#fecaca'; e.currentTarget.style.background = '#fef2f2'; }}
+                    onMouseLeave={e => { e.currentTarget.style.color = '#94a3b8'; e.currentTarget.style.borderColor = '#e2e8f0'; e.currentTarget.style.background = '#f8fafc'; }}
+                  >
+                    Delete
+                  </button>
+                )}
+              </>
+            )}
+
+            {/* Draft with runs — greyed-out delete with tooltip */}
+            {protocol.status === 'draft' && isAdmin && runCount > 0 && (
+              <span
+                title={`Cannot delete — ${runCount} run${runCount !== 1 ? 's' : ''} reference this protocol. Archive it instead.`}
+                style={{ padding: '4px 10px', background: '#f8fafc', color: '#cbd5e1', border: '1px solid #f1f5f9', borderRadius: 6, fontSize: 11, cursor: 'not-allowed', fontWeight: 600, userSelect: 'none' }}
+              >
+                Delete
+              </span>
+            )}
+
+            {/* Restore button — archived, admin only */}
+            {protocol.status === 'archived' && isAdmin && (
+              <button
+                onClick={async (e) => {
+                  e.stopPropagation();
+                  try {
+                    await base44.entities.Protocol.update(protocol.id, { status: 'draft' });
+                    onRestore(protocol.id);
+                  } catch(err) {
+                    console.error('Restore failed:', err);
+                  }
+                }}
+                style={{ padding: '4px 10px', background: '#f0fdf4', color: '#16a34a', border: '1px solid #bbf7d0', borderRadius: 6, fontSize: 11, cursor: 'pointer', fontWeight: 600 }}
+              >
+                Restore to Draft
+              </button>
+            )}
+          </div>
+
+          <Button size="sm" variant="outline" onClick={() => onView(protocol.id)}>
+            View
+          </Button>
         </div>
-
-        <Button size="sm" variant="outline" onClick={() => onView(protocol.id)}>
-          View
-        </Button>
       </div>
     </div>
   );
@@ -148,23 +220,32 @@ export default function Protocols() {
   const [confirmArchiveId, setConfirmArchiveId] = useState(null);
   const [archivingId, setArchivingId] = useState(null);
   const [activeRunCounts, setActiveRunCounts] = useState({});
+  const [confirmDeleteId, setConfirmDeleteId] = useState(null);
+  const [deletingId, setDeletingId] = useState(null);
+  const [runCountsByProtocol, setRunCountsByProtocol] = useState({});
 
   const orgId = localStorage.getItem("bt_org_id");
   const isAdmin = localStorage.getItem('bt_role') === 'admin';
 
   useEffect(() => {
     async function load() {
-      const [data, inProgressRuns] = await Promise.all([
+      const [data, allRuns] = await Promise.all([
         base44.entities.Protocol.filter({ organization_id: orgId }, "-created_date"),
-        base44.entities.Run.filter({ organization_id: orgId, run_state: 'in_progress' }),
+        base44.entities.Run.filter({ organization_id: orgId }),
       ]);
       setProtocols(data);
 
-      const runCounts = {};
-      (inProgressRuns || []).forEach(run => {
-        runCounts[run.protocol_id] = (runCounts[run.protocol_id] || 0) + 1;
+      // All run counts per protocol
+      const allCounts = {};
+      const activeCounts = {};
+      (allRuns || []).forEach(run => {
+        allCounts[run.protocol_id] = (allCounts[run.protocol_id] || 0) + 1;
+        if (run.run_state === 'in_progress') {
+          activeCounts[run.protocol_id] = (activeCounts[run.protocol_id] || 0) + 1;
+        }
       });
-      setActiveRunCounts(runCounts);
+      setRunCountsByProtocol(allCounts);
+      setActiveRunCounts(activeCounts);
 
       if (data.length > 0) {
         const steps = await base44.entities.ProtocolStep.filter({ organization_id: orgId });
@@ -190,6 +271,39 @@ export default function Protocols() {
       console.error('Archive failed:', err);
     } finally {
       setArchivingId(null);
+    }
+  };
+
+  const handleDeleteProtocol = async (protocolId) => {
+    setDeletingId(protocolId);
+    setConfirmDeleteId(null);
+    try {
+      // Final safety check
+      const linkedRuns = await base44.entities.Run.filter({ protocol_id: protocolId, organization_id: orgId });
+      if (linkedRuns.length > 0) {
+        alert('Cannot delete — this protocol has linked runs. Archive it instead.');
+        setDeletingId(null);
+        return;
+      }
+
+      const [steps, items, versions] = await Promise.all([
+        base44.entities.ProtocolStep.filter({ protocol_id: protocolId, organization_id: orgId }),
+        base44.entities.ProtocolChecklistItem.filter({ protocol_id: protocolId, organization_id: orgId }),
+        base44.entities.ProtocolVersion.filter({ protocol_id: protocolId, organization_id: orgId }),
+      ]);
+
+      await Promise.all([
+        ...steps.map(s => base44.entities.ProtocolStep.delete(s.id)),
+        ...items.map(i => base44.entities.ProtocolChecklistItem.delete(i.id)),
+        ...versions.map(v => base44.entities.ProtocolVersion.delete(v.id)),
+      ]);
+
+      await base44.entities.Protocol.delete(protocolId);
+      setProtocols(prev => prev.filter(p => p.id !== protocolId));
+    } catch(err) {
+      console.error('Delete protocol failed:', err);
+    } finally {
+      setDeletingId(null);
     }
   };
 
@@ -269,10 +383,15 @@ export default function Protocols() {
               onView={(id) => navigate(`/protocol-detail?id=${id}`)}
               onArchive={handleArchiveProtocol}
               onRestore={(id) => setProtocols(prev => prev.map(pr => pr.id === id ? { ...pr, status: 'draft' } : pr))}
+              onDelete={handleDeleteProtocol}
               confirmArchiveId={confirmArchiveId}
               setConfirmArchiveId={setConfirmArchiveId}
               archivingId={archivingId}
               activeRunCounts={activeRunCounts}
+              confirmDeleteId={confirmDeleteId}
+              setConfirmDeleteId={setConfirmDeleteId}
+              deletingId={deletingId}
+              runCountsByProtocol={runCountsByProtocol}
             />
           ))}
         </div>
