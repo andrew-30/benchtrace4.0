@@ -379,6 +379,87 @@ function StepRow({ step, onDelete }) {
   );
 }
 
+// ── Confidence Gate Screen ──────────────────────────────────────────────────
+function ConfidenceGateScreen({ parsed, classification, onContinue, onDownloadTemplate, onReUpload }) {
+  const hasExecutionSection = !!parsed._detected_section;
+  const hasSteps = parsed.steps && parsed.steps.length > 0;
+  const hasMaterials = parsed.sections_json?.some(s => s.type === 'materials');
+  const hasPurpose = parsed.sections_json?.some(s => s.type === 'purpose');
+  const stepCount = parsed.steps?.length || 0;
+
+  return (
+    <div style={{ minHeight: '60vh', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '32px 24px', fontFamily: 'system-ui, sans-serif' }}>
+      <div style={{ maxWidth: 560, width: '100%' }}>
+        <div style={{ background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 12, padding: '20px 24px', marginBottom: 20, borderTop: '4px solid #ef4444' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
+            <span style={{ fontSize: 24 }}>⚠️</span>
+            <div>
+              <div style={{ fontSize: 16, fontWeight: 800, color: '#dc2626' }}>Low Parse Confidence</div>
+              <div style={{ fontSize: 12, color: '#ef4444' }}>We had difficulty extracting structured steps from your document</div>
+            </div>
+          </div>
+          <div style={{ fontSize: 12, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 8 }}>What the parser found:</div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 14 }}>
+            {[
+              { label: 'Numbered execution section (3.1, 3.2...)', found: hasExecutionSection },
+              { label: `Execution steps (${stepCount} found)`, found: hasSteps && stepCount > 2 },
+              { label: 'Materials / Reagents section', found: hasMaterials },
+              { label: 'Purpose / Objective section', found: hasPurpose },
+            ].map((check, i) => (
+              <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span style={{ fontSize: 13, fontWeight: 700, color: check.found ? '#16a34a' : '#ef4444', flexShrink: 0 }}>{check.found ? '✓' : '✗'}</span>
+                <span style={{ fontSize: 12, color: check.found ? '#374151' : '#94a3b8' }}>{check.label}</span>
+              </div>
+            ))}
+          </div>
+          <div style={{ padding: '10px 12px', background: 'white', borderRadius: 7, border: '1px solid #fecaca', fontSize: 12, color: '#7f1d1d' }}>
+            <strong>Why this matters:</strong> Poor step detection means you'll need to manually add or edit most execution steps after import — which defeats the purpose of importing.
+          </div>
+        </div>
+
+        <div style={{ fontSize: 13, fontWeight: 700, color: '#1e293b', marginBottom: 14, textAlign: 'center' }}>We recommend one of these options:</div>
+
+        <div style={{ background: 'white', border: '2px solid #6366f1', borderRadius: 12, padding: '20px', marginBottom: 12 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+            <span style={{ fontSize: 11, fontWeight: 800, padding: '2px 9px', borderRadius: 99, background: '#6366f1', color: 'white' }}>RECOMMENDED</span>
+          </div>
+          <div style={{ fontSize: 15, fontWeight: 700, color: '#1e293b', marginBottom: 6 }}>📄 Use the BenchTrace Template</div>
+          <div style={{ fontSize: 12, color: '#64748b', lineHeight: 1.6, marginBottom: 14 }}>
+            Download our <strong>{classification}</strong> template, copy your protocol content into it, and re-upload. The template is pre-structured for perfect parsing — you'll get clean steps with zero editing.
+          </div>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button onClick={onDownloadTemplate} style={{ flex: 1, padding: '10px', background: '#6366f1', color: 'white', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>
+              ↓ Download {classification} Template
+            </button>
+            <button onClick={onReUpload} style={{ padding: '10px 16px', background: 'white', color: '#6366f1', border: '1px solid #c7d2fe', borderRadius: 8, fontSize: 12, cursor: 'pointer', fontWeight: 600 }}>
+              Re-upload
+            </button>
+          </div>
+        </div>
+
+        <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 12, padding: '20px' }}>
+          <div style={{ fontSize: 15, fontWeight: 700, color: '#475569', marginBottom: 6 }}>⚡ Continue Anyway</div>
+          <div style={{ fontSize: 12, color: '#64748b', lineHeight: 1.6, marginBottom: 14 }}>
+            Proceed to the review screen with what was detected.
+            {stepCount > 0
+              ? ` We found ${stepCount} step${stepCount !== 1 ? 's' : ''} — you can add, edit, and rearrange them manually.`
+              : " You'll need to add all execution steps manually in the protocol editor."
+            }
+            {' '}This may take significantly more time than using the template.
+          </div>
+          <button onClick={onContinue} style={{ width: '100%', padding: '9px', background: 'white', color: '#64748b', border: '1px solid #e2e8f0', borderRadius: 8, fontSize: 12, cursor: 'pointer', fontWeight: 600 }}>
+            Continue with {stepCount} step{stepCount !== 1 ? 's' : ''} →
+          </button>
+        </div>
+
+        <div style={{ marginTop: 16, fontSize: 11, color: '#94a3b8', textAlign: 'center' }}>
+          💡 Labs using our templates save an average of 15 minutes per protocol import
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── Main page ─────────────────────────────────────────────────────────────────
 export default function Import() {
   const navigate = useNavigate();
@@ -387,6 +468,8 @@ export default function Import() {
 
   const [step, setStep] = useState(1);
   const [classification, setClassification] = useState("");
+  const [showConfidenceGate, setShowConfidenceGate] = useState(false);
+  const [gateChoice, setGateChoice] = useState(null);
   const [showParserGuide, setShowParserGuide] = useState(false);
   const [inputMode, setInputMode] = useState("upload"); // upload | paste
   const [file, setFile] = useState(null);
@@ -441,7 +524,12 @@ export default function Import() {
     setEditSteps(result.steps || []);
     setEditChecklist(result.checklist_items || []);
     setProcessing(false);
-    setStep(4);
+    if (result._confidence === 'low') {
+      setShowConfidenceGate(true);
+    } else {
+      setShowConfidenceGate(false);
+      setStep(4);
+    }
   }
 
   async function handleSave() {
@@ -502,6 +590,27 @@ export default function Import() {
   }
 
   const CLASSIFICATIONS = ["Academic Research", "Clinical Diagnostic", "GMP Manufacturing", "ISO Accredited", "CRO Study", "Biotech Startup", "General"];
+
+  if (showConfidenceGate && parsed) {
+    return (
+      <div className="space-y-6 max-w-4xl">
+        <div className="flex items-center gap-3">
+          <button onClick={() => navigate("/protocols")} className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground">
+            <ArrowLeft className="w-4 h-4" /> Protocols
+          </button>
+          <span className="text-muted-foreground">/</span>
+          <span className="text-sm font-medium text-foreground">Import SOP</span>
+        </div>
+        <ConfidenceGateScreen
+          parsed={parsed}
+          classification={classification}
+          onContinue={() => { setShowConfidenceGate(false); setGateChoice('continue'); setStep(4); }}
+          onDownloadTemplate={() => downloadSectorTemplate(classification)}
+          onReUpload={() => { setShowConfidenceGate(false); setGateChoice(null); setParsed(null); setStep(2); }}
+        />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6 max-w-4xl">
@@ -681,6 +790,34 @@ export default function Import() {
           <div className="flex items-center justify-between" style={{ marginBottom: 12 }}>
             <h2 className="text-base font-semibold text-foreground">Review & Edit</h2>
           </div>
+
+          {/* Medium confidence warning — non-blocking amber banner */}
+          {parsed._confidence === 'medium' && gateChoice !== 'continue' && (
+            <div style={{ padding: '12px 16px', background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 8, marginBottom: 4, display: 'flex', gap: 12, alignItems: 'flex-start' }}>
+              <span style={{ fontSize: 18, flexShrink: 0 }}>⚠️</span>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: 13, fontWeight: 700, color: '#92400e', marginBottom: 3 }}>Medium confidence — review carefully</div>
+                <div style={{ fontSize: 12, color: '#78350f', lineHeight: 1.6 }}>
+                  Some steps may be incomplete or incorrectly grouped. Check each step below before saving.
+                  For future imports, <button onClick={() => downloadSectorTemplate(classification)} style={{ background: 'none', border: 'none', color: '#6366f1', cursor: 'pointer', fontSize: 12, fontWeight: 700, textDecoration: 'underline', padding: 0 }}>download our {classification} template</button> for better results.
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Low confidence warning — shown when user chose Continue Anyway */}
+          {gateChoice === 'continue' && (
+            <div style={{ padding: '12px 16px', background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 8, marginBottom: 4, display: 'flex', gap: 12, alignItems: 'flex-start' }}>
+              <span style={{ fontSize: 18, flexShrink: 0 }}>🔴</span>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: 13, fontWeight: 700, color: '#dc2626', marginBottom: 3 }}>Low confidence import — manual review required</div>
+                <div style={{ fontSize: 12, color: '#b91c1c', lineHeight: 1.6 }}>
+                  Most steps will need manual editing. Review each step carefully and add any missing steps before saving. Consider using our <button onClick={() => downloadSectorTemplate(classification)} style={{ background: 'none', border: 'none', color: '#6366f1', cursor: 'pointer', fontSize: 12, fontWeight: 700, textDecoration: 'underline', padding: 0 }}>{classification} template</button> for future imports.
+                </div>
+              </div>
+            </div>
+          )}
+
           <div style={{ marginBottom: 14 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 8 }}>
               <span style={{ padding: '3px 10px', borderRadius: 99, fontSize: 11, fontWeight: 700, background: parsed._confidence === 'high' ? '#f0fdf4' : parsed._confidence === 'medium' ? '#fffbeb' : '#fef2f2', color: parsed._confidence === 'high' ? '#16a34a' : parsed._confidence === 'medium' ? '#d97706' : '#dc2626', border: `1px solid ${parsed._confidence === 'high' ? '#bbf7d0' : parsed._confidence === 'medium' ? '#fde68a' : '#fecaca'}` }}>
