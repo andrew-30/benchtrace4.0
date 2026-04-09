@@ -1,6 +1,7 @@
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { FlaskConical, LogOut } from "lucide-react";
+import { getPlanStatus } from "@/lib/planStatus";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -31,6 +32,16 @@ function NavLink({ to, label }) {
 export default function TopNav({ user }) {
   const navigate = useNavigate();
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const [planStatus, setPlanStatus] = useState(null);
+
+  useEffect(() => {
+    const orgId = localStorage.getItem('bt_org_id');
+    if (!orgId) return;
+    base44.entities.Organization.filter({ id: orgId }).then(data => {
+      const org = data?.[0];
+      if (org) setPlanStatus(getPlanStatus(org));
+    }).catch(e => console.error(e));
+  }, []);
 
   function handleSignOut() {
     localStorage.removeItem("bt_org_id");
@@ -110,6 +121,76 @@ export default function TopNav({ user }) {
               {item.label}
             </button>
           ))}
+        </div>
+      )}
+
+      {/* Trial / beta banner */}
+      {planStatus && planStatus.hasTrial && (
+        <div style={{
+          width: '100%',
+          padding: '6px 20px',
+          display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12,
+          fontSize: 12, fontWeight: 500,
+          background: planStatus.isBeta
+            ? 'linear-gradient(90deg, #1e1b4b, #312e81)'
+            : planStatus.urgentRenewal
+            ? '#fef2f2'
+            : planStatus.trialExpired
+            ? '#fef2f2'
+            : '#f0f4ff',
+          borderBottom: `1px solid ${planStatus.isBeta ? 'rgba(99,102,241,0.3)' : planStatus.urgentRenewal || planStatus.trialExpired ? '#fecaca' : '#c7d2fe'}`,
+          flexWrap: 'wrap',
+        }}>
+          {planStatus.isBeta ? (
+            <>
+              <span style={{ color: '#a5b4fc', fontWeight: 600 }}>
+                🎉 Beta Access — {planStatus.planName} plan · All features unlocked free during beta
+              </span>
+              <button
+                onClick={() => navigate('/pricing')}
+                style={{ padding: '2px 10px', background: 'rgba(99,102,241,0.3)', color: '#a5b4fc', border: '1px solid rgba(99,102,241,0.4)', borderRadius: 99, fontSize: 11, cursor: 'pointer', fontWeight: 700, whiteSpace: 'nowrap' }}
+              >
+                View Pricing →
+              </button>
+            </>
+          ) : planStatus.trialExpired ? (
+            <>
+              <span style={{ color: '#dc2626', fontWeight: 600 }}>⚠ Your trial has ended · Your data is safe</span>
+              <button
+                onClick={() => navigate('/pricing')}
+                style={{ padding: '3px 12px', background: '#ef4444', color: 'white', border: 'none', borderRadius: 99, fontSize: 11, cursor: 'pointer', fontWeight: 700 }}
+              >
+                Choose Plan →
+              </button>
+            </>
+          ) : planStatus.urgentRenewal ? (
+            <>
+              <span style={{ color: '#dc2626', fontWeight: 600 }}>
+                ⚠ {planStatus.daysLeft} day{planStatus.daysLeft !== 1 ? 's' : ''} left in your {planStatus.planName} trial
+              </span>
+              <button
+                onClick={() => navigate('/pricing')}
+                style={{ padding: '3px 12px', background: '#ef4444', color: 'white', border: 'none', borderRadius: 99, fontSize: 11, cursor: 'pointer', fontWeight: 700 }}
+              >
+                Upgrade Now →
+              </button>
+            </>
+          ) : (
+            <>
+              <span style={{ color: '#4338ca' }}>
+                ⏱ {planStatus.planName} Trial · {planStatus.daysLeft} day{planStatus.daysLeft !== 1 ? 's' : ''} remaining
+              </span>
+              <div style={{ width: 80, height: 4, background: '#e0e7ff', borderRadius: 2, overflow: 'hidden' }}>
+                <div style={{ height: '100%', background: '#6366f1', width: `${planStatus.trialProgressPct}%`, borderRadius: 2 }} />
+              </div>
+              <button
+                onClick={() => navigate('/pricing')}
+                style={{ padding: '2px 10px', background: 'transparent', color: '#6366f1', border: '1px solid #c7d2fe', borderRadius: 99, fontSize: 11, cursor: 'pointer', fontWeight: 600 }}
+              >
+                View Plans →
+              </button>
+            </>
+          )}
         </div>
       )}
     </header>

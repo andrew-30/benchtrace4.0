@@ -1,0 +1,62 @@
+{
+  "name": "Organization",
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string",
+      "title": "Name"
+    },
+    "sector": {
+      "type": "string",
+      "title": "Sector",
+      "enum": [
+        "Academic Research",
+        "Clinical Diagnostic",
+        "GMP Manufacturing",
+        "ISO Accredited",
+        "CRO Study",
+        "Biotech Startup",
+        "General"
+      ],
+      "default": "Academic Research"
+    },
+    "plan": {
+      "type": "string",
+      "title": "Plan",
+      "enum": [
+        "starter",
+        "lab",
+        "lab_pro",
+        "enterprise"
+      ],
+      "default": "starter"
+    },
+    "timezone": {
+      "type": "string",
+      "title": "Timezone",
+      "default": "UTC"
+    },
+    "beta_user": {
+      "type": "boolean",
+      "title": "Beta User",
+      "default": true
+    },
+    "trial_started_at": {
+      "type": "string",
+      "format": "date-time",
+      "title": "Trial Started At"
+    },
+    "trial_expires_at": {
+      "type": "string",
+      "format": "date-time",
+      "title": "Trial Expires At"
+    },
+    "created_by_id": {
+      "type": "string",
+      "title": "Created By ID"
+    }
+  },
+  "required": [
+    "name"
+  ]
+}
