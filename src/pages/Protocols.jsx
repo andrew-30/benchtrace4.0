@@ -22,7 +22,7 @@ const CLASS_STYLES = {
   "General": "bg-gray-100 text-gray-600",
 };
 
-function ProtocolCard({ protocol, stepCounts, onView }) {
+function ProtocolCard({ protocol, stepCounts, onView, onArchive }) {
   const count = stepCounts[protocol.id] || 0;
 
   return (
@@ -64,7 +64,15 @@ function ProtocolCard({ protocol, stepCounts, onView }) {
       <div className="pt-1 border-t border-border flex justify-between items-center">
         {protocol.status === 'draft' && localStorage.getItem('bt_role') === 'admin' && onArchive && (
           <button
-            onClick={async (e) => { e.stopPropagation(); onArchive(protocol.id); }}
+            onClick={async (e) => {
+              e.stopPropagation();
+              try {
+                await base44.entities.Protocol.update(protocol.id, { status: 'archived' });
+                onArchive(protocol.id);
+              } catch(err) {
+                console.error('Archive failed:', err);
+              }
+            }}
             style={{ padding: '4px 10px', background: '#f8fafc', color: '#64748b', border: '1px solid #e2e8f0', borderRadius: 6, fontSize: 11, cursor: 'pointer', fontWeight: 600 }}
           >
             Archive
@@ -84,7 +92,7 @@ export default function Protocols() {
   const [stepCounts, setStepCounts] = useState({});
   const [activeFilter, setActiveFilter] = useState("All");
   const [loading, setLoading] = useState(true);
-  const [archivingId, setArchivingId] = useState(null);
+
 
   const orgId = localStorage.getItem("bt_org_id");
   const isAdmin = localStorage.getItem('bt_role') === 'admin';
@@ -178,11 +186,8 @@ export default function Protocols() {
               protocol={p}
               stepCounts={stepCounts}
               onView={(id) => navigate(`/protocol-detail?id=${id}`)}
-              onArchive={async (id) => {
-                setArchivingId(id);
-                await base44.entities.Protocol.update(id, { status: 'archived' });
+              onArchive={(id) => {
                 setProtocols(prev => prev.map(pr => pr.id === id ? { ...pr, status: 'archived' } : pr));
-                setArchivingId(null);
               }}
             />
           ))}
