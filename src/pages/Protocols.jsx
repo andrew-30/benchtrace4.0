@@ -61,8 +61,16 @@ function ProtocolCard({ protocol, stepCounts, onView }) {
         )}
       </div>
 
-      <div className="pt-1 border-t border-border flex justify-end">
-        <Button size="sm" variant="outline" onClick={() => onView(protocol.id)}>
+      <div className="pt-1 border-t border-border flex justify-between items-center">
+        {protocol.status === 'draft' && localStorage.getItem('bt_role') === 'admin' && onArchive && (
+          <button
+            onClick={async (e) => { e.stopPropagation(); onArchive(protocol.id); }}
+            style={{ padding: '4px 10px', background: '#f8fafc', color: '#64748b', border: '1px solid #e2e8f0', borderRadius: 6, fontSize: 11, cursor: 'pointer', fontWeight: 600 }}
+          >
+            Archive
+          </button>
+        )}
+        <Button size="sm" variant="outline" onClick={() => onView(protocol.id)} className="ml-auto">
           View
         </Button>
       </div>
@@ -76,6 +84,7 @@ export default function Protocols() {
   const [stepCounts, setStepCounts] = useState({});
   const [activeFilter, setActiveFilter] = useState("All");
   const [loading, setLoading] = useState(true);
+  const [archivingId, setArchivingId] = useState(null);
 
   const orgId = localStorage.getItem("bt_org_id");
   const isAdmin = localStorage.getItem('bt_role') === 'admin';
@@ -99,9 +108,13 @@ export default function Protocols() {
     load();
   }, [orgId]);
 
-  const filtered = activeFilter === "All"
-    ? protocols
-    : protocols.filter(p => p.status === activeFilter.toLowerCase());
+  const filtered = protocols.filter(p => {
+    if (activeFilter === 'All') return p.status !== 'archived';
+    if (activeFilter === 'Active') return p.status === 'active';
+    if (activeFilter === 'Draft') return p.status === 'draft';
+    if (activeFilter === 'Archived') return p.status === 'archived';
+    return true;
+  });
 
   return (
     <div className="space-y-6">
@@ -165,6 +178,12 @@ export default function Protocols() {
               protocol={p}
               stepCounts={stepCounts}
               onView={(id) => navigate(`/protocol-detail?id=${id}`)}
+              onArchive={async (id) => {
+                setArchivingId(id);
+                await base44.entities.Protocol.update(id, { status: 'archived' });
+                setProtocols(prev => prev.map(pr => pr.id === id ? { ...pr, status: 'archived' } : pr));
+                setArchivingId(null);
+              }}
             />
           ))}
         </div>

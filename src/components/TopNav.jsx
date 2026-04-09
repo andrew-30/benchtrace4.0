@@ -44,9 +44,8 @@ export default function TopNav({ user }) {
         <div className="flex items-center gap-8">
           <Link to="/dashboard" className="flex items-center gap-2">
             <FlaskConical className="w-5 h-5 text-primary" />
-            <span className="text-base font-semibold tracking-tight text-foreground">
-              BenchTrace 4.0
-            </span>
+            <span className="text-base font-semibold tracking-tight text-foreground">BenchTrace</span>
+            <span style={{ fontSize: 9, fontWeight: 800, padding: '2px 7px', borderRadius: 99, background: '#eef2ff', color: '#6366f1', border: '1px solid #c7d2fe', letterSpacing: '0.08em' }}>BETA</span>
           </Link>
           <nav className="hidden md:flex items-center gap-1">
             <NavLink to="/dashboard" label="Dashboard" />
