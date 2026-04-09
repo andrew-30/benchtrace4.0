@@ -22,11 +22,11 @@ const CLASS_STYLES = {
   "General": "bg-gray-100 text-gray-600",
 };
 
-function ProtocolCard({ protocol, stepCounts, onView, onArchive }) {
+function ProtocolCard({ protocol, stepCounts, onView, onArchive, onRestore }) {
   const count = stepCounts[protocol.id] || 0;
 
   return (
-    <div className="bg-card border border-border rounded-lg p-5 flex flex-col gap-3 hover:shadow-sm transition-shadow">
+    <div className="bg-card border border-border rounded-lg p-5 flex flex-col gap-3 hover:shadow-sm transition-shadow" style={{ opacity: protocol.status === 'archived' ? 0.7 : 1 }}>
       <div className="flex items-start justify-between gap-2">
         <h3 className="font-semibold text-foreground text-sm leading-snug line-clamp-2 flex-1">
           {protocol.name}
@@ -76,6 +76,22 @@ function ProtocolCard({ protocol, stepCounts, onView, onArchive }) {
             style={{ padding: '4px 10px', background: '#f8fafc', color: '#64748b', border: '1px solid #e2e8f0', borderRadius: 6, fontSize: 11, cursor: 'pointer', fontWeight: 600 }}
           >
             Archive
+          </button>
+        )}
+        {protocol.status === 'archived' && localStorage.getItem('bt_role') === 'admin' && onRestore && (
+          <button
+            onClick={async (e) => {
+              e.stopPropagation();
+              try {
+                await base44.entities.Protocol.update(protocol.id, { status: 'draft' });
+                onRestore(protocol.id);
+              } catch(err) {
+                console.error('Restore failed:', err);
+              }
+            }}
+            style={{ padding: '4px 10px', background: '#f0fdf4', color: '#16a34a', border: '1px solid #bbf7d0', borderRadius: 6, fontSize: 11, cursor: 'pointer', fontWeight: 600 }}
+          >
+            Restore to Draft
           </button>
         )}
         <Button size="sm" variant="outline" onClick={() => onView(protocol.id)} className="ml-auto">
@@ -178,6 +194,10 @@ export default function Protocols() {
             Import SOP
           </Button>
         </div>
+      ) : filtered.length === 0 && activeFilter === 'Archived' ? (
+        <div style={{ padding: '40px 24px', textAlign: 'center', color: '#94a3b8', fontSize: 13 }}>
+          No archived protocols. Archive a draft protocol to store it here.
+        </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {filtered.map(p => (
@@ -188,6 +208,9 @@ export default function Protocols() {
               onView={(id) => navigate(`/protocol-detail?id=${id}`)}
               onArchive={(id) => {
                 setProtocols(prev => prev.map(pr => pr.id === id ? { ...pr, status: 'archived' } : pr));
+              }}
+              onRestore={(id) => {
+                setProtocols(prev => prev.map(pr => pr.id === id ? { ...pr, status: 'draft' } : pr));
               }}
             />
           ))}
