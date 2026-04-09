@@ -31,26 +31,31 @@ export default function Settings() {
   const [timezone, setTimezone] = useState('UTC');
 
   useEffect(() => {
-    async function load() {
+    const load = async () => {
+      setLoading(true);
       try {
-        const [orgsData, currentUser] = await Promise.all([
-          base44.entities.Organization.filter({ id: orgId }),
-          base44.auth.me(),
-        ]);
-        const orgData = orgsData?.[0];
-        if (orgData) {
-          setOrg(orgData);
-          setOrgName(orgData.name || '');
-          setSector(orgData.sector || 'Academic Research');
-          setTimezone(orgData.timezone || 'UTC');
-          setPlan(orgData.plan || 'free');
-        }
+        const currentUser = await base44.auth.me();
         setUser(currentUser);
-      } catch(e) { console.error(e); }
-      finally { setLoading(false); }
-    }
-    if (orgId) load();
-  }, [orgId]);
+
+        const storedOrgId = localStorage.getItem('bt_org_id');
+        if (storedOrgId) {
+          const orgs = await base44.entities.Organization.filter({ id: storedOrgId });
+          const orgData = orgs?.[0];
+          if (orgData) {
+            setOrg(orgData);
+            setOrgName(orgData.name || '');
+            setSector(orgData.sector || 'Academic Research');
+            setTimezone(orgData.timezone || 'UTC');
+          }
+        }
+      } catch(e) {
+        console.error('Settings load error:', e);
+      } finally {
+        setLoading(false);
+      }
+    };
+    load();
+  }, []);
 
   async function handleSaveOrg() {
     if (!orgName.trim()) { setSaveError('Lab name is required.'); return; }
@@ -88,20 +93,26 @@ export default function Settings() {
       {/* Account info */}
       <div style={{ background: 'white', borderRadius: 12, border: '1px solid #e2e8f0', padding: '20px 24px', marginBottom: 16 }}>
         <div style={{ fontSize: 11, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 14 }}>Account</div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-          <div style={{ width: 48, height: 48, borderRadius: '50%', background: '#eef2ff', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-            <span style={{ fontSize: 20, fontWeight: 700, color: '#6366f1' }}>
-              {((user?.full_name || user?.email || '?')[0] || '?').toUpperCase()}
-            </span>
+        {loading ? (
+          <div style={{ color: '#94a3b8', fontSize: 13 }}>Loading account details...</div>
+        ) : (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+            <div style={{ width: 48, height: 48, borderRadius: '50%', background: '#eef2ff', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+              <span style={{ fontSize: 20, fontWeight: 700, color: '#6366f1' }}>
+                {user?.full_name ? user.full_name.charAt(0).toUpperCase() : user?.email ? user.email.charAt(0).toUpperCase() : '?'}
+              </span>
+            </div>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontSize: 15, fontWeight: 700, color: '#1e293b', marginBottom: 2 }}>
+                {user?.full_name || user?.email?.split('@')[0] || 'User'}
+              </div>
+              <div style={{ fontSize: 13, color: '#64748b', marginBottom: 4 }}>{user?.email || '—'}</div>
+              <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 99, background: isAdmin ? '#eef2ff' : '#f1f5f9', color: isAdmin ? '#4338ca' : '#64748b', border: `1px solid ${isAdmin ? '#c7d2fe' : '#e2e8f0'}`, display: 'inline-block' }}>
+                {(role || 'member').toUpperCase()}
+              </span>
+            </div>
           </div>
-          <div>
-            <div style={{ fontSize: 15, fontWeight: 700, color: '#1e293b' }}>{user?.full_name || '—'}</div>
-            <div style={{ fontSize: 13, color: '#64748b' }}>{user?.email || '—'}</div>
-            <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 99, background: isAdmin ? '#eef2ff' : '#f1f5f9', color: isAdmin ? '#4338ca' : '#64748b', border: `1px solid ${isAdmin ? '#c7d2fe' : '#e2e8f0'}`, marginTop: 4, display: 'inline-block' }}>
-              {(role || 'member').toUpperCase()}
-            </span>
-          </div>
-        </div>
+        )}
       </div>
 
       {/* Lab config */}
@@ -253,6 +264,7 @@ export default function Settings() {
             ['Version', 'BenchTrace 4.0'],
             ['Build', 'Phase 6 — Production'],
             ['Compliance', '21 CFR Part 11 · GMP · ISO 17025'],
+            ['Account', user?.email || '—'],
             ['Organisation ID', orgId?.slice(-12) || '—'],
           ].map(([k, v]) => (
             <div key={k} style={{ display: 'flex', gap: 16, fontSize: 12 }}>
