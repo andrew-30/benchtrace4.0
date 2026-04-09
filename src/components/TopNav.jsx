@@ -66,6 +66,7 @@ export default function TopNav({ user }) {
             <NavLink to="/traceability" label="Traceability" />
             <NavLink to="/audit-readiness" label="Audit Readiness" />
             <NavLink to="/team" label="Team" />
+            <NavLink to="/pricing" label="Pricing" />
             <NavLink to="/settings" label="Settings" />
           </nav>
         </div>

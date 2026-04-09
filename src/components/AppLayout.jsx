@@ -3,6 +3,33 @@ import { Outlet, useNavigate, useLocation } from "react-router-dom";
 import { base44 } from "@/api/base44Client";
 import TopNav from "./TopNav";
 
+async function migrateOldPlan(org) {
+  const OLD_TO_NEW = { free: 'starter', pro: 'lab', team: 'lab' };
+  const needsMigration = ['free', 'pro', 'team'].includes(org.plan);
+  const needsBetaFlag = org.beta_user === undefined || org.beta_user === null;
+  if (!needsMigration && !needsBetaFlag) return org;
+
+  const now = new Date();
+  const newPlan = OLD_TO_NEW[org.plan] || org.plan;
+  const TRIAL_DAYS = { starter: 14, lab: 21, lab_pro: 30 };
+  const trialExpiry = new Date(now);
+  trialExpiry.setDate(trialExpiry.getDate() + (TRIAL_DAYS[newPlan] || 14));
+
+  const updates = { beta_user: true };
+  if (needsMigration) updates.plan = newPlan;
+  if (!org.trial_started_at) {
+    updates.trial_started_at = now.toISOString();
+    updates.trial_expires_at = trialExpiry.toISOString();
+  }
+  try {
+    await base44.entities.Organization.update(org.id, updates);
+    return { ...org, ...updates };
+  } catch(e) {
+    console.error('Migration failed:', e);
+    return org;
+  }
+}
+
 export default function AppLayout() {
   const [user, setUser] = useState(null);
   const [org, setOrg] = useState(null);
@@ -23,10 +50,12 @@ export default function AppLayout() {
 
       if (cachedOrgId) {
         const orgData = await base44.entities.Organization.filter({ id: cachedOrgId });
-        const org = orgData?.[0] || null;
+        let org = orgData?.[0] || null;
+        if (org) org = await migrateOldPlan(org);
         setOrg(org);
         setRole(localStorage.getItem("bt_role"));
         if (org?.timezone) localStorage.setItem("bt_tz", org.timezone);
+        if (org?.plan) localStorage.setItem("bt_plan", org.plan);
         setLoading(false);
         if (location.pathname === "/") navigate("/dashboard", { replace: true });
         return;
