@@ -1,5 +1,6 @@
 import { useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
+import { base44 } from "@/api/base44Client";
 import {
   ArrowLeft, Upload, FileText, ChevronRight, AlertCircle,
   Beaker, Wrench, Shield, Tag, GripVertical, X, Plus, ArrowRight
@@ -380,7 +381,7 @@ function StepRow({ step, onDelete }) {
 }
 
 // ── Confidence Gate Screen ──────────────────────────────────────────────────
-function ConfidenceGateScreen({ parsed, classification, onContinue, onDownloadTemplate, onReUpload }) {
+function ConfidenceGateScreen({ parsed, classification, onContinue, onDownloadTemplate, onReUpload, onTryAI }) {
   const hasExecutionSection = !!parsed._detected_section;
   const hasSteps = parsed.steps && parsed.steps.length > 0;
   const hasMaterials = parsed.sections_json?.some(s => s.type === 'materials');
@@ -437,6 +438,16 @@ function ConfidenceGateScreen({ parsed, classification, onContinue, onDownloadTe
           </div>
         </div>
 
+        <div style={{ background: '#eef2ff', border: '2px solid #6366f1', borderRadius: 12, padding: '20px', marginBottom: 12 }}>
+          <div style={{ fontSize: 15, fontWeight: 700, color: '#4338ca', marginBottom: 6 }}>✨ Try AI Parse Instead</div>
+          <div style={{ fontSize: 12, color: '#4338ca', lineHeight: 1.6, marginBottom: 14, opacity: 0.85 }}>
+            AI can read complex SOPs even with non-standard formatting. It works well where the smart parser struggles — prose sections, unusual numbering, or missing section headers.
+          </div>
+          <button onClick={() => onTryAI && onTryAI()} style={{ width: '100%', padding: '10px', background: '#6366f1', color: 'white', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>
+            ✨ Switch to AI Parse →
+          </button>
+        </div>
+
         <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 12, padding: '20px' }}>
           <div style={{ fontSize: 15, fontWeight: 700, color: '#475569', marginBottom: 6 }}>⚡ Continue Anyway</div>
           <div style={{ fontSize: 12, color: '#64748b', lineHeight: 1.6, marginBottom: 14 }}>
@@ -470,6 +481,10 @@ export default function Import() {
   const [classification, setClassification] = useState("");
   const [showConfidenceGate, setShowConfidenceGate] = useState(false);
   const [gateChoice, setGateChoice] = useState(null);
+  const [useAI, setUseAI] = useState(false);
+  const [stepGranularity, setStepGranularity] = useState('individual');
+  const [aiParsing, setAiParsing] = useState(false);
+  const [aiError, setAiError] = useState('');
   const [showParserGuide, setShowParserGuide] = useState(false);
   const [inputMode, setInputMode] = useState("upload"); // upload | paste
   const [file, setFile] = useState(null);
@@ -495,6 +510,104 @@ export default function Import() {
     if (f) setFile(f);
   }
 
+  const handleAIParse = async (text) => {
+    setAiParsing(true);
+    setAiError('');
+    const granularityInstruction = stepGranularity === 'individual'
+      ? `IMPORTANT: Extract each bullet point or action as a SEPARATE individual step. Do NOT group multiple bullets under one step. If a subsection like "6.1 RNA Quality Assessment" has 3 bullet points → create 3 separate steps. Each bullet becomes its own step. The step title = subsection name (max 60 chars). The step instruction = the bullet text only (never repeat the title in the instruction). Total steps should equal total number of bullet points/actions.`
+      : `Extract subsections as grouped steps. Each subsection (e.g. "6.1 RNA Quality Assessment") becomes ONE step, with all its bullet points combined into the instruction text. Step title = subsection name. Instruction = all bullets joined.`;
+    const prompt = `You are a laboratory SOP parser. Extract structured protocol data from the document below.
+
+${granularityInstruction}
+
+Return ONLY valid JSON — no markdown, no backticks, no explanation. Just the raw JSON object:
+{
+  "name": "specific protocol name — never use generic titles like Standard Operating Procedure",
+  "description": "1-2 sentence plain text summary of what this protocol does",
+  "classification": "one of: Academic Research, Clinical Diagnostic, GMP Manufacturing, ISO Accredited, CRO Study, Biotech Startup, General",
+  "estimated_duration_minutes": number or null,
+  "compliance_tags": ["array of detected standards e.g. GMP, ISO, CLIA, 21 CFR Part 11, GLP"],
+  "steps": [
+    {
+      "step_order": 1,
+      "title": "subsection or group name — max 60 chars",
+      "instruction": "action text only — NEVER copy or repeat the title here",
+      "is_critical": false,
+      "estimated_duration_seconds": null,
+      "requires_measurement": false
+    }
+  ],
+  "checklist_items": [
+    {
+      "item_text": "material or equipment name",
+      "category": "reagent or equipment or safety or other"
+    }
+  ]
+}
+
+Rules:
+- step title and instruction must NEVER be identical or duplicate each other
+- instruction = the action text only, not a copy of the title
+- is_critical = true if the text contains: critical, warning, caution, must not, do not, danger, immediately
+- Convert time mentions to seconds (5 minutes = 300, 1 hour = 3600, 30 seconds = 30)
+- requires_measurement = true if step involves measuring, recording, calculating a value
+- Extract ALL materials and equipment as checklist_items with correct categories
+- compliance_tags: detect GMP, GLP, ISO, CLIA, FDA, 21 CFR Part 11 from context
+
+Document:
+${text.substring(0, 10000)}`;
+    try {
+      const responseText = await base44.integrations.Core.InvokeLLM({ prompt });
+      const cleaned = responseText.replace(/```json\s*/gi, '').replace(/```\s*/gi, '').trim();
+      const aiResult = JSON.parse(cleaned);
+      if (!aiResult.steps || !Array.isArray(aiResult.steps)) throw new Error('AI did not return a valid steps array');
+      const normalisedSteps = aiResult.steps.map((s, i) => ({
+        ...s,
+        step_order: s.step_order || i + 1,
+        _id: `ai_s_${i}`,
+        title: (s.title || '').substring(0, 200),
+        instruction: s.instruction || s.title || '',
+        is_critical: s.is_critical || false,
+        estimated_duration_seconds: s.estimated_duration_seconds || null,
+        requires_measurement: s.requires_measurement || false,
+      }));
+      const checklistItems = (aiResult.checklist_items || []).map((item, i) => ({
+        ...item,
+        _id: `ai_c_${i}`,
+        category: ['reagent', 'equipment', 'safety', 'other'].includes(item.category) ? item.category : 'other',
+      }));
+      const result = {
+        name: aiResult.name || 'Imported Protocol',
+        description: aiResult.description || '',
+        classification: aiResult.classification || classification || 'General',
+        estimated_duration_minutes: aiResult.estimated_duration_minutes || null,
+        compliance_tags: aiResult.compliance_tags || [],
+        steps: normalisedSteps,
+        checklist_items: checklistItems,
+        structured_materials: null,
+        _confidence: 'high',
+        _detected_section: `AI Parsed (${stepGranularity === 'individual' ? 'individual steps' : 'grouped steps'})`,
+        _parser_mode: 'ai',
+      };
+      setParsed(result);
+      setEditName(result.name);
+      setEditDesc(result.description);
+      setEditClass(result.classification);
+      setEditDuration(result.estimated_duration_minutes ? String(result.estimated_duration_minutes) : '');
+      setEditSections([]);
+      setEditSteps(result.steps);
+      setEditChecklist(result.checklist_items);
+      setStep(4);
+    } catch (e) {
+      console.error('AI parse failed:', e);
+      setAiError(e.message?.includes('JSON')
+        ? 'AI returned an unexpected format. Try again or use the smart parser.'
+        : `AI parsing failed: ${e.message || 'Unknown error'}. Please try again.`);
+    } finally {
+      setAiParsing(false);
+    }
+  };
+
   async function handleProcess() {
     if (inputMode === "upload" && !file) return;
     if (inputMode === "paste" && !pasteText.trim()) return;
@@ -502,6 +615,7 @@ export default function Import() {
     setProcessing(true);
     setStep(3);
     setError("");
+    setAiError("");
 
     let text = "";
     if (inputMode === "upload") {
@@ -514,21 +628,26 @@ export default function Import() {
       text = pasteText;
     }
 
-    const result = parseProtocolDocument(text, classification, granularity);
-    setParsed(result);
-    setEditName(result.name);
-    setEditDesc(result.description);
-    setEditClass(result.classification);
-    setEditDuration(result.estimated_duration_minutes ? String(result.estimated_duration_minutes) : "");
-    setEditSections(result.sections_json || []);
-    setEditSteps(result.steps || []);
-    setEditChecklist(result.checklist_items || []);
-    setProcessing(false);
-    if (result._confidence === 'low') {
-      setShowConfidenceGate(true);
+    if (useAI) {
+      setProcessing(false);
+      await handleAIParse(text);
     } else {
-      setShowConfidenceGate(false);
-      setStep(4);
+      const result = parseProtocolDocument(text, classification, granularity);
+      setParsed(result);
+      setEditName(result.name);
+      setEditDesc(result.description);
+      setEditClass(result.classification);
+      setEditDuration(result.estimated_duration_minutes ? String(result.estimated_duration_minutes) : "");
+      setEditSections(result.sections_json || []);
+      setEditSteps(result.steps || []);
+      setEditChecklist(result.checklist_items || []);
+      setProcessing(false);
+      if (result._confidence === 'low') {
+        setShowConfidenceGate(true);
+      } else {
+        setShowConfidenceGate(false);
+        setStep(4);
+      }
     }
   }
 
@@ -581,7 +700,7 @@ export default function Import() {
       event_type: "protocol_created",
       actor_user_id: user.id,
       actor_email: user.email,
-      metadata: { source: "import", step_count: editSteps.length, confidence: parsed._confidence },
+      metadata: { source: 'import', step_count: editSteps.length, confidence: parsed._confidence, detected_section: parsed._detected_section, parser_mode: parsed._parser_mode || 'smart', step_granularity: parsed._parser_mode === 'ai' ? stepGranularity : null },
       created_at: new Date().toISOString(),
     });
 
@@ -607,6 +726,7 @@ export default function Import() {
           onContinue={() => { setShowConfidenceGate(false); setGateChoice('continue'); setStep(4); }}
           onDownloadTemplate={() => downloadSectorTemplate(classification)}
           onReUpload={() => { setShowConfidenceGate(false); setGateChoice(null); setParsed(null); setStep(2); }}
+          onTryAI={() => { setShowConfidenceGate(false); setUseAI(true); setGateChoice(null); setParsed(null); setStep(2); }}
         />
       </div>
     );
@@ -766,10 +886,70 @@ export default function Import() {
             </div>
           </div>
 
+          {/* AI Parser Controls */}
+          <div style={{ marginTop: 16, padding: '14px 16px', background: useAI ? '#eef2ff' : '#f8fafc', border: `1px solid ${useAI ? '#c7d2fe' : '#e2e8f0'}`, borderRadius: 10, transition: 'all 0.2s' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: useAI ? 14 : 0 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <span style={{ fontSize: 18 }}>✨</span>
+                <div>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: '#1e293b' }}>
+                    AI Parse
+                    <span style={{ marginLeft: 6, fontSize: 10, fontWeight: 700, padding: '1px 7px', borderRadius: 99, background: '#6366f1', color: 'white' }}>RECOMMENDED</span>
+                  </div>
+                  <div style={{ fontSize: 11, color: '#64748b', marginTop: 1 }}>
+                    {useAI ? 'AI will read and extract your protocol intelligently' : 'Use AI for complex SOPs or when smart parser returns few steps'}
+                  </div>
+                </div>
+              </div>
+              <div onClick={() => setUseAI(prev => !prev)} style={{ width: 44, height: 24, borderRadius: 99, cursor: 'pointer', background: useAI ? '#6366f1' : '#cbd5e1', position: 'relative', flexShrink: 0, transition: 'background 0.2s' }}>
+                <div style={{ position: 'absolute', top: 3, left: useAI ? 23 : 3, width: 18, height: 18, borderRadius: '50%', background: 'white', boxShadow: '0 1px 3px rgba(0,0,0,0.2)', transition: 'left 0.2s' }} />
+              </div>
+            </div>
+            {useAI && (
+              <div>
+                <div style={{ fontSize: 11, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 8 }}>Step Granularity</div>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  {[
+                    { value: 'individual', icon: '◉', label: 'Individual Steps', desc: 'Each bullet point = one step — best for detailed execution tracking' },
+                    { value: 'grouped', icon: '⊞', label: 'Grouped Steps', desc: 'Each subsection = one step — best for complex multi-part procedures' },
+                  ].map(opt => (
+                    <button key={opt.value} onClick={() => setStepGranularity(opt.value)}
+                      style={{ flex: 1, padding: '10px 12px', borderRadius: 8, cursor: 'pointer', fontSize: 12, textAlign: 'left', border: `2px solid ${stepGranularity === opt.value ? '#6366f1' : '#e2e8f0'}`, background: stepGranularity === opt.value ? '#eef2ff' : 'white', color: stepGranularity === opt.value ? '#4338ca' : '#64748b', transition: 'all 0.15s' }}>
+                      <div style={{ fontWeight: 700, marginBottom: 3 }}>{opt.icon} {opt.label}</div>
+                      <div style={{ fontSize: 11, opacity: 0.8, lineHeight: 1.4 }}>{opt.desc}</div>
+                    </button>
+                  ))}
+                </div>
+                <div style={{ marginTop: 10, padding: '8px 12px', background: 'rgba(99,102,241,0.08)', borderRadius: 6, fontSize: 11, color: '#4338ca' }}>
+                  💡 AI Parse reads your full document context — it works well even with non-standard formatting, continuous prose, and unusual section names.
+                </div>
+              </div>
+            )}
+          </div>
+
+          {aiParsing && (
+            <div style={{ marginTop: 12, padding: '14px 16px', background: '#f0f4ff', border: '1px solid #c7d2fe', borderRadius: 10, display: 'flex', alignItems: 'center', gap: 12 }}>
+              <div style={{ width: 20, height: 20, borderRadius: '50%', border: '2px solid #c7d2fe', borderTop: '2px solid #6366f1', animation: 'spin 1s linear infinite', flexShrink: 0 }} />
+              <div>
+                <div style={{ fontSize: 13, fontWeight: 700, color: '#4338ca' }}>AI is reading your protocol...</div>
+                <div style={{ fontSize: 11, color: '#6366f1', marginTop: 2 }}>Extracting steps, materials, and compliance tags</div>
+              </div>
+            </div>
+          )}
+
+          {aiError && (
+            <div style={{ marginTop: 12, padding: '12px 14px', background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 8, fontSize: 12, color: '#dc2626' }}>
+              ⚠ {aiError}
+              <button onClick={() => setAiError('')} style={{ marginLeft: 8, background: 'none', border: 'none', color: '#dc2626', cursor: 'pointer', fontSize: 12, fontWeight: 700 }}>Dismiss</button>
+            </div>
+          )}
+
+          <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+
           <div className="flex gap-3">
             <Button variant="outline" onClick={() => setStep(1)}>Back</Button>
             <Button onClick={handleProcess} disabled={(inputMode === "upload" && !file) || (inputMode === "paste" && !pasteText.trim())}>
-              Process Document
+              {useAI ? 'Parse with AI' : 'Process Document'}
             </Button>
           </div>
         </div>
@@ -790,6 +970,17 @@ export default function Import() {
           <div className="flex items-center justify-between" style={{ marginBottom: 12 }}>
             <h2 className="text-base font-semibold text-foreground">Review & Edit</h2>
           </div>
+
+          {/* AI parse badge */}
+          {parsed?._parser_mode === 'ai' && (
+            <div style={{ padding: '10px 14px', background: '#eef2ff', border: '1px solid #c7d2fe', borderRadius: 8, marginBottom: 16, display: 'flex', alignItems: 'center', gap: 10 }}>
+              <span style={{ fontSize: 18 }}>✨</span>
+              <div>
+                <div style={{ fontSize: 13, fontWeight: 700, color: '#4338ca' }}>AI Parsed — {parsed._detected_section}</div>
+                <div style={{ fontSize: 11, color: '#6366f1' }}>{parsed.steps?.length} steps extracted · High confidence · Review before saving</div>
+              </div>
+            </div>
+          )}
 
           {/* Medium confidence warning — non-blocking amber banner */}
           {parsed._confidence === 'medium' && gateChoice !== 'continue' && (
