@@ -1,15 +1,15 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { FlaskConical, Upload, Plus, Clock, AlertTriangle } from "lucide-react";
+import { FlaskConical, Upload, Plus, Clock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { base44 } from "@/api/base44Client";
 
 const FILTER_TABS = ["All", "Active", "Draft", "Archived"];
 
-const STATUS_STYLES = {
-  active: "bg-emerald-50 text-emerald-700 border border-emerald-200",
-  draft: "bg-gray-100 text-gray-600 border border-gray-200",
-  archived: "bg-slate-100 text-slate-500 border border-slate-200",
+const STATUS_CONFIG = {
+  active:   { label: 'Active',   bg: '#f0fdf4', color: '#16a34a', border: '#bbf7d0' },
+  draft:    { label: 'Draft',    bg: '#fffbeb', color: '#d97706', border: '#fde68a' },
+  archived: { label: 'Archived', bg: '#f1f5f9', color: '#94a3b8', border: '#e2e8f0' },
 };
 
 const CLASS_STYLES = {
@@ -22,17 +22,22 @@ const CLASS_STYLES = {
   "General": "bg-gray-100 text-gray-600",
 };
 
-function ProtocolCard({ protocol, stepCounts, onView, onArchive, onRestore }) {
+function ProtocolCard({ protocol, stepCounts, onView, onArchive, onRestore, confirmArchiveId, setConfirmArchiveId, archivingId, activeRunCounts }) {
   const count = stepCounts[protocol.id] || 0;
+  const sc = STATUS_CONFIG[protocol.status] || STATUS_CONFIG.draft;
+  const isAdmin = localStorage.getItem('bt_role') === 'admin';
 
   return (
-    <div className="bg-card border border-border rounded-lg p-5 flex flex-col gap-3 hover:shadow-sm transition-shadow" style={{ opacity: protocol.status === 'archived' ? 0.7 : 1 }}>
+    <div
+      className="bg-card border border-border rounded-lg p-5 flex flex-col gap-3 hover:shadow-sm transition-shadow"
+      style={{ opacity: protocol.status === 'archived' ? 0.7 : 1 }}
+    >
       <div className="flex items-start justify-between gap-2">
         <h3 className="font-semibold text-foreground text-sm leading-snug line-clamp-2 flex-1">
           {protocol.name}
         </h3>
-        <span className={`shrink-0 text-xs px-2 py-0.5 rounded-full font-medium ${STATUS_STYLES[protocol.status] || STATUS_STYLES.draft}`}>
-          {protocol.status}
+        <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 99, background: sc.bg, color: sc.color, border: `1px solid ${sc.border}`, whiteSpace: 'nowrap' }}>
+          {sc.label}
         </span>
       </div>
 
@@ -61,40 +66,72 @@ function ProtocolCard({ protocol, stepCounts, onView, onArchive, onRestore }) {
         )}
       </div>
 
-      <div className="pt-1 border-t border-border flex justify-between items-center">
-        {protocol.status === 'draft' && localStorage.getItem('bt_role') === 'admin' && onArchive && (
-          <button
-            onClick={async (e) => {
-              e.stopPropagation();
-              try {
-                await base44.entities.Protocol.update(protocol.id, { status: 'archived' });
-                onArchive(protocol.id);
-              } catch(err) {
-                console.error('Archive failed:', err);
-              }
-            }}
-            style={{ padding: '4px 10px', background: '#f8fafc', color: '#64748b', border: '1px solid #e2e8f0', borderRadius: 6, fontSize: 11, cursor: 'pointer', fontWeight: 600 }}
-          >
-            Archive
-          </button>
-        )}
-        {protocol.status === 'archived' && localStorage.getItem('bt_role') === 'admin' && onRestore && (
-          <button
-            onClick={async (e) => {
-              e.stopPropagation();
-              try {
-                await base44.entities.Protocol.update(protocol.id, { status: 'draft' });
-                onRestore(protocol.id);
-              } catch(err) {
-                console.error('Restore failed:', err);
-              }
-            }}
-            style={{ padding: '4px 10px', background: '#f0fdf4', color: '#16a34a', border: '1px solid #bbf7d0', borderRadius: 6, fontSize: 11, cursor: 'pointer', fontWeight: 600 }}
-          >
-            Restore to Draft
-          </button>
-        )}
-        <Button size="sm" variant="outline" onClick={() => onView(protocol.id)} className="ml-auto">
+      <div className="pt-1 border-t border-border flex flex-wrap justify-between items-center gap-2">
+        <div className="flex flex-wrap gap-2 items-center">
+          {/* Archive control — active or draft, admin only */}
+          {(protocol.status === 'active' || protocol.status === 'draft') && isAdmin && (
+            <>
+              {confirmArchiveId === protocol.id ? (
+                <div
+                  style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', padding: '6px 10px', background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 7 }}
+                  onClick={e => e.stopPropagation()}
+                >
+                  {activeRunCounts[protocol.id] > 0 ? (
+                    <span style={{ fontSize: 11, color: '#dc2626', fontWeight: 600 }}>
+                      ⚠ {activeRunCounts[protocol.id]} run{activeRunCounts[protocol.id] !== 1 ? 's' : ''} in progress — new runs will be blocked
+                    </span>
+                  ) : (
+                    <span style={{ fontSize: 11, color: '#dc2626', fontWeight: 600 }}>
+                      Archive this protocol?
+                    </span>
+                  )}
+                  <button
+                    onClick={() => onArchive(protocol.id)}
+                    disabled={archivingId === protocol.id}
+                    style={{ padding: '3px 12px', background: '#ef4444', color: 'white', border: 'none', borderRadius: 5, fontSize: 11, fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap' }}
+                  >
+                    {archivingId === protocol.id ? 'Archiving...' : 'Yes, Archive'}
+                  </button>
+                  <button
+                    onClick={() => setConfirmArchiveId(null)}
+                    style={{ padding: '3px 10px', background: 'white', color: '#475569', border: '1px solid #e2e8f0', borderRadius: 5, fontSize: 11, cursor: 'pointer', whiteSpace: 'nowrap' }}
+                  >
+                    Cancel
+                  </button>
+                </div>
+              ) : (
+                <button
+                  onClick={e => { e.stopPropagation(); setConfirmArchiveId(protocol.id); }}
+                  style={{ padding: '4px 10px', background: '#f8fafc', color: '#94a3b8', border: '1px solid #e2e8f0', borderRadius: 6, fontSize: 11, cursor: 'pointer', fontWeight: 600 }}
+                  onMouseEnter={e => { e.currentTarget.style.color = '#ef4444'; e.currentTarget.style.borderColor = '#fecaca'; e.currentTarget.style.background = '#fef2f2'; }}
+                  onMouseLeave={e => { e.currentTarget.style.color = '#94a3b8'; e.currentTarget.style.borderColor = '#e2e8f0'; e.currentTarget.style.background = '#f8fafc'; }}
+                >
+                  Archive
+                </button>
+              )}
+            </>
+          )}
+
+          {/* Restore button — archived, admin only */}
+          {protocol.status === 'archived' && isAdmin && (
+            <button
+              onClick={async (e) => {
+                e.stopPropagation();
+                try {
+                  await base44.entities.Protocol.update(protocol.id, { status: 'draft' });
+                  onRestore(protocol.id);
+                } catch(err) {
+                  console.error('Restore failed:', err);
+                }
+              }}
+              style={{ padding: '4px 10px', background: '#f0fdf4', color: '#16a34a', border: '1px solid #bbf7d0', borderRadius: 6, fontSize: 11, cursor: 'pointer', fontWeight: 600 }}
+            >
+              Restore to Draft
+            </button>
+          )}
+        </div>
+
+        <Button size="sm" variant="outline" onClick={() => onView(protocol.id)}>
           View
         </Button>
       </div>
@@ -108,15 +145,26 @@ export default function Protocols() {
   const [stepCounts, setStepCounts] = useState({});
   const [activeFilter, setActiveFilter] = useState("All");
   const [loading, setLoading] = useState(true);
-
+  const [confirmArchiveId, setConfirmArchiveId] = useState(null);
+  const [archivingId, setArchivingId] = useState(null);
+  const [activeRunCounts, setActiveRunCounts] = useState({});
 
   const orgId = localStorage.getItem("bt_org_id");
   const isAdmin = localStorage.getItem('bt_role') === 'admin';
 
   useEffect(() => {
     async function load() {
-      const data = await base44.entities.Protocol.filter({ organization_id: orgId }, "-created_date");
+      const [data, inProgressRuns] = await Promise.all([
+        base44.entities.Protocol.filter({ organization_id: orgId }, "-created_date"),
+        base44.entities.Run.filter({ organization_id: orgId, run_state: 'in_progress' }),
+      ]);
       setProtocols(data);
+
+      const runCounts = {};
+      (inProgressRuns || []).forEach(run => {
+        runCounts[run.protocol_id] = (runCounts[run.protocol_id] || 0) + 1;
+      });
+      setActiveRunCounts(runCounts);
 
       if (data.length > 0) {
         const steps = await base44.entities.ProtocolStep.filter({ organization_id: orgId });
@@ -132,12 +180,25 @@ export default function Protocols() {
     load();
   }, [orgId]);
 
+  const handleArchiveProtocol = async (protocolId) => {
+    setArchivingId(protocolId);
+    setConfirmArchiveId(null);
+    try {
+      await base44.entities.Protocol.update(protocolId, { status: 'archived' });
+      setProtocols(prev => prev.map(p => p.id === protocolId ? { ...p, status: 'archived' } : p));
+    } catch(err) {
+      console.error('Archive failed:', err);
+    } finally {
+      setArchivingId(null);
+    }
+  };
+
   const filtered = protocols.filter(p => {
     if (activeFilter === 'All') return p.status !== 'archived';
     if (activeFilter === 'Active') return p.status === 'active';
     if (activeFilter === 'Draft') return p.status === 'draft';
     if (activeFilter === 'Archived') return p.status === 'archived';
-    return true;
+    return p.status !== 'archived';
   });
 
   return (
@@ -180,6 +241,10 @@ export default function Protocols() {
         <div className="flex justify-center py-16">
           <div className="w-6 h-6 border-2 border-primary/20 border-t-primary rounded-full animate-spin" />
         </div>
+      ) : filtered.length === 0 && activeFilter === 'Archived' ? (
+        <div style={{ padding: '40px 24px', textAlign: 'center', color: '#94a3b8', fontSize: 13 }}>
+          No archived protocols. Archive a draft or active protocol to store it here.
+        </div>
       ) : filtered.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-20 text-center">
           <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center mb-4">
@@ -194,10 +259,6 @@ export default function Protocols() {
             Import SOP
           </Button>
         </div>
-      ) : filtered.length === 0 && activeFilter === 'Archived' ? (
-        <div style={{ padding: '40px 24px', textAlign: 'center', color: '#94a3b8', fontSize: 13 }}>
-          No archived protocols. Archive a draft protocol to store it here.
-        </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {filtered.map(p => (
@@ -206,12 +267,12 @@ export default function Protocols() {
               protocol={p}
               stepCounts={stepCounts}
               onView={(id) => navigate(`/protocol-detail?id=${id}`)}
-              onArchive={(id) => {
-                setProtocols(prev => prev.map(pr => pr.id === id ? { ...pr, status: 'archived' } : pr));
-              }}
-              onRestore={(id) => {
-                setProtocols(prev => prev.map(pr => pr.id === id ? { ...pr, status: 'draft' } : pr));
-              }}
+              onArchive={handleArchiveProtocol}
+              onRestore={(id) => setProtocols(prev => prev.map(pr => pr.id === id ? { ...pr, status: 'draft' } : pr))}
+              confirmArchiveId={confirmArchiveId}
+              setConfirmArchiveId={setConfirmArchiveId}
+              archivingId={archivingId}
+              activeRunCounts={activeRunCounts}
             />
           ))}
         </div>
