@@ -56,7 +56,7 @@ export default function TopNav({ user }) {
           <Link to="/dashboard" className="flex items-center gap-2">
             <FlaskConical className="w-5 h-5 text-primary" />
             <span className="text-base font-semibold tracking-tight text-foreground">BenchTrace</span>
-            <span style={{ fontSize: 9, fontWeight: 800, padding: '2px 7px', borderRadius: 99, background: '#eef2ff', color: '#6366f1', border: '1px solid #c7d2fe', letterSpacing: '0.08em' }}>BETA</span>
+            <span title="Beta: All features unlocked free for all testers" style={{ fontSize: 9, fontWeight: 800, padding: '2px 7px', borderRadius: 99, background: '#eef2ff', color: '#6366f1', border: '1px solid #c7d2fe', letterSpacing: '0.08em', cursor: 'help' }}>BETA</span>
           </Link>
           <nav className="hidden md:flex items-center gap-1">
             <NavLink to="/dashboard" label="Dashboard" />
@@ -145,7 +145,10 @@ export default function TopNav({ user }) {
           {planStatus.isBeta ? (
             <>
               <span style={{ color: '#a5b4fc', fontWeight: 600 }}>
-                🎉 Beta Access — {planStatus.planName} plan · All features unlocked free during beta
+                🎉 Beta Access · <strong style={{ color: 'white' }}>{planStatus.planName} plan</strong> · All features unlocked free
+              </span>
+              <span style={{ color: '#6366f1', fontSize: 10, padding: '1px 8px', background: 'rgba(99,102,241,0.2)', borderRadius: 99, border: '1px solid rgba(99,102,241,0.3)' }}>
+                Selected: {planStatus.planName}
               </span>
               <button
                 onClick={() => navigate('/pricing')}

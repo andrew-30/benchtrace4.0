@@ -3,30 +3,60 @@ import { Outlet, useNavigate, useLocation } from "react-router-dom";
 import { base44 } from "@/api/base44Client";
 import TopNav from "./TopNav";
 
-async function migrateOldPlan(org) {
-  const OLD_TO_NEW = { free: 'starter', pro: 'lab', team: 'lab' };
-  const needsMigration = ['free', 'pro', 'team'].includes(org.plan);
-  const needsBetaFlag = org.beta_user === undefined || org.beta_user === null;
-  if (!needsMigration && !needsBetaFlag) return org;
-
-  const now = new Date();
-  const newPlan = OLD_TO_NEW[org.plan] || org.plan;
-  const TRIAL_DAYS = { starter: 14, lab: 21, lab_pro: 30 };
-  const trialExpiry = new Date(now);
-  trialExpiry.setDate(trialExpiry.getDate() + (TRIAL_DAYS[newPlan] || 14));
-
-  const updates = { beta_user: true };
-  if (needsMigration) updates.plan = newPlan;
-  if (!org.trial_started_at) {
-    updates.trial_started_at = now.toISOString();
-    updates.trial_expires_at = trialExpiry.toISOString();
-  }
+async function migrateOrg(orgId) {
   try {
-    await base44.entities.Organization.update(org.id, updates);
-    return { ...org, ...updates };
-  } catch(e) {
-    console.error('Migration failed:', e);
+    const orgData = await base44.entities.Organization.filter({ id: orgId });
+    const org = orgData?.[0];
+    if (!org) return null;
+
+    const now = new Date();
+    const needsUpdate = {};
+
+    const OLD_TO_NEW = { free: 'starter', pro: 'lab', team: 'lab', lab_pro: 'lab_pro' };
+    if (OLD_TO_NEW[org.plan]) needsUpdate.plan = OLD_TO_NEW[org.plan];
+    if (org.beta_user === undefined || org.beta_user === null) needsUpdate.beta_user = true;
+
+    if (!org.trial_started_at) {
+      needsUpdate.trial_started_at = now.toISOString();
+      const TRIAL_DAYS = { starter: 14, lab: 21, lab_pro: 30 };
+      const finalPlan = needsUpdate.plan || org.plan;
+      const trialExpiry = new Date(now);
+      trialExpiry.setDate(trialExpiry.getDate() + (TRIAL_DAYS[finalPlan] || 30));
+      needsUpdate.trial_expires_at = trialExpiry.toISOString();
+    }
+
+    // Specific org overrides
+    if (org.id === '69c1ff326cd36f01645372ec' && org.plan !== 'lab_pro') {
+      needsUpdate.plan = 'lab_pro';
+      const trialExpiry = new Date(now); trialExpiry.setDate(trialExpiry.getDate() + 30);
+      needsUpdate.trial_expires_at = trialExpiry.toISOString();
+      if (!org.trial_started_at) needsUpdate.trial_started_at = now.toISOString();
+    }
+    if (org.id === '69cfd70ade4b144683b02743' && org.plan !== 'lab_pro') {
+      needsUpdate.plan = 'lab_pro';
+      if (!org.trial_started_at) {
+        needsUpdate.trial_started_at = now.toISOString();
+        const trialExpiry = new Date(now); trialExpiry.setDate(trialExpiry.getDate() + 30);
+        needsUpdate.trial_expires_at = trialExpiry.toISOString();
+      }
+    }
+    if (org.id === '69cf8f74bdc9d94ebd59e9d3' && org.plan !== 'lab') {
+      needsUpdate.plan = 'lab';
+      if (!org.trial_started_at) {
+        needsUpdate.trial_started_at = now.toISOString();
+        const trialExpiry = new Date(now); trialExpiry.setDate(trialExpiry.getDate() + 21);
+        needsUpdate.trial_expires_at = trialExpiry.toISOString();
+      }
+    }
+
+    if (Object.keys(needsUpdate).length > 0) {
+      await base44.entities.Organization.update(orgId, needsUpdate);
+      return { ...org, ...needsUpdate };
+    }
     return org;
+  } catch(e) {
+    console.error('Org migration failed:', e);
+    return null;
   }
 }
 
@@ -49,9 +79,7 @@ export default function AppLayout() {
       setUser(currentUser);
 
       if (cachedOrgId) {
-        const orgData = await base44.entities.Organization.filter({ id: cachedOrgId });
-        let org = orgData?.[0] || null;
-        if (org) org = await migrateOldPlan(org);
+        const org = await migrateOrg(cachedOrgId);
         setOrg(org);
         setRole(localStorage.getItem("bt_role"));
         if (org?.timezone) localStorage.setItem("bt_tz", org.timezone);
@@ -78,9 +106,12 @@ export default function AppLayout() {
 
       localStorage.setItem("bt_org_id", membership.organization_id);
       localStorage.setItem("bt_role", membership.role);
-      if (orgData?.[0]?.timezone) localStorage.setItem("bt_tz", orgData[0].timezone);
 
-      setOrg(orgData?.[0] || null);
+      const migratedOrg = await migrateOrg(membership.organization_id);
+      if (migratedOrg?.timezone) localStorage.setItem("bt_tz", migratedOrg.timezone);
+      if (migratedOrg?.plan) localStorage.setItem("bt_plan", migratedOrg.plan);
+
+      setOrg(migratedOrg);
       setRole(membership.role);
       setLoading(false);
 

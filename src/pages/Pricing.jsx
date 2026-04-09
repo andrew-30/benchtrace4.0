@@ -6,11 +6,15 @@ import { PLAN_CONFIG } from "@/lib/planConfig";
 const FAQ = [
   {
     q: 'What happens to my data when the trial ends?',
-    a: 'Your data is always safe and accessible. After your trial ends, you can view existing protocols and runs but cannot create new ones until you upgrade. Nothing is ever deleted.',
+    a: 'Your data is always safe and accessible. After your trial ends, you can view existing protocols and runs but cannot create new ones until you upgrade. Nothing is ever deleted. During beta, your trial never expires — you have full access throughout the beta period.',
   },
   {
     q: 'Can I switch between plans?',
     a: 'Yes — you can upgrade at any time. Your data and audit trail carry over seamlessly. Downgrades take effect at the end of your billing period.',
+  },
+  {
+    q: 'Which features are restricted to which plan after beta?',
+    a: 'Starter ($19/mo): protocol import, run execution, timers, deviation logging, basic PDF reports, lot tracking — for individual researchers. Lab ($79/mo): adds team management, traceability navigator, audit readiness score, version control — for research groups. Lab Pro ($249/mo): adds 21 CFR Part 11 e-signature with SHA-256 hash, Audit View inspector mode, advanced PDF reports, deviation severity management — for regulated environments. During beta, all features are available to everyone.',
   },
   {
     q: 'Is there a student or academic discount?',
@@ -22,7 +26,7 @@ const FAQ = [
   },
   {
     q: 'How does the beta period work?',
-    a: "During beta, all features are free regardless of your selected plan. When beta ends, you'll be notified and given 30 days to choose a paid plan. Early beta users get 3 months free.",
+    a: "During beta, ALL features are completely free and unlocked for every tester — regardless of which plan you selected during onboarding. This means every beta tester has access to 21 CFR Part 11 e-signatures, Audit View, Traceability Navigator, Team Management, and all other features. When beta ends, you'll be notified 30 days in advance and given the option to choose a paid plan. Early beta users get 3 months free when pricing activates.",
   },
   {
     q: 'Do you offer annual billing?',
@@ -51,10 +55,18 @@ export default function Pricing() {
     <div style={{ minHeight: '100vh', background: '#f8fafc', fontFamily: 'system-ui, sans-serif' }}>
 
       {/* Beta banner */}
-      <div style={{ background: 'linear-gradient(90deg, #1e1b4b, #312e81)', padding: '12px 24px', textAlign: 'center' }}>
-        <span style={{ color: '#a5b4fc', fontSize: 13, fontWeight: 600 }}>
-          🎉 BenchTrace is <strong>free during beta</strong>. Pricing below applies after launch. Early adopters get <strong>3 months free</strong> when we go live.
-        </span>
+      <div style={{ background: 'linear-gradient(90deg, #1e1b4b, #312e81)', padding: '12px 24px' }}>
+        <div style={{ textAlign: 'center', marginBottom: 4 }}>
+          <span style={{ color: '#a5b4fc', fontSize: 13, fontWeight: 600 }}>
+            🎉 BenchTrace is <strong style={{ color: 'white' }}>completely free during beta</strong>. Pricing below applies after launch.
+            Early adopters get <strong style={{ color: '#fbbf24' }}>3 months free</strong> when we go live.
+          </span>
+        </div>
+        <div style={{ textAlign: 'center' }}>
+          <span style={{ color: '#818cf8', fontSize: 12 }}>
+            ⚡ During beta: <strong style={{ color: '#a5b4fc' }}>ALL features are unlocked for every tester</strong> regardless of selected plan — including 21 CFR Part 11, Audit View, Traceability, and Team Management.
+          </span>
+        </div>
       </div>
 
       <div style={{ maxWidth: 1000, margin: '0 auto', padding: '48px 24px' }}>
@@ -138,8 +150,12 @@ export default function Pricing() {
                   )}
                 </div>
 
-                <div style={{ padding: '6px 12px', background: plan.bg, border: `1px solid ${plan.border}`, borderRadius: 7, fontSize: 11, color: plan.color, fontWeight: 600, marginBottom: 20, textAlign: 'center' }}>
+                <div style={{ padding: '6px 12px', background: plan.bg, border: `1px solid ${plan.border}`, borderRadius: 7, fontSize: 11, color: plan.color, fontWeight: 600, marginBottom: 12, textAlign: 'center' }}>
                   {plan.trialDays}-day free trial · No credit card required
+                </div>
+
+                <div style={{ padding: '6px 10px', background: 'rgba(99,102,241,0.08)', border: '1px solid rgba(99,102,241,0.2)', borderRadius: 6, marginBottom: 12, fontSize: 11, color: '#6366f1', textAlign: 'center', fontWeight: 500 }}>
+                  ✓ All features unlocked during beta
                 </div>
 
                 <button
