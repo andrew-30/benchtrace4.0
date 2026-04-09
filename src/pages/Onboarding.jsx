@@ -12,6 +12,7 @@ const PERSONAS = [
     icon: '🎓',
     title: 'Individual Researcher',
     subtitle: 'PhD student, postdoc, or independent scientist',
+    punchline: "Because 'I'll write it up later' has cost too many results.",
     price: '$19',
     period: '/month',
     annual: '$15/mo billed annually',
@@ -44,6 +45,7 @@ const PERSONAS = [
     icon: '🔬',
     title: 'Research Lab',
     subtitle: 'PI, lab manager, or small research team',
+    punchline: 'One protocol. Every run. Every person. Every time.',
     price: '$79',
     period: '/month',
     annual: '$59/mo billed annually',
@@ -78,6 +80,7 @@ const PERSONAS = [
     icon: '🏭',
     title: 'Regulated Environment',
     subtitle: 'GMP, clinical diagnostics, pharma, or CRO',
+    punchline: "Audit-ready isn't a goal. It's your default state.",
     price: '$249',
     period: '/month',
     annual: '$199/mo billed annually',
@@ -229,7 +232,13 @@ export default function Onboarding() {
 
             <div style={{ fontSize:32, marginBottom:10 }}>{persona.icon}</div>
             <div style={{ fontSize:16, fontWeight:800, color:'white', marginBottom:4 }}>{persona.title}</div>
-            <div style={{ fontSize:12, color:'#94a3b8', marginBottom:16, lineHeight:1.5 }}>{persona.subtitle}</div>
+            <div style={{ fontSize:12, color:'#94a3b8', marginBottom:10, lineHeight:1.5 }}>{persona.subtitle}</div>
+
+            {persona.punchline && (
+              <div style={{ fontSize:12, fontStyle:'italic', color:'rgba(255,255,255,0.75)', lineHeight:1.5, marginBottom:14, padding:'8px 10px', background:'rgba(255,255,255,0.07)', borderRadius:6, borderLeft:`2px solid ${persona.color}` }}>
+                "{persona.punchline}"
+              </div>
+            )}
 
             <div style={{ display:'flex', alignItems:'baseline', gap:4, marginBottom:4 }}>
               <span style={{ fontSize:32, fontWeight:900, color:persona.color }}>{persona.price}</span>
@@ -271,7 +280,7 @@ export default function Onboarding() {
           </button>
 
           <div style={{ background:'rgba(255,255,255,0.06)', border:`2px solid ${persona.border}`, borderRadius:14, padding:'24px', marginBottom:16 }}>
-            <div style={{ display:'flex', alignItems:'center', gap:12, marginBottom:16 }}>
+            <div style={{ display:'flex', alignItems:'center', gap:12, marginBottom:12 }}>
               <span style={{ fontSize:28 }}>{persona.icon}</span>
               <div>
                 <div style={{ fontSize:18, fontWeight:800, color:'white' }}>{persona.title}</div>
@@ -282,6 +291,12 @@ export default function Onboarding() {
                 <div style={{ fontSize:10, color:'#64748b' }}>{persona.annual}</div>
               </div>
             </div>
+
+            {persona.punchline && (
+              <div style={{ fontSize:14, fontStyle:'italic', fontWeight:600, color:'rgba(255,255,255,0.9)', lineHeight:1.5, marginBottom:16, padding:'10px 14px', background:'rgba(255,255,255,0.07)', borderRadius:8, borderLeft:`3px solid ${persona.color}` }}>
+                "{persona.punchline}"
+              </div>
+            )}
 
             <div style={{ padding:'8px 14px', background:`rgba(${persona.color === '#3b82f6' ? '59,130,246' : persona.color === '#6366f1' ? '99,102,241' : '220,38,38'},0.15)`, borderRadius:8, fontSize:12, color:persona.color, fontWeight:600, marginBottom:16, border:`1px solid ${persona.border}` }}>
               ✓ {persona.trial} · Free during beta · No credit card required

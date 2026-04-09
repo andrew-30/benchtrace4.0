@@ -34,6 +34,12 @@ const FAQ = [
   },
 ];
 
+const PUNCHLINES = {
+  starter: "Because 'I'll write it up later' has cost too many results.",
+  lab: 'One protocol. Every run. Every person. Every time.',
+  lab_pro: "Audit-ready isn't a goal. It's your default state.",
+};
+
 export default function Pricing() {
   const navigate = useNavigate();
   const orgId = localStorage.getItem('bt_org_id');
@@ -134,7 +140,14 @@ export default function Pricing() {
                     <span style={{ fontSize: 24 }}>{plan.icon}</span>
                     <span style={{ fontSize: 18, fontWeight: 800, color: '#1e293b' }}>{plan.name}</span>
                   </div>
-                  <div style={{ fontSize: 12, color: '#64748b', marginBottom: 16, lineHeight: 1.5 }}>{plan.target}</div>
+                  <div style={{ fontSize: 12, color: '#64748b', marginBottom: PUNCHLINES[planKey] ? 8 : 16, lineHeight: 1.5 }}>{plan.target}</div>
+                  {PUNCHLINES[planKey] && (
+                    <div style={{ padding: '10px 14px', background: plan.bg, border: `1px solid ${plan.border}`, borderLeft: `3px solid ${plan.color}`, borderRadius: 7, marginBottom: 16, marginTop: 4 }}>
+                      <div style={{ fontSize: 13, fontWeight: 700, color: plan.color, lineHeight: 1.5, fontStyle: 'italic' }}>
+                        "{PUNCHLINES[planKey]}"
+                      </div>
+                    </div>
+                  )}
                   <div style={{ display: 'flex', alignItems: 'baseline', gap: 4, marginBottom: 4 }}>
                     <span style={{ fontSize: 40, fontWeight: 900, color: plan.color }}>${displayPrice}</span>
                     <span style={{ fontSize: 13, color: '#64748b' }}>/month</span>

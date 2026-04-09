@@ -174,6 +174,14 @@ export default function Settings() {
       {(() => {
         const planStatus = getPlanStatus(org);
         const planCfg = PLAN_CONFIG[planStatus.plan] || PLAN_CONFIG['starter'];
+        const SETTINGS_PUNCHLINES = {
+          starter: "Because 'I'll write it up later' has cost too many results.",
+          lab: 'One protocol. Every run. Every person. Every time.',
+          lab_pro: "Audit-ready isn't a goal. It's your default state.",
+          free: "Because 'I'll write it up later' has cost too many results.",
+          pro: 'One protocol. Every run. Every person. Every time.',
+          team: 'One protocol. Every run. Every person. Every time.',
+        };
         return (
           <div style={{ background: 'white', borderRadius: 12, border: '1px solid #e2e8f0', padding: '20px 24px', marginBottom: 16 }}>
             <div style={{ fontSize: 11, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 14 }}>Current Plan</div>
@@ -206,6 +214,12 @@ export default function Settings() {
                 )}
               </div>
             </div>
+
+            {SETTINGS_PUNCHLINES[planStatus.plan] && (
+              <div style={{ fontSize:12, fontStyle:'italic', color: planCfg.color, lineHeight:1.5, marginBottom:14, padding:'8px 12px', background: planCfg.bg, border:`1px solid ${planCfg.border}`, borderLeft:`3px solid ${planCfg.color}`, borderRadius:6 }}>
+                "{SETTINGS_PUNCHLINES[planStatus.plan]}"
+              </div>
+            )}
 
             {planStatus.hasTrial && !planStatus.isBeta && !planStatus.trialExpired && (
               <div style={{ marginBottom: 16 }}>
