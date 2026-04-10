@@ -522,9 +522,23 @@ function ConfidenceGateScreen({ parsed, classification, onContinue, onDownloadTe
 
         <div style={{ fontSize: 13, fontWeight: 700, color: '#1e293b', marginBottom: 14, textAlign: 'center' }}>We recommend one of these options:</div>
 
-        <div style={{ background: 'white', border: '2px solid #6366f1', borderRadius: 12, padding: '20px', marginBottom: 12 }}>
+        {/* BEST OPTION — Try AI first */}
+        <div style={{ background: 'linear-gradient(135deg, #eef2ff, #f0f9ff)', border: '2px solid #6366f1', borderRadius: 12, padding: '20px', marginBottom: 12 }}>
+          <div style={{ fontSize: 11, fontWeight: 800, color: '#6366f1', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8 }}>BEST OPTION</div>
+          <div style={{ fontSize: 15, fontWeight: 700, color: '#1e293b', marginBottom: 6 }}>✨ Try AI Normaliser</div>
+          <div style={{ fontSize: 12, color: '#475569', lineHeight: 1.6, marginBottom: 14 }}>
+            AI reads your document intelligently — it understands context, not just formatting. Works even when the smart parser struggles with unusual layouts or prose-style protocols.
+          </div>
+          <button onClick={() => { if (onTryAI) onTryAI(); }}
+            style={{ width: '100%', padding: '10px', background: '#6366f1', color: 'white', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>
+            ✨ Switch to AI Normaliser →
+          </button>
+        </div>
+
+        <div style={{ background: 'white', border: '2px solid #6366f1',
+          borderRadius: 12, padding: '20px', marginBottom: 12 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
-            <span style={{ fontSize: 11, fontWeight: 800, padding: '2px 9px', borderRadius: 99, background: '#6366f1', color: 'white' }}>RECOMMENDED</span>
+            <span style={{ fontSize: 11, fontWeight: 800, padding: '2px 9px', borderRadius: 99, background: '#6366f1', color: 'white' }}>USE TEMPLATE</span>
           </div>
           <div style={{ fontSize: 15, fontWeight: 700, color: '#1e293b', marginBottom: 6 }}>📄 Use the BenchTrace Template</div>
           <div style={{ fontSize: 12, color: '#64748b', lineHeight: 1.6, marginBottom: 14 }}>
@@ -581,6 +595,9 @@ export default function Import() {
 
   const [step, setStep] = useState(1);
   const [classification, setClassification] = useState("");
+  const [uploadSubState, setUploadSubState] = useState('idle'); // 'idle' | 'selected' | 'processing'
+  const [selectedFile, setSelectedFile] = useState(null);
+  const [selectedParserMode, setSelectedParserMode] = useState('ai'); // 'ai' | 'smart'
   const [showConfidenceGate, setShowConfidenceGate] = useState(false);
   const [gateChoice, setGateChoice] = useState(null);
   const [useAI, setUseAI] = useState(false);
@@ -612,192 +629,43 @@ export default function Import() {
     if (f) setFile(f);
   }
 
-  const handleAIParse = async (extractedText) => {
-    setAiParsing(true);
-    setAiError('');
-
-    const sectorPrompt = SECTOR_AI_PROMPTS[classification] || SECTOR_AI_PROMPTS['General'];
-
-    const granularityInstruction = stepGranularity === 'individual'
-      ? `STEP GRANULARITY — INDIVIDUAL MODE:
-Extract each individual action or bullet point as a SEPARATE step.
-If a subsection "6.1 RNA Quality Assessment" has 3 bullet points → create 3 separate steps.
-Each bullet = its own step. Step title = subsection name (max 60 chars).
-Step instruction = the individual bullet text ONLY — never repeat the title.
-Total steps should equal total number of individual bullet points and actions.`
-      : `STEP GRANULARITY — GROUPED MODE:
-Extract each subsection as ONE grouped step.
-If "6.1 RNA Quality Assessment" has 3 bullets → combine into 1 step.
-Step title = subsection name (max 60 chars).
-Step instruction = all bullet points joined with newline characters.`;
-
-    const schemaDefinition = `OUTPUT SCHEMA — return ONLY this JSON structure, no markdown, no explanation:
-{
-  "name": "specific protocol name — never use generic titles like Standard Operating Procedure or SOP",
-  "description": "1-3 sentence plain text summary of what this protocol does and its purpose",
-  "classification": "one of exactly: Academic Research, Clinical Diagnostic, GMP Manufacturing, ISO Accredited, CRO Study, Biotech Startup, General",
-  "estimated_duration_minutes": null,
-  "compliance_tags": ["array of detected standards — GMP, GLP, ISO, CLIA, FDA, 21 CFR Part 11, ICH, USP"],
-  "steps": [
-    {
-      "step_order": 1,
-      "title": "subsection or group name — max 60 chars, null if no clear group name",
-      "instruction": "the complete action text — NEVER copy or repeat the title here",
-      "is_critical": false,
-      "timing_mode": "none",
-      "expected_duration_seconds": null,
-      "tolerance_lower_seconds": 0,
-      "tolerance_upper_seconds": 0,
-      "requires_measurement": false,
-      "measurement_parameters": []
-    }
-  ],
-  "checklist_items": [
-    {
-      "item_text": "specific material, reagent, or equipment name",
-      "category": "reagent or equipment or safety or other"
-    }
-  ]
-}
-
-TIMING RULES:
-- timing_mode "none": no specific time mentioned
-- timing_mode "advisory": time mentioned but operator controls start (incubations, reactions)
-- timing_mode "strict": time-critical, deviation has consequences (GMP, clinical, PK timepoints)
-- expected_duration_seconds: convert time to seconds (5min=300, 2h=7200, overnight=57600)
-- tolerance: only set for "strict" mode ("± 5min" → lower: 300, upper: 300)
-
-CRITICAL FLAG RULES:
-- is_critical = true if: critical, warning, caution, must not, do not, danger, immediately, NEVER, hazard
-
-MEASUREMENT RULES:
-- requires_measurement = true if step involves recording a numeric value
-- measurement_parameters: [{name, unit, min_value, max_value, required}]`;
-
-    const prompt = `You are BenchTrace AI — a specialised laboratory protocol formatter. Convert the protocol below into structured BenchTrace format with complete step metadata.
-
-SECTOR CONTEXT — ${classification}:
-${sectorPrompt.context}
-
-SECTOR EXAMPLES:
-${sectorPrompt.examples}
-
-${granularityInstruction}
-
-${schemaDefinition}
-
-IMPORTANT RULES:
-1. step title and instruction must NEVER be identical
-2. instruction is the actual action the operator performs
-3. Extract EVERY step — do not skip or summarise
-4. Be generous with checklist_items — extract everything mentioned
-5. name must be specific — not just "Protocol" or "SOP"
-
-PROTOCOL DOCUMENT:
-${extractedText.substring(0, 12000)}`;
-
+  const handleProcessFile = async (file) => {
     try {
-      const responseText = await base44.integrations.Core.InvokeLLM({ prompt });
-      const cleaned = responseText.replace(/```json\s*/gi, '').replace(/```\s*/gi, '').trim();
-      const jsonStart = cleaned.indexOf('{');
-      const jsonEnd = cleaned.lastIndexOf('}');
-      if (jsonStart === -1 || jsonEnd === -1) throw new Error('No JSON object found in AI response');
-      const aiResult = JSON.parse(cleaned.substring(jsonStart, jsonEnd + 1));
-
-      const { errors, warnings } = validateAIProtocolOutput(aiResult);
-      if (errors.length > 0) throw new Error(`AI output validation failed: ${errors.join(', ')}`);
-
-      const normalisedSteps = aiResult.steps.map((s, i) => {
-        const timingMode = ['none', 'advisory', 'strict'].includes(s.timing_mode) ? s.timing_mode : 'none';
-        const duration = (timingMode !== 'none' && s.expected_duration_seconds > 0) ? Math.round(s.expected_duration_seconds) : null;
-        const tolLower = timingMode === 'strict' ? Math.max(0, Math.round(s.tolerance_lower_seconds || 0)) : 0;
-        const tolUpper = timingMode === 'strict' ? Math.max(0, Math.round(s.tolerance_upper_seconds || 0)) : 0;
-        const measureParams = Array.isArray(s.measurement_parameters)
-          ? s.measurement_parameters.map(p => ({ name: p.name || '', unit: p.unit || '', min_value: p.min_value ?? null, max_value: p.max_value ?? null, required: p.required ?? true })).filter(p => p.name.length > 0)
-          : [];
-        return {
-          step_order: i + 1,
-          title: (s.title || '').substring(0, 200) || null,
-          instruction: (s.instruction || s.title || 'Step instruction').trim(),
-          is_critical: s.is_critical === true,
-          timing_mode: timingMode,
-          expected_duration_seconds: duration,
-          tolerance_lower_seconds: tolLower,
-          tolerance_upper_seconds: tolUpper,
-          requires_measurement: s.requires_measurement === true || measureParams.length > 0,
-          measurement_parameters: measureParams,
-          _id: `ai_s_${i}`,
-        };
-      });
-
-      const validCategories = ['reagent', 'equipment', 'safety', 'other'];
-      const checklistItems = (aiResult.checklist_items || []).map((item, i) => ({
-        item_text: (item.item_text || '').trim(),
-        category: validCategories.includes(item.category) ? item.category : 'other',
-        _id: `ai_c_${i}`,
-      })).filter(item => item.item_text.length > 2);
-
-      const timedSteps = normalisedSteps.filter(s => s.timing_mode !== 'none').length;
-      const criticalSteps = normalisedSteps.filter(s => s.is_critical).length;
-      const measurementSteps = normalisedSteps.filter(s => s.requires_measurement).length;
-
-      const result = {
-        name: (aiResult.name || 'Imported Protocol').trim(),
-        description: (aiResult.description || '').trim(),
-        classification: aiResult.classification || classification || 'General',
-        estimated_duration_minutes: aiResult.estimated_duration_minutes || null,
-        compliance_tags: Array.isArray(aiResult.compliance_tags) ? aiResult.compliance_tags : [],
-        steps: normalisedSteps,
-        checklist_items: checklistItems,
-        structured_materials: null,
-        sections_json: [],
-        _confidence: 'high',
-        _parser_mode: 'ai_normalise',
-        _detected_section: `AI Normalised (${stepGranularity === 'individual' ? 'individual steps' : 'grouped steps'})`,
-        _ai_stats: {
-          total_steps: normalisedSteps.length,
-          timed_steps: timedSteps,
-          critical_steps: criticalSteps,
-          measurement_steps: measurementSteps,
-          checklist_items: checklistItems.length,
-          sector: classification,
-          granularity: stepGranularity,
-          warnings,
-        },
-      };
-
-      setParsed(result);
-      setEditName(result.name);
-      setEditDesc(result.description);
-      setEditClass(result.classification);
-      setEditDuration(result.estimated_duration_minutes ? String(result.estimated_duration_minutes) : '');
-      setEditSections([]);
-      setEditSteps(result.steps);
-      setEditChecklist(result.checklist_items);
-      setShowConfidenceGate(false);
-      setStep(4);
-
-    } catch (e) {
-      console.error('AI normalisation failed:', e);
-      try {
-        const fallbackResult = parseProtocolDocument(extractedText, classification);
-        fallbackResult._ai_fallback = true;
-        fallbackResult._ai_error = e.message;
-        setParsed(fallbackResult);
-        setEditName(fallbackResult.name); setEditDesc(fallbackResult.description); setEditClass(fallbackResult.classification);
-        setEditDuration(fallbackResult.estimated_duration_minutes ? String(fallbackResult.estimated_duration_minutes) : '');
-        setEditSections(fallbackResult.sections_json || []); setEditSteps(fallbackResult.steps || []); setEditChecklist(fallbackResult.checklist_items || []);
-        if (fallbackResult._confidence === 'low') { setShowConfidenceGate(true); } else { setStep(4); }
-        setAiError(`AI parsing failed — using smart parser instead. (${e.message})`);
-      } catch (fallbackErr) {
-        setAiError(`Both AI and smart parser failed: ${e.message}. Please try a different file.`);
+      let text = '';
+      const fileName = file.name.toLowerCase();
+      if (fileName.endsWith('.docx') || fileName.endsWith('.doc')) {
+        text = await extractDocxText(file);
+      } else {
+        text = await file.text();
       }
-    } finally {
-      setAiParsing(false);
+      if (!text || text.trim().length < 20) throw new Error('Document appears empty or too short');
+
+      if (selectedParserMode === 'ai') {
+        setUseAI(true);
+        await handleAIParse(text);
+      } else {
+        setUseAI(false);
+        const result = parseProtocolDocument(text, classification);
+        setParsed(result);
+        setEditName(result.name); setEditDesc(result.description); setEditClass(result.classification);
+        setEditDuration(result.estimated_duration_minutes ? String(result.estimated_duration_minutes) : '');
+        setEditSections(result.sections_json || []); setEditSteps(result.steps || []); setEditChecklist(result.checklist_items || []);
+        if (result._confidence === 'low') {
+          setShowConfidenceGate(true);
+          setUploadSubState('selected');
+        } else {
+          setStep(4);
+        }
+      }
+      setUploadSubState('idle');
+    } catch (e) {
+      console.error('Processing failed:', e);
+      setAiError(e.message || 'Processing failed. Please try again.');
+      setUploadSubState('selected');
     }
   };
 
-  async function handleProcess() {
+  const handleAIParse = async (extractedText) => {
     if (inputMode === "upload" && !file) return;
     if (inputMode === "paste" && !pasteText.trim()) return;
 
@@ -983,198 +851,214 @@ ${extractedText.substring(0, 12000)}`;
         </div>
       )}
 
-      {/* Step 2 — Upload */}
-      {step === 2 && (
-        <div className="space-y-4">
-          <h2 className="text-base font-semibold text-foreground">Upload or paste your SOP</h2>
-
-          <div className="flex items-center gap-1 bg-muted rounded-lg p-1 w-fit">
-            {["upload", "paste"].map(mode => (
-              <button key={mode} onClick={() => setInputMode(mode)}
-                className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors capitalize ${inputMode === mode ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}>
-                {mode === "upload" ? "Upload File" : "Paste Text"}
-              </button>
-            ))}
+      {/* Step 2 — Idle: drop zone */}
+      {step === 2 && uploadSubState === 'idle' && (
+        <div style={{ maxWidth: 560, margin: '0 auto', fontFamily: 'system-ui, sans-serif' }}>
+          <div style={{ textAlign: 'center', marginBottom: 32 }}>
+            <div style={{ fontSize: 13, fontWeight: 700, color: '#6366f1', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 8 }}>Step 2 of 3</div>
+            <h2 style={{ fontSize: 22, fontWeight: 800, color: '#1e293b', margin: '0 0 8px' }}>Upload Your Protocol</h2>
+            <p style={{ fontSize: 14, color: '#64748b', margin: 0 }}>✨ AI will automatically convert it to BenchTrace format</p>
           </div>
 
-          {/* Parser guide */}
-          <div style={{ marginBottom: 0 }}>
-            <button onClick={() => setShowParserGuide(prev => !prev)}
-              style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '10px 14px', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: showParserGuide ? '8px 8px 0 0' : 8, cursor: 'pointer', textAlign: 'left', fontSize: 13, color: '#475569', fontWeight: 600 }}>
-              <span style={{ fontSize: 15 }}>ℹ</span>
-              <span>How BenchTrace detects your steps</span>
-              <span style={{ marginLeft: 'auto', fontSize: 12, color: '#94a3b8' }}>{showParserGuide ? '▲ hide' : '▼ show'}</span>
-            </button>
-            {showParserGuide && (
-              <div style={{ padding: '16px 18px', background: '#f8fafc', border: '1px solid #e2e8f0', borderTop: 'none', borderRadius: '0 0 8px 8px' }}>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                  {[
-                    { icon: '📋', title: 'Numbered subsections → step group titles', example: '3.1 RNA Quality Assessment, 3.2 Reverse Transcription...', detail: 'Each numbered subsection becomes a step group label shown in the execution screen' },
-                    { icon: '•', title: 'Bullet points under subsections → individual steps', example: '• Measure RNA concentration\n• Assess RNA integrity', detail: 'Each bullet becomes one executable step. Use "Individual Steps" mode for this.' },
-                    { icon: '⏱', title: 'Time mentions → advisory timer auto-set', example: '"Incubate for 5 minutes", "centrifuge for 30 sec"', detail: 'Duration is extracted and set as an advisory countdown timer on that step' },
-                    { icon: '⚠', title: '"critical", "warning", "do not" → step flagged critical', example: '"Do not exceed 42°C", "Critical: maintain cold chain"', detail: 'Step is highlighted in red and operators are alerted during execution' },
-                    { icon: '🧪', title: 'Materials section → pre-run checklist', example: 'Reagents: RNA kit, SYBR Green...\nEquipment: Centrifuge, qPCR...', detail: 'Reagents and equipment are captured as checklist items with lot number and expiry fields' },
-                    { icon: '📄', title: 'Tip: use our template for best results', example: `Download the ${classification || 'sector'} template from Step 1`, detail: 'Templates are pre-structured with the exact section headers our parser expects' },
-                  ].map((item, i) => (
-                    <div key={i} style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
-                      <span style={{ fontSize: 16, flexShrink: 0, width: 24, textAlign: 'center', marginTop: 1 }}>{item.icon}</span>
-                      <div style={{ flex: 1 }}>
-                        <div style={{ fontSize: 12, fontWeight: 700, color: '#1e293b', marginBottom: 2 }}>{item.title}</div>
-                        <div style={{ fontSize: 11, color: '#6366f1', fontFamily: 'monospace', background: '#eef2ff', padding: '2px 7px', borderRadius: 4, marginBottom: 3, whiteSpace: 'pre-line' }}>{item.example}</div>
-                        <div style={{ fontSize: 11, color: '#64748b' }}>{item.detail}</div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
-
-          {inputMode === "upload" ? (
-            <div
-              onDrop={handleDrop}
-              onDragOver={e => e.preventDefault()}
-              onClick={() => fileRef.current?.click()}
-              className={`border-2 border-dashed rounded-lg p-10 text-center cursor-pointer transition-colors ${file ? "border-primary bg-primary/5" : "border-border hover:border-primary/50"}`}>
-              <input ref={fileRef} type="file" accept=".docx,.txt,.md" className="hidden" onChange={e => setFile(e.target.files[0])} />
-              <Upload className="w-8 h-8 mx-auto text-muted-foreground mb-3" />
-              {file ? (
-                <p className="text-sm font-medium text-foreground">{file.name}</p>
-              ) : (
-                <>
-                  <p className="text-sm font-medium text-foreground">Drop file here or click to upload</p>
-                  <p className="text-xs text-muted-foreground mt-1">Supports .docx, .txt, .md</p>
-                </>
-              )}
+          <div
+            onDragOver={e => { e.preventDefault(); e.currentTarget.style.background = '#eef2ff'; e.currentTarget.style.borderColor = '#6366f1'; }}
+            onDragLeave={e => { e.currentTarget.style.background = '#f8fafc'; e.currentTarget.style.borderColor = '#c7d2fe'; }}
+            onDrop={e => {
+              e.preventDefault();
+              e.currentTarget.style.background = '#f8fafc'; e.currentTarget.style.borderColor = '#c7d2fe';
+              const f = e.dataTransfer.files[0];
+              if (f) { setSelectedFile(f); setUploadSubState('selected'); }
+            }}
+            onClick={() => document.getElementById('bt-file-input').click()}
+            style={{ border: '2px dashed #c7d2fe', borderRadius: 16, padding: '48px 32px', textAlign: 'center', background: '#f8fafc', cursor: 'pointer', transition: 'all 0.2s', marginBottom: 16 }}
+          >
+            <div style={{ fontSize: 48, marginBottom: 12 }}>📄</div>
+            <div style={{ fontSize: 16, fontWeight: 700, color: '#1e293b', marginBottom: 6 }}>Drop your protocol here</div>
+            <div style={{ fontSize: 13, color: '#64748b', marginBottom: 16 }}>or click to browse your files</div>
+            <div style={{ display: 'inline-flex', gap: 6 }}>
+              {['DOCX', 'TXT', 'MD'].map(ext => (
+                <span key={ext} style={{ fontSize: 11, fontWeight: 700, padding: '3px 10px', borderRadius: 99, background: '#eef2ff', color: '#4338ca', border: '1px solid #c7d2fe' }}>{ext}</span>
+              ))}
             </div>
-          ) : (
-            <Textarea
-              placeholder="Paste your protocol text here..."
-              value={pasteText}
-              onChange={e => setPasteText(e.target.value)}
-              rows={12}
-              className="font-mono text-sm"
-            />
-          )}
+            <input id="bt-file-input" type="file" accept=".docx,.txt,.md,.doc" style={{ display: 'none' }}
+              onChange={e => { const f = e.target.files?.[0]; if (f) { setSelectedFile(f); setUploadSubState('selected'); } }} />
+          </div>
 
-          <div className="bg-card border border-border rounded-lg p-4 space-y-2">
-            <p className="text-sm font-medium text-foreground">Step granularity</p>
-            <div className="flex items-center gap-3">
+          <div style={{ padding: '14px 16px', background: 'linear-gradient(135deg, #eef2ff, #f0f9ff)', border: '1px solid #c7d2fe', borderRadius: 10, marginBottom: 16 }}>
+            <div style={{ fontSize: 12, fontWeight: 700, color: '#4338ca', marginBottom: 8 }}>✨ What AI does automatically for {classification} protocols:</div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: 6 }}>
               {[
-                { val: "individual", label: "Individual Steps", desc: "Each bullet = one step" },
-                { val: "grouped", label: "Grouped Steps", desc: "Each subsection = one step" },
-              ].map(opt => (
-                <label key={opt.val} className="flex items-start gap-2 cursor-pointer">
-                  <input type="radio" name="granularity" value={opt.val} checked={granularity === opt.val} onChange={() => setGranularity(opt.val)} className="mt-0.5" />
+                { icon: '⏱', text: 'Detects timers', sub: 'advisory & strict' },
+                { icon: '🔴', text: 'Flags critical steps', sub: 'warnings & must-dos' },
+                { icon: '📏', text: 'Extracts measurements', sub: 'with units & ranges' },
+                { icon: '🧪', text: 'Builds materials list', sub: 'reagents & equipment' },
+              ].map(item => (
+                <div key={item.text} style={{ display: 'flex', alignItems: 'flex-start', gap: 6 }}>
+                  <span style={{ fontSize: 14, flexShrink: 0 }}>{item.icon}</span>
                   <div>
-                    <p className="text-sm font-medium text-foreground">{opt.label}</p>
-                    <p className="text-xs text-muted-foreground">{opt.desc}</p>
+                    <div style={{ fontSize: 11, fontWeight: 700, color: '#1e293b' }}>{item.text}</div>
+                    <div style={{ fontSize: 10, color: '#64748b' }}>{item.sub}</div>
                   </div>
-                </label>
+                </div>
               ))}
             </div>
           </div>
 
-          {/* AI Normalisation Controls */}
-          <div style={{
-            marginTop: 16, padding: '16px',
-            background: useAI ? 'linear-gradient(135deg, #eef2ff, #f0f9ff)' : '#f8fafc',
-            border: `2px solid ${useAI ? '#6366f1' : '#e2e8f0'}`,
-            borderRadius: 12, transition: 'all 0.2s'
-          }}>
-            <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, marginBottom: useAI ? 16 : 0 }}>
-              <div style={{ flex: 1 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-                  <span style={{ fontSize: 20 }}>✨</span>
-                  <span style={{ fontSize: 14, fontWeight: 800, color: '#1e293b' }}>AI Protocol Normaliser</span>
-                  <span style={{ fontSize: 10, fontWeight: 800, padding: '2px 8px', borderRadius: 99, background: '#6366f1', color: 'white', letterSpacing: '0.05em' }}>RECOMMENDED</span>
-                </div>
-                <div style={{ fontSize: 12, color: '#64748b', lineHeight: 1.5 }}>
-                  {useAI
-                    ? `AI will read your document and convert it to BenchTrace format — automatically setting timers, critical flags, and measurements for ${classification} protocols.`
-                    : 'AI reads any protocol format and converts it intelligently. Works with prose, unusual formatting, and complex SOPs.'
-                  }
-                </div>
-              </div>
-              <div
-                onClick={() => { setUseAI(prev => !prev); setAiError(''); }}
-                style={{ width: 48, height: 26, borderRadius: 99, cursor: 'pointer', background: useAI ? '#6366f1' : '#cbd5e1', position: 'relative', flexShrink: 0, marginTop: 2, transition: 'background 0.2s', boxShadow: useAI ? '0 0 12px rgba(99,102,241,0.4)' : 'none' }}
-              >
-                <div style={{ position: 'absolute', top: 3, left: useAI ? 25 : 3, width: 20, height: 20, borderRadius: '50%', background: 'white', boxShadow: '0 1px 4px rgba(0,0,0,0.2)', transition: 'left 0.2s' }} />
-              </div>
-            </div>
-            {useAI && (
-              <div>
-                <div style={{ padding: '8px 12px', background: 'rgba(99,102,241,0.08)', border: '1px solid rgba(99,102,241,0.2)', borderRadius: 8, marginBottom: 12, fontSize: 11, color: '#4338ca' }}>
-                  🎯 Sector-tuned for <strong>{classification}</strong> — AI knows what to look for in {classification} protocols
-                </div>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 8, marginBottom: 14 }}>
-                  {[
-                    { icon: '⏱', label: 'Auto-detect timers', desc: 'Sets advisory/strict mode + seconds' },
-                    { icon: '🔴', label: 'Flag critical steps', desc: 'Warnings, must/do-not steps' },
-                    { icon: '📏', label: 'Extract measurements', desc: 'pH, OD, concentration ranges' },
-                    { icon: '🧪', label: 'Build materials list', desc: 'Reagents, equipment, safety' },
-                  ].map(item => (
-                    <div key={item.label} style={{ padding: '8px 10px', background: 'white', borderRadius: 7, border: '1px solid #e0e7ff' }}>
-                      <div style={{ fontSize: 14, marginBottom: 3 }}>{item.icon}</div>
-                      <div style={{ fontSize: 11, fontWeight: 700, color: '#1e293b', marginBottom: 2 }}>{item.label}</div>
-                      <div style={{ fontSize: 10, color: '#64748b', lineHeight: 1.4 }}>{item.desc}</div>
-                    </div>
-                  ))}
-                </div>
-                <div style={{ fontSize: 11, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 8 }}>Step Granularity</div>
-                <div style={{ display: 'flex', gap: 8 }}>
-                  {[
-                    { value: 'individual', icon: '◉', label: 'Individual Steps', desc: 'Each bullet = one step — best for detailed execution' },
-                    { value: 'grouped', icon: '⊞', label: 'Grouped Steps', desc: 'Each subsection = one step — best for complex procedures' },
-                  ].map(opt => (
-                    <button key={opt.value} onClick={() => setStepGranularity(opt.value)}
-                      style={{ flex: 1, padding: '10px 12px', borderRadius: 8, cursor: 'pointer', fontSize: 12, textAlign: 'left', border: `2px solid ${stepGranularity === opt.value ? '#6366f1' : '#e2e8f0'}`, background: stepGranularity === opt.value ? '#eef2ff' : 'white', color: stepGranularity === opt.value ? '#4338ca' : '#64748b', transition: 'all 0.15s' }}>
-                      <div style={{ fontWeight: 700, marginBottom: 3 }}>{opt.icon} {opt.label}</div>
-                      <div style={{ fontSize: 11, opacity: 0.8, lineHeight: 1.4 }}>{opt.desc}</div>
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
+          <div style={{ textAlign: 'center' }}>
+            <span style={{ fontSize: 12, color: '#94a3b8' }}>Don't have a protocol yet?{' '}
+              <button onClick={e => { e.stopPropagation(); downloadSectorTemplate(classification); }}
+                style={{ background: 'none', border: 'none', color: '#6366f1', cursor: 'pointer', fontSize: 12, fontWeight: 700, textDecoration: 'underline', padding: 0 }}>
+                Download our {classification} template →
+              </button>
+            </span>
           </div>
 
-          {aiParsing && (
-            <div style={{ marginTop: 12, padding: '16px', background: 'linear-gradient(135deg, #eef2ff, #f0f9ff)', border: '1px solid #c7d2fe', borderRadius: 12 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 10 }}>
-                <div style={{ width: 22, height: 22, borderRadius: '50%', border: '2px solid #c7d2fe', borderTop: '2px solid #6366f1', animation: 'bt-spin 1s linear infinite', flexShrink: 0 }} />
-                <div>
-                  <div style={{ fontSize: 13, fontWeight: 700, color: '#4338ca' }}>AI is normalising your protocol...</div>
-                  <div style={{ fontSize: 11, color: '#6366f1', marginTop: 1 }}>Reading steps, detecting timers, extracting measurements for {classification}</div>
-                </div>
-              </div>
-              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                {['Reading document structure', 'Detecting timed steps', 'Flagging critical steps', 'Extracting materials'].map((label, i) => (
-                  <span key={i} style={{ fontSize: 10, padding: '2px 8px', borderRadius: 99, background: 'rgba(99,102,241,0.15)', color: '#4338ca', fontWeight: 600 }}>{label}</span>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {aiError && (
-            <div style={{ marginTop: 12, padding: '12px 14px', background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 8, fontSize: 12, color: '#92400e' }}>
-              ⚠ {aiError}
-              <button onClick={() => setAiError('')} style={{ marginLeft: 8, background: 'none', border: 'none', color: '#92400e', cursor: 'pointer', fontSize: 12, fontWeight: 700 }}>×</button>
-            </div>
-          )}
-
+          <div style={{ marginTop: 20 }}>
+            <Button variant="outline" onClick={() => setStep(1)}>← Back</Button>
+          </div>
           <style>{`@keyframes bt-spin { to { transform: rotate(360deg); } }`}</style>
-
-          <div className="flex gap-3">
-            <Button variant="outline" onClick={() => setStep(1)}>Back</Button>
-            <Button onClick={handleProcess} disabled={(inputMode === "upload" && !file) || (inputMode === "paste" && !pasteText.trim())}>
-              {useAI ? 'Parse with AI' : 'Process Document'}
-            </Button>
-          </div>
         </div>
       )}
 
-      {/* Step 3 — Processing */}
+      {/* Step 2 — Selected: choose processing mode */}
+      {step === 2 && uploadSubState === 'selected' && selectedFile && (
+        <div style={{ maxWidth: 560, margin: '0 auto', fontFamily: 'system-ui, sans-serif' }}>
+          <div style={{ textAlign: 'center', marginBottom: 28 }}>
+            <div style={{ fontSize: 13, fontWeight: 700, color: '#6366f1', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 8 }}>Step 2 of 3</div>
+            <h2 style={{ fontSize: 22, fontWeight: 800, color: '#1e293b', margin: '0 0 8px' }}>How should we process this?</h2>
+          </div>
+
+          {/* File card */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 16px', background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 10, marginBottom: 24 }}>
+            <span style={{ fontSize: 24, flexShrink: 0 }}>📄</span>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 13, fontWeight: 700, color: '#1e293b', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{selectedFile.name}</div>
+              <div style={{ fontSize: 11, color: '#64748b' }}>{(selectedFile.size / 1024).toFixed(1)} KB · {classification}</div>
+            </div>
+            <button onClick={() => { setSelectedFile(null); setUploadSubState('idle'); }}
+              style={{ background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer', fontSize: 20, flexShrink: 0 }}>×</button>
+          </div>
+
+          {/* Mode cards */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 20 }}>
+
+            {/* AI — PRIMARY */}
+            <div onClick={() => setSelectedParserMode('ai')} style={{ padding: '20px', borderRadius: 12, cursor: 'pointer', border: `2px solid ${selectedParserMode === 'ai' ? '#6366f1' : '#e2e8f0'}`, background: selectedParserMode === 'ai' ? 'linear-gradient(135deg, #eef2ff, #f0f9ff)' : 'white', transition: 'all 0.15s', position: 'relative' }}>
+              <div style={{ position: 'absolute', top: -12, left: 20, background: '#6366f1', color: 'white', fontSize: 10, fontWeight: 800, padding: '3px 12px', borderRadius: 99, letterSpacing: '0.05em' }}>★ RECOMMENDED</div>
+              <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
+                <div style={{ width: 20, height: 20, borderRadius: '50%', border: `2px solid ${selectedParserMode === 'ai' ? '#6366f1' : '#cbd5e1'}`, background: selectedParserMode === 'ai' ? '#6366f1' : 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginTop: 2 }}>
+                  {selectedParserMode === 'ai' && <div style={{ width: 8, height: 8, borderRadius: '50%', background: 'white' }} />}
+                </div>
+                <div style={{ flex: 1 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                    <span style={{ fontSize: 20 }}>✨</span>
+                    <span style={{ fontSize: 15, fontWeight: 800, color: '#1e293b' }}>AI Protocol Normaliser</span>
+                  </div>
+                  <div style={{ fontSize: 12, color: '#475569', lineHeight: 1.6, marginBottom: selectedParserMode === 'ai' ? 12 : 0 }}>
+                    AI reads your document and converts it to BenchTrace format — automatically detecting timers, critical steps, measurements, and materials. Works with any formatting.
+                  </div>
+                  {selectedParserMode === 'ai' && (
+                    <div>
+                      <div style={{ fontSize: 11, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6 }}>Step Granularity</div>
+                      <div style={{ display: 'flex', gap: 8, marginBottom: 10 }}>
+                        {[
+                          { value: 'individual', icon: '◉', label: 'Individual Steps', desc: 'Each bullet = one step' },
+                          { value: 'grouped', icon: '⊞', label: 'Grouped Steps', desc: 'Each subsection = one step' },
+                        ].map(opt => (
+                          <button key={opt.value} onClick={e => { e.stopPropagation(); setStepGranularity(opt.value); }}
+                            style={{ flex: 1, padding: '8px 10px', borderRadius: 7, cursor: 'pointer', fontSize: 11, textAlign: 'left', border: `1px solid ${stepGranularity === opt.value ? '#6366f1' : '#e2e8f0'}`, background: stepGranularity === opt.value ? '#eef2ff' : 'white', color: stepGranularity === opt.value ? '#4338ca' : '#64748b' }}>
+                            <div style={{ fontWeight: 700, marginBottom: 2 }}>{opt.icon} {opt.label}</div>
+                            <div style={{ fontSize: 10, opacity: 0.8 }}>{opt.desc}</div>
+                          </button>
+                        ))}
+                      </div>
+                      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                        {['⏱ Timers', '🔴 Critical steps', '📏 Measurements', '🧪 Materials'].map(tag => (
+                          <span key={tag} style={{ fontSize: 10, padding: '2px 8px', borderRadius: 99, background: 'rgba(99,102,241,0.12)', color: '#4338ca', fontWeight: 600 }}>{tag}</span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Smart — SECONDARY */}
+            <div onClick={() => setSelectedParserMode('smart')} style={{ padding: '16px 20px', borderRadius: 12, cursor: 'pointer', border: `2px solid ${selectedParserMode === 'smart' ? '#64748b' : '#e2e8f0'}`, background: selectedParserMode === 'smart' ? '#f8fafc' : 'white', transition: 'all 0.15s' }}>
+              <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
+                <div style={{ width: 20, height: 20, borderRadius: '50%', border: `2px solid ${selectedParserMode === 'smart' ? '#64748b' : '#cbd5e1'}`, background: selectedParserMode === 'smart' ? '#64748b' : 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginTop: 2 }}>
+                  {selectedParserMode === 'smart' && <div style={{ width: 8, height: 8, borderRadius: '50%', background: 'white' }} />}
+                </div>
+                <div style={{ flex: 1 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                    <span style={{ fontSize: 18 }}>⚡</span>
+                    <span style={{ fontSize: 14, fontWeight: 700, color: '#475569' }}>Smart Parser</span>
+                    <span style={{ fontSize: 10, color: '#94a3b8', fontWeight: 500 }}>Fallback option</span>
+                  </div>
+                  <div style={{ fontSize: 12, color: '#64748b', lineHeight: 1.5 }}>Regex-based structural parser. Fast and offline-capable. Works best with well-structured DOCX files using numbered steps. May require manual editing.</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Action buttons */}
+          <div style={{ display: 'flex', gap: 10 }}>
+            <button onClick={() => { setSelectedFile(null); setUploadSubState('idle'); setSelectedParserMode('ai'); }}
+              style={{ padding: '11px 20px', background: 'white', border: '1px solid #e2e8f0', borderRadius: 9, fontSize: 13, cursor: 'pointer', color: '#64748b', fontWeight: 600 }}>← Change File</button>
+            <button
+              onClick={async () => { setUploadSubState('processing'); await handleProcessFile(selectedFile); }}
+              style={{ flex: 1, padding: '11px', borderRadius: 9, fontSize: 14, fontWeight: 800, border: 'none', cursor: 'pointer', color: 'white', background: selectedParserMode === 'ai' ? 'linear-gradient(135deg, #6366f1, #4f46e5)' : '#475569' }}
+            >
+              {selectedParserMode === 'ai' ? '✨ Normalise with AI →' : '⚡ Parse with Smart Parser →'}
+            </button>
+          </div>
+
+          {aiError && (
+            <div style={{ marginTop: 12, padding: '10px 14px', background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 8, fontSize: 12, color: '#92400e', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span>⚠ {aiError}</span>
+              <button onClick={() => setAiError('')} style={{ background: 'none', border: 'none', color: '#92400e', cursor: 'pointer', fontSize: 16 }}>×</button>
+            </div>
+          )}
+          <style>{`@keyframes bt-spin { to { transform: rotate(360deg); } }`}</style>
+        </div>
+      )}
+
+      {/* Step 2 — Processing */}
+      {step === 2 && uploadSubState === 'processing' && (
+        <div style={{ maxWidth: 480, margin: '0 auto', textAlign: 'center', fontFamily: 'system-ui, sans-serif', padding: '40px 24px' }}>
+          {selectedParserMode === 'ai' ? (
+            <>
+              <div style={{ width: 64, height: 64, borderRadius: '50%', border: '4px solid #e0e7ff', borderTop: '4px solid #6366f1', animation: 'bt-spin 1s linear infinite', margin: '0 auto 24px' }} />
+              <h3 style={{ fontSize: 20, fontWeight: 800, color: '#1e293b', margin: '0 0 8px' }}>AI is reading your protocol...</h3>
+              <p style={{ fontSize: 14, color: '#64748b', margin: '0 0 24px' }}>Converting to BenchTrace format for {classification}</p>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8, textAlign: 'left', padding: '16px', background: '#eef2ff', borderRadius: 10 }}>
+                {[
+                  { icon: '📖', text: 'Reading document structure' },
+                  { icon: '⏱', text: 'Detecting timed steps (advisory & strict)' },
+                  { icon: '🔴', text: 'Flagging critical steps' },
+                  { icon: '📏', text: 'Extracting measurement parameters' },
+                  { icon: '🧪', text: 'Building materials checklist' },
+                ].map((item, i) => (
+                  <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <span style={{ fontSize: 16, flexShrink: 0 }}>{item.icon}</span>
+                    <span style={{ fontSize: 12, color: '#4338ca', fontWeight: 500 }}>{item.text}</span>
+                  </div>
+                ))}
+              </div>
+              <p style={{ fontSize: 11, color: '#94a3b8', marginTop: 16 }}>This usually takes 5-15 seconds</p>
+            </>
+          ) : (
+            <>
+              <div style={{ width: 56, height: 56, borderRadius: '50%', border: '3px solid #e2e8f0', borderTop: '3px solid #475569', animation: 'bt-spin 0.8s linear infinite', margin: '0 auto 20px' }} />
+              <h3 style={{ fontSize: 18, fontWeight: 700, color: '#1e293b', margin: '0 0 8px' }}>Analysing document structure...</h3>
+              <p style={{ fontSize: 13, color: '#64748b', margin: 0 }}>Smart parser detecting sections and steps</p>
+            </>
+          )}
+          <style>{`@keyframes bt-spin { to { transform: rotate(360deg); } }`}</style>
+        </div>
+      )}
+
+      {/* Step 3 — Processing (legacy/paste) */}
       {step === 3 && (
         <div className="flex flex-col items-center justify-center py-20 text-center">
           <div className="w-10 h-10 border-3 border-primary/20 border-t-primary rounded-full animate-spin mb-5" />
