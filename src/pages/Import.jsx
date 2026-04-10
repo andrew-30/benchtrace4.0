@@ -632,17 +632,18 @@ export default function Import() {
   const handleProcessFile = async (file) => {
     try {
       let text = '';
-      const fileName = file.name.toLowerCase();
+      const fileName = (file.name || '').toLowerCase();
       if (fileName.endsWith('.docx') || fileName.endsWith('.doc')) {
         text = await extractDocxText(file);
       } else {
         text = await file.text();
       }
-      if (!text || text.trim().length < 20) throw new Error('Document appears empty or too short');
+      if (!text || text.trim().length < 20) throw new Error('Document appears empty or too short.');
 
       if (selectedParserMode === 'ai') {
         setUseAI(true);
         await handleAIParse(text);
+        // handleAIParse calls setStep(4) internally — do NOT reset uploadSubState here
       } else {
         setUseAI(false);
         const result = parseProtocolDocument(text, classification);
@@ -654,59 +655,177 @@ export default function Import() {
           setShowConfidenceGate(true);
           setUploadSubState('selected');
         } else {
-          setStep(4);
+          setStep(4); // DO NOT reset uploadSubState — step change drives navigation
         }
       }
-      setUploadSubState('idle');
     } catch (e) {
       console.error('Processing failed:', e);
       setAiError(e.message || 'Processing failed. Please try again.');
-      setUploadSubState('selected');
+      setUploadSubState('selected'); // only reset on error so user can retry
+      setAiParsing(false);
     }
   };
 
   const handleAIParse = async (extractedText) => {
-    if (inputMode === "upload" && !file) return;
-    if (inputMode === "paste" && !pasteText.trim()) return;
+    setAiParsing(true);
+    setAiError('');
 
-    setProcessing(true);
-    setStep(3);
-    setError("");
-    setAiError("");
+    const sectorPrompt = SECTOR_AI_PROMPTS[classification] || SECTOR_AI_PROMPTS['General'];
 
-    let text = "";
-    if (inputMode === "upload") {
-      if (file.name.endsWith(".docx")) {
-        text = await extractDocxText(file);
-      } else {
-        text = await file.text();
-      }
-    } else {
-      text = pasteText;
+    const granularityInstruction = stepGranularity === 'individual'
+      ? `STEP GRANULARITY — INDIVIDUAL MODE:
+Extract each individual action or bullet point as a SEPARATE step.
+If a subsection "6.1 RNA Quality Assessment" has 3 bullet points → create 3 separate steps.
+Each bullet = its own step. Step title = subsection name (max 60 chars).
+Step instruction = the individual bullet text ONLY — never repeat the title.`
+      : `STEP GRANULARITY — GROUPED MODE:
+Extract each subsection as ONE grouped step.
+Step title = subsection name (max 60 chars).
+Step instruction = all bullet points joined with newline characters.`;
+
+    const schemaDefinition = `OUTPUT SCHEMA — return ONLY this JSON structure, no markdown, no explanation:
+{
+  "name": "specific protocol name — never use generic titles like Standard Operating Procedure or SOP",
+  "description": "1-3 sentence plain text summary",
+  "classification": "one of exactly: Academic Research, Clinical Diagnostic, GMP Manufacturing, ISO Accredited, CRO Study, Biotech Startup, General",
+  "estimated_duration_minutes": null,
+  "compliance_tags": [],
+  "steps": [
+    {
+      "step_order": 1,
+      "title": null,
+      "instruction": "action text ONLY — never copy the title",
+      "is_critical": false,
+      "timing_mode": "none",
+      "expected_duration_seconds": null,
+      "tolerance_lower_seconds": 0,
+      "tolerance_upper_seconds": 0,
+      "requires_measurement": false,
+      "measurement_parameters": []
     }
+  ],
+  "checklist_items": [
+    {"item_text": "material or equipment name", "category": "reagent or equipment or safety or other"}
+  ]
+}
+TIMING: "none" no time, "advisory" time mentioned (operator starts), "strict" time-critical. Seconds: 5min=300, 2h=7200.
+CRITICAL: is_critical=true for: critical, warning, caution, must not, do not, danger, NEVER, hazard.
+MEASUREMENTS: requires_measurement=true + measurement_parameters when recording numeric values.`;
 
-    if (useAI) {
-      setProcessing(false);
-      await handleAIParse(text);
-    } else {
-      const result = parseProtocolDocument(text, classification, granularity);
+    const prompt = `You are BenchTrace AI — a laboratory protocol formatter.
+
+SECTOR: ${classification}
+${sectorPrompt.context}
+
+EXAMPLES:
+${sectorPrompt.examples}
+
+${granularityInstruction}
+
+${schemaDefinition}
+
+PROTOCOL DOCUMENT:
+${extractedText.substring(0, 12000)}`;
+
+    try {
+      const responseText = await base44.integrations.Core.InvokeLLM({ prompt });
+      const cleaned = responseText.replace(/```json\s*/gi, '').replace(/```\s*/gi, '').trim();
+      const jsonStart = cleaned.indexOf('{');
+      const jsonEnd = cleaned.lastIndexOf('}');
+      if (jsonStart === -1 || jsonEnd === -1) throw new Error('No JSON object found in AI response');
+      const aiResult = JSON.parse(cleaned.substring(jsonStart, jsonEnd + 1));
+
+      const { errors, warnings } = validateAIProtocolOutput(aiResult);
+      if (errors.length > 0) throw new Error(`AI output validation failed: ${errors.join(', ')}`);
+
+      const normalisedSteps = aiResult.steps.map((s, i) => {
+        const timingMode = ['none', 'advisory', 'strict'].includes(s.timing_mode) ? s.timing_mode : 'none';
+        const duration = (timingMode !== 'none' && s.expected_duration_seconds > 0) ? Math.round(Number(s.expected_duration_seconds)) : null;
+        const tolLower = timingMode === 'strict' ? Math.max(0, Math.round(Number(s.tolerance_lower_seconds) || 0)) : 0;
+        const tolUpper = timingMode === 'strict' ? Math.max(0, Math.round(Number(s.tolerance_upper_seconds) || 0)) : 0;
+        const measureParams = Array.isArray(s.measurement_parameters)
+          ? s.measurement_parameters.map(p => ({ name: p.name || '', unit: p.unit || '', min_value: p.min_value ?? null, max_value: p.max_value ?? null, required: p.required ?? true })).filter(p => p.name.length > 0)
+          : [];
+        return {
+          step_order: i + 1,
+          title: s.title ? String(s.title).substring(0, 200) : null,
+          instruction: (s.instruction || s.title || 'Step instruction').trim(),
+          is_critical: s.is_critical === true,
+          timing_mode: timingMode,
+          expected_duration_seconds: duration,
+          tolerance_lower_seconds: tolLower,
+          tolerance_upper_seconds: tolUpper,
+          requires_measurement: s.requires_measurement === true || measureParams.length > 0,
+          measurement_parameters: measureParams,
+          _id: `ai_s_${i}`,
+        };
+      });
+
+      const validCats = ['reagent', 'equipment', 'safety', 'other'];
+      const checklistItems = (aiResult.checklist_items || [])
+        .map((item, i) => ({ item_text: (item.item_text || '').trim(), category: validCats.includes(item.category) ? item.category : 'other', _id: `ai_c_${i}` }))
+        .filter(item => item.item_text.length > 2);
+
+      const timedSteps = normalisedSteps.filter(s => s.timing_mode !== 'none').length;
+      const criticalSteps = normalisedSteps.filter(s => s.is_critical).length;
+      const measurementSteps = normalisedSteps.filter(s => s.requires_measurement).length;
+
+      const result = {
+        name: (aiResult.name || 'Imported Protocol').trim(),
+        description: (aiResult.description || '').trim(),
+        classification: aiResult.classification || classification || 'General',
+        estimated_duration_minutes: aiResult.estimated_duration_minutes || null,
+        compliance_tags: Array.isArray(aiResult.compliance_tags) ? aiResult.compliance_tags : [],
+        steps: normalisedSteps,
+        checklist_items: checklistItems,
+        structured_materials: null,
+        sections_json: [],
+        _confidence: 'high',
+        _parser_mode: 'ai_normalise',
+        _detected_section: `AI Normalised (${stepGranularity === 'individual' ? 'individual steps' : 'grouped steps'})`,
+        _ai_stats: {
+          total_steps: normalisedSteps.length,
+          timed_steps: timedSteps,
+          critical_steps: criticalSteps,
+          measurement_steps: measurementSteps,
+          checklist_items: checklistItems.length,
+          sector: classification,
+          granularity: stepGranularity,
+          warnings,
+        },
+      };
+
       setParsed(result);
       setEditName(result.name);
       setEditDesc(result.description);
       setEditClass(result.classification);
-      setEditDuration(result.estimated_duration_minutes ? String(result.estimated_duration_minutes) : "");
-      setEditSections(result.sections_json || []);
-      setEditSteps(result.steps || []);
-      setEditChecklist(result.checklist_items || []);
-      setProcessing(false);
-      if (result._confidence === 'low') {
-        setShowConfidenceGate(true);
-      } else {
-        setShowConfidenceGate(false);
-        setStep(4);
+      setEditDuration(result.estimated_duration_minutes ? String(result.estimated_duration_minutes) : '');
+      setEditSections([]);
+      setEditSteps(result.steps);
+      setEditChecklist(result.checklist_items);
+      setShowConfidenceGate(false);
+      setStep(4); // This drives navigation — do NOT call setUploadSubState after this
+
+    } catch (e) {
+      console.error('AI normalisation failed:', e);
+      setUploadSubState('selected');
+      try {
+        const fallbackResult = parseProtocolDocument(extractedText, classification);
+        fallbackResult._ai_fallback = true;
+        setParsed(fallbackResult);
+        setEditName(fallbackResult.name); setEditDesc(fallbackResult.description); setEditClass(fallbackResult.classification);
+        setEditDuration(fallbackResult.estimated_duration_minutes ? String(fallbackResult.estimated_duration_minutes) : '');
+        setEditSections(fallbackResult.sections_json || []); setEditSteps(fallbackResult.steps || []); setEditChecklist(fallbackResult.checklist_items || []);
+        if (fallbackResult._confidence === 'low') { setShowConfidenceGate(true); } else { setStep(4); }
+        setAiError(`AI parsing failed — using smart parser instead. (${e.message})`);
+      } catch (fallbackErr) {
+        setAiError(`Both AI and smart parser failed: ${e.message}. Please try a different file.`);
       }
+    } finally {
+      setAiParsing(false);
+      // Do NOT reset uploadSubState here — success uses setStep(4), error already set 'selected'
     }
-  }
+  };
 
   async function handleSave() {
     setSaving(true);
@@ -1006,7 +1125,7 @@ export default function Import() {
             <button onClick={() => { setSelectedFile(null); setUploadSubState('idle'); setSelectedParserMode('ai'); }}
               style={{ padding: '11px 20px', background: 'white', border: '1px solid #e2e8f0', borderRadius: 9, fontSize: 13, cursor: 'pointer', color: '#64748b', fontWeight: 600 }}>← Change File</button>
             <button
-              onClick={async () => { setUploadSubState('processing'); await handleProcessFile(selectedFile); }}
+              onClick={async () => { setAiError(''); setUploadSubState('processing'); await handleProcessFile(selectedFile); }}
               style={{ flex: 1, padding: '11px', borderRadius: 9, fontSize: 14, fontWeight: 800, border: 'none', cursor: 'pointer', color: 'white', background: selectedParserMode === 'ai' ? 'linear-gradient(135deg, #6366f1, #4f46e5)' : '#475569' }}
             >
               {selectedParserMode === 'ai' ? '✨ Normalise with AI →' : '⚡ Parse with Smart Parser →'}
