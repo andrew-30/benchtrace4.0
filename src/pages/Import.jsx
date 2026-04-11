@@ -180,22 +180,66 @@ function parseProtocolDocument(text, classification, granularity = "individual")
 }
 
 async function extractDocxText(file) {
-  if (!window.JSZip) {
+  // Mobile-safe array buffer reading — tries arrayBuffer() first, falls back to FileReader
+  const readAsArrayBuffer = (f) => new Promise((resolve, reject) => {
+    if (f.arrayBuffer) {
+      f.arrayBuffer()
+        .then(resolve)
+        .catch(() => {
+          const reader = new FileReader();
+          reader.onload = e => resolve(e.target.result);
+          reader.onerror = () => reject(new Error('FileReader failed to read the file'));
+          reader.readAsArrayBuffer(f);
+        });
+    } else {
+      const reader = new FileReader();
+      reader.onload = e => resolve(e.target.result);
+      reader.onerror = () => reject(new Error('FileReader failed to read the file'));
+      reader.readAsArrayBuffer(f);
+    }
+  });
+
+  const waitForJSZip = () => new Promise((resolve, reject) => {
+    if (window.JSZip) { resolve(); return; }
+    let attempts = 0;
+    const check = setInterval(() => {
+      attempts++;
+      if (window.JSZip) { clearInterval(check); resolve(); }
+      if (attempts > 20) {
+        clearInterval(check);
+        reject(new Error('JSZip library failed to load. Please check your connection and try again.'));
+      }
+    }, 200);
+  });
+
+  try {
+    await waitForJSZip();
+  } catch(e) {
     await new Promise((resolve, reject) => {
-      const script = document.createElement("script");
-      script.src = "https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js";
-      script.onload = resolve; script.onerror = reject;
+      const script = document.createElement('script');
+      script.src = 'https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js';
+      script.onload = resolve;
+      script.onerror = () => reject(new Error('Could not load file parser. Please use "Paste Text" option instead.'));
       document.head.appendChild(script);
     });
   }
-  const zip = await window.JSZip.loadAsync(await file.arrayBuffer());
-  const xml = await zip.file("word/document.xml").async("string");
-  return xml
-    .replace(/<w:br[^>]*\/>/gi, "\n").replace(/<w:p[^>]*>/gi, "\n")
-    .replace(/<\/w:p>/gi, "").replace(/<[^>]+>/g, "")
-    .replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">")
+
+  const arrayBuffer = await readAsArrayBuffer(file);
+  const zip = await window.JSZip.loadAsync(arrayBuffer);
+  const xmlFile = zip.file('word/document.xml');
+  if (!xmlFile) throw new Error('Invalid DOCX file structure. Please ensure this is a valid Word document.');
+
+  const xml = await xmlFile.async('string');
+  const text = xml
+    .replace(/<w:br[^>]*\/>/gi, '\n').replace(/<w:p[^>]*>/gi, '\n')
+    .replace(/<\/w:p>/gi, '').replace(/<[^>]+>/g, '')
+    .replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>')
     .replace(/&quot;/g, '"').replace(/&apos;/g, "'")
-    .replace(/&#x2013;/g, "–").replace(/&#x2019;/g, "'");
+    .replace(/&#x2013;/g, '–').replace(/&#x2014;/g, '—')
+    .replace(/&#x2019;/g, "'").replace(/&#xD;/g, '');
+
+  if (!text || text.trim().length < 20) throw new Error('Document appears empty or could not be read.');
+  return text;
 }
 
 // ── Template downloader ─────────────────────────────────────────────────────
@@ -624,7 +668,7 @@ export default function Import() {
   const [aiParsing, setAiParsing] = useState(false);
   const [aiError, setAiError] = useState('');
   const [showParserGuide, setShowParserGuide] = useState(false);
-  const [inputMode, setInputMode] = useState("upload"); // upload | paste
+  const [inputMode, setInputMode] = useState(window.innerWidth < 768 ? 'paste' : 'upload');
   const [file, setFile] = useState(null);
   const [pasteText, setPasteText] = useState("");
   const [granularity, setGranularity] = useState("individual");
@@ -632,6 +676,7 @@ export default function Import() {
   const [parsed, setParsed] = useState(null);
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
+  const [uploadError, setUploadError] = useState('');
 
   // Review state
   const [editName, setEditName] = useState("");
@@ -642,6 +687,17 @@ export default function Import() {
   const [editSteps, setEditSteps] = useState([]);
   const [editChecklist, setEditChecklist] = useState([]);
 
+  // Pre-load JSZip on mount for mobile reliability
+  useEffect(() => {
+    if (window.JSZip) return;
+    const script = document.createElement('script');
+    script.src = 'https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js';
+    script.async = true;
+    script.onload = () => { console.log('JSZip pre-loaded successfully'); };
+    script.onerror = () => { console.warn('JSZip CDN failed — will use text fallback'); };
+    document.head.appendChild(script);
+  }, []);
+
   function handleDrop(e) {
     e.preventDefault();
     const f = e.dataTransfer.files[0];
@@ -649,20 +705,40 @@ export default function Import() {
   }
 
   const handleProcessFile = async (file) => {
+    setUploadError('');
     try {
+      setUploadSubState('processing');
+      setAiError('');
       let text = '';
       const fileName = (file.name || '').toLowerCase();
-      if (fileName.endsWith('.docx') || fileName.endsWith('.doc')) {
-        text = await extractDocxText(file);
-      } else {
-        text = await file.text();
+
+      try {
+        if (fileName.endsWith('.docx') || fileName.endsWith('.doc')) {
+          text = await extractDocxText(file);
+        } else if (fileName.endsWith('.pdf')) {
+          const rawText = await file.text();
+          text = rawText.replace(/[^\x20-\x7E\n\r\t]/g, ' ').replace(/\s{4,}/g, '\n').trim();
+          if (text.split(/\s+/).filter(w => w.length > 2).length < 20) {
+            throw new Error('This PDF appears to be scanned or image-based. Please use "Paste Text" instead, or convert your PDF to Word format first.');
+          }
+        } else {
+          text = await file.text();
+        }
+      } catch(fileError) {
+        setUploadError(fileError.message || 'Could not read this file. Please try "Paste Text" instead.');
+        setUploadSubState('selected');
+        return;
       }
-      if (!text || text.trim().length < 20) throw new Error('Document appears empty or too short.');
+
+      if (!text || text.trim().length < 20) {
+        setUploadError('The file appears empty or could not be parsed. Please try "Paste Text" instead.');
+        setUploadSubState('selected');
+        return;
+      }
 
       if (selectedParserMode === 'ai') {
         setUseAI(true);
         await handleAIParse(text);
-        // handleAIParse calls setStep(4) internally — do NOT reset uploadSubState here
       } else {
         setUseAI(false);
         const result = parseProtocolDocument(text, classification);
@@ -674,13 +750,13 @@ export default function Import() {
           setShowConfidenceGate(true);
           setUploadSubState('selected');
         } else {
-          setStep(4); // DO NOT reset uploadSubState — step change drives navigation
+          setStep(4);
         }
       }
-    } catch (e) {
+    } catch(e) {
       console.error('Processing failed:', e);
-      setAiError(e.message || 'Processing failed. Please try again.');
-      setUploadSubState('selected'); // only reset on error so user can retry
+      setUploadError(e.message || 'Processing failed. Please try "Paste Text" instead.');
+      setUploadSubState('selected');
       setAiParsing(false);
     }
   };
@@ -1031,164 +1107,251 @@ ${extractedText.substring(0, 12000)}`;
         </div>
       )}
 
-      {/* Step 2 — Idle: drop zone */}
-      {step === 2 && uploadSubState === 'idle' && (
+      {/* Step 2 — Upload/Paste */}
+      {step === 2 && uploadSubState !== 'processing' && (
         <div style={{ maxWidth: 560, margin: '0 auto', fontFamily: 'system-ui, sans-serif' }}>
-          <div style={{ textAlign: 'center', marginBottom: 32 }}>
+          <div style={{ textAlign: 'center', marginBottom: 24 }}>
             <div style={{ fontSize: 13, fontWeight: 700, color: '#6366f1', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 8 }}>Step 2 of 3</div>
             <h2 style={{ fontSize: 22, fontWeight: 800, color: '#1e293b', margin: '0 0 8px' }}>Upload Your Protocol</h2>
             <p style={{ fontSize: 14, color: '#64748b', margin: 0 }}>✨ AI extracts every action as an individual executable step</p>
           </div>
 
-          <div
-            onDragOver={e => { e.preventDefault(); e.currentTarget.style.background = '#eef2ff'; e.currentTarget.style.borderColor = '#6366f1'; }}
-            onDragLeave={e => { e.currentTarget.style.background = '#f8fafc'; e.currentTarget.style.borderColor = '#c7d2fe'; }}
-            onDrop={e => {
-              e.preventDefault();
-              e.currentTarget.style.background = '#f8fafc'; e.currentTarget.style.borderColor = '#c7d2fe';
-              const f = e.dataTransfer.files[0];
-              if (f) { setSelectedFile(f); setUploadSubState('selected'); }
-            }}
-            onClick={() => document.getElementById('bt-file-input').click()}
-            style={{ border: '2px dashed #c7d2fe', borderRadius: 16, padding: '48px 32px', textAlign: 'center', background: '#f8fafc', cursor: 'pointer', transition: 'all 0.2s', marginBottom: 16 }}
-          >
-            <div style={{ fontSize: 48, marginBottom: 12 }}>📄</div>
-            <div style={{ fontSize: 16, fontWeight: 700, color: '#1e293b', marginBottom: 6 }}>Drop your protocol here</div>
-            <div style={{ fontSize: 13, color: '#64748b', marginBottom: 16 }}>or click to browse your files</div>
-            <div style={{ display: 'inline-flex', gap: 6 }}>
-              {['DOCX', 'TXT', 'MD'].map(ext => (
-                <span key={ext} style={{ fontSize: 11, fontWeight: 700, padding: '3px 10px', borderRadius: 99, background: '#eef2ff', color: '#4338ca', border: '1px solid #c7d2fe' }}>{ext}</span>
-              ))}
-            </div>
-            <input id="bt-file-input" type="file" accept=".docx,.txt,.md,.doc" style={{ display: 'none' }}
-              onChange={e => { const f = e.target.files?.[0]; if (f) { setSelectedFile(f); setUploadSubState('selected'); } }} />
+          {/* Mode selector */}
+          <div style={{ display: 'flex', background: '#f1f5f9', borderRadius: 10, padding: 4, marginBottom: 20 }}>
+            <button onClick={() => setInputMode('paste')} style={{ flex: 1, padding: '10px 12px', borderRadius: 7, border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: inputMode === 'paste' ? 700 : 500, background: inputMode === 'paste' ? 'white' : 'transparent', color: inputMode === 'paste' ? '#1e293b' : '#64748b', boxShadow: inputMode === 'paste' ? '0 1px 4px rgba(0,0,0,0.1)' : 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, minHeight: 40 }}>
+              📋 Paste Text
+              {window.innerWidth < 768 && <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 99, background: '#6366f1', color: 'white' }}>MOBILE</span>}
+            </button>
+            <button onClick={() => setInputMode('upload')} style={{ flex: 1, padding: '10px 12px', borderRadius: 7, border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: inputMode === 'upload' ? 700 : 500, background: inputMode === 'upload' ? 'white' : 'transparent', color: inputMode === 'upload' ? '#1e293b' : '#64748b', boxShadow: inputMode === 'upload' ? '0 1px 4px rgba(0,0,0,0.1)' : 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, minHeight: 40 }}>
+              📄 Upload File
+            </button>
           </div>
 
-          <div style={{ padding: '14px 16px', background: 'linear-gradient(135deg, #eef2ff, #f0f9ff)', border: '1px solid #c7d2fe', borderRadius: 10, marginBottom: 16 }}>
-            <div style={{ fontSize: 12, fontWeight: 700, color: '#4338ca', marginBottom: 8 }}>✨ What AI does automatically for {classification} protocols:</div>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: 6 }}>
-              {[
-                { icon: '⏱', text: 'Detects timers', sub: 'advisory & strict' },
-                { icon: '🔴', text: 'Flags critical steps', sub: 'warnings & must-dos' },
-                { icon: '📏', text: 'Extracts measurements', sub: 'with units & ranges' },
-                { icon: '🧪', text: 'Builds materials list', sub: 'reagents & equipment' },
-              ].map(item => (
-                <div key={item.text} style={{ display: 'flex', alignItems: 'flex-start', gap: 6 }}>
-                  <span style={{ fontSize: 14, flexShrink: 0 }}>{item.icon}</span>
-                  <div>
-                    <div style={{ fontSize: 11, fontWeight: 700, color: '#1e293b' }}>{item.text}</div>
-                    <div style={{ fontSize: 10, color: '#64748b' }}>{item.sub}</div>
+          {/* PASTE TEXT MODE */}
+          {inputMode === 'paste' && (
+            <div>
+              <div style={{ padding: '12px 16px', background: '#eef2ff', border: '1px solid #c7d2fe', borderRadius: 10, marginBottom: 16 }}>
+                <div style={{ fontSize: 13, fontWeight: 700, color: '#4338ca', marginBottom: 6 }}>📋 How to paste your protocol:</div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  {['1. Open your protocol in Google Docs, Word, or Notes', '2. Select all text (Ctrl+A or ⌘+A)', '3. Copy (Ctrl+C or ⌘+C)', '4. Tap below and paste (Ctrl+V or ⌘+V)'].map((s, i) => (
+                    <div key={i} style={{ fontSize: 12, color: '#4338ca', lineHeight: 1.5 }}>{s}</div>
+                  ))}
+                </div>
+              </div>
+              <textarea
+                value={pasteText}
+                onChange={e => setPasteText(e.target.value)}
+                placeholder={"Paste your protocol text here...\n\nExample:\n1. Introduction\nPurpose: This protocol describes...\n\n2. Materials\n- Reagent A\n- Equipment B\n\n3. Procedure\n3.1 Sample preparation\n• Weigh 10g of sample\n• Add 100mL buffer..."}
+                rows={12}
+                style={{ width: '100%', padding: '16px', background: 'white', border: '2px solid #e2e8f0', borderRadius: 10, fontSize: 14, lineHeight: 1.6, resize: 'vertical', boxSizing: 'border-box', fontFamily: 'system-ui, sans-serif', minHeight: 200, color: '#1e293b' }}
+              />
+              <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 6, marginBottom: 16, textAlign: 'right' }}>
+                {pasteText.length} characters
+                {pasteText.length > 0 && pasteText.length < 100 && <span style={{ color: '#dc2626' }}> — paste more text for better results</span>}
+                {pasteText.length >= 100 && <span style={{ color: '#16a34a' }}> ✓ ready to process</span>}
+              </div>
+              {uploadError && (
+                <div style={{ padding: '10px 14px', background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 8, fontSize: 12, color: '#dc2626', marginBottom: 12 }}>
+                  {uploadError}
+                </div>
+              )}
+              <button
+                onClick={async () => {
+                  if (!pasteText.trim() || pasteText.trim().length < 50) {
+                    setUploadError('Please paste more text — at least a few paragraphs of your protocol.');
+                    return;
+                  }
+                  setUploadError('');
+                  setUploadSubState('processing');
+                  try {
+                    if (selectedParserMode === 'ai') {
+                      await handleAIParse(pasteText.trim());
+                    } else {
+                      const result = parseProtocolDocument(pasteText.trim(), classification);
+                      setParsed(result);
+                      setEditName(result.name); setEditDesc(result.description); setEditClass(result.classification);
+                      setEditDuration(result.estimated_duration_minutes ? String(result.estimated_duration_minutes) : '');
+                      setEditSections(result.sections_json || []); setEditSteps(result.steps || []); setEditChecklist(result.checklist_items || []);
+                      if (result._confidence === 'low') {
+                        setShowConfidenceGate(true);
+                        setUploadSubState('idle');
+                      } else {
+                        setStep(4);
+                      }
+                    }
+                  } catch(e) {
+                    setUploadError(e.message || 'Processing failed. Please try again.');
+                    setUploadSubState('idle');
+                  }
+                }}
+                disabled={!pasteText.trim() || pasteText.trim().length < 50 || aiParsing}
+                style={{ width: '100%', padding: '14px', background: !pasteText.trim() || pasteText.trim().length < 50 || aiParsing ? '#94a3b8' : 'linear-gradient(135deg, #6366f1, #4f46e5)', color: 'white', border: 'none', borderRadius: 10, fontSize: 15, fontWeight: 800, cursor: !pasteText.trim() || pasteText.trim().length < 50 || aiParsing ? 'not-allowed' : 'pointer', minHeight: 52 }}
+              >
+                {aiParsing ? '✨ AI is reading your protocol...' : selectedParserMode === 'smart' ? '⚡ Parse with Smart Parser →' : '✨ Normalise with AI →'}
+              </button>
+            </div>
+          )}
+
+          {/* UPLOAD FILE MODE — Idle */}
+          {inputMode === 'upload' && uploadSubState === 'idle' && (
+            <div>
+              {window.innerWidth < 768 && (
+                <div style={{ padding: '10px 14px', background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 8, marginBottom: 16, display: 'flex', gap: 8, alignItems: 'flex-start' }}>
+                  <span style={{ fontSize: 16, flexShrink: 0 }}>💡</span>
+                  <div style={{ fontSize: 12, color: '#92400e' }}>File upload can be unreliable on mobile. If you have issues, use <strong>Paste Text</strong> instead — it works perfectly on all devices.</div>
+                </div>
+              )}
+              <div
+                onDragOver={e => { e.preventDefault(); e.currentTarget.style.background = '#eef2ff'; e.currentTarget.style.borderColor = '#6366f1'; }}
+                onDragLeave={e => { e.currentTarget.style.background = '#f8fafc'; e.currentTarget.style.borderColor = '#c7d2fe'; }}
+                onDrop={e => {
+                  e.preventDefault();
+                  e.currentTarget.style.background = '#f8fafc'; e.currentTarget.style.borderColor = '#c7d2fe';
+                  const f = e.dataTransfer.files[0];
+                  if (f) { setSelectedFile(f); setUploadSubState('selected'); setUploadError(''); }
+                }}
+                onClick={() => document.getElementById('bt-file-input').click()}
+                style={{ border: '2px dashed #c7d2fe', borderRadius: 16, padding: '48px 32px', textAlign: 'center', background: '#f8fafc', cursor: 'pointer', transition: 'all 0.2s', marginBottom: 16 }}
+              >
+                <div style={{ fontSize: 48, marginBottom: 12 }}>📄</div>
+                <div style={{ fontSize: 16, fontWeight: 700, color: '#1e293b', marginBottom: 6 }}>Drop your protocol here</div>
+                <div style={{ fontSize: 13, color: '#64748b', marginBottom: 16 }}>or click to browse your files</div>
+                <div style={{ display: 'inline-flex', gap: 6 }}>
+                  {['DOCX', 'TXT', 'MD'].map(ext => (
+                    <span key={ext} style={{ fontSize: 11, fontWeight: 700, padding: '3px 10px', borderRadius: 99, background: '#eef2ff', color: '#4338ca', border: '1px solid #c7d2fe' }}>{ext}</span>
+                  ))}
+                </div>
+                <input id="bt-file-input" type="file"
+                  accept=".docx,.doc,.txt,.md,.pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/msword,text/plain,text/markdown,application/pdf"
+                  style={{ display: 'none' }}
+                  onChange={e => { const f = e.target.files?.[0]; if (f) { setSelectedFile(f); setUploadSubState('selected'); setUploadError(''); } e.target.value = ''; }}
+                />
+              </div>
+              <div style={{ padding: '14px 16px', background: 'linear-gradient(135deg, #eef2ff, #f0f9ff)', border: '1px solid #c7d2fe', borderRadius: 10, marginBottom: 16 }}>
+                <div style={{ fontSize: 12, fontWeight: 700, color: '#4338ca', marginBottom: 8 }}>✨ What AI does automatically for {classification} protocols:</div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: 6 }}>
+                  {[
+                    { icon: '⏱', text: 'Detects timers', sub: 'advisory & strict' },
+                    { icon: '🔴', text: 'Flags critical steps', sub: 'warnings & must-dos' },
+                    { icon: '📏', text: 'Extracts measurements', sub: 'with units & ranges' },
+                    { icon: '🧪', text: 'Builds materials list', sub: 'reagents & equipment' },
+                  ].map(item => (
+                    <div key={item.text} style={{ display: 'flex', alignItems: 'flex-start', gap: 6 }}>
+                      <span style={{ fontSize: 14, flexShrink: 0 }}>{item.icon}</span>
+                      <div>
+                        <div style={{ fontSize: 11, fontWeight: 700, color: '#1e293b' }}>{item.text}</div>
+                        <div style={{ fontSize: 10, color: '#64748b' }}>{item.sub}</div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              <div style={{ textAlign: 'center' }}>
+                <span style={{ fontSize: 12, color: '#94a3b8' }}>Don't have a protocol yet?{' '}
+                  <button onClick={e => { e.stopPropagation(); downloadSectorTemplate(classification); }}
+                    style={{ background: 'none', border: 'none', color: '#6366f1', cursor: 'pointer', fontSize: 12, fontWeight: 700, textDecoration: 'underline', padding: 0 }}>
+                    Download our {classification} template →
+                  </button>
+                </span>
+              </div>
+            </div>
+          )}
+
+          {/* UPLOAD FILE MODE — File Selected */}
+          {inputMode === 'upload' && uploadSubState === 'selected' && selectedFile && (
+            <div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 16px', background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 10, marginBottom: 20 }}>
+                <span style={{ fontSize: 24, flexShrink: 0 }}>📄</span>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: '#1e293b', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{selectedFile.name}</div>
+                  <div style={{ fontSize: 11, color: '#64748b' }}>{(selectedFile.size / 1024).toFixed(1)} KB · {classification}</div>
+                </div>
+                <button onClick={() => { setSelectedFile(null); setUploadSubState('idle'); setUploadError(''); }}
+                  style={{ background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer', fontSize: 20, flexShrink: 0 }}>×</button>
+              </div>
+
+              {uploadError && (
+                <div style={{ padding: '14px 16px', background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 10, marginBottom: 16 }}>
+                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
+                    <span style={{ fontSize: 20, flexShrink: 0 }}>⚠️</span>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontSize: 13, fontWeight: 700, color: '#dc2626', marginBottom: 6 }}>Could not read this file</div>
+                      <div style={{ fontSize: 12, color: '#b91c1c', lineHeight: 1.6, marginBottom: 12 }}>{uploadError}</div>
+                      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                        <button onClick={() => { setUploadError(''); setSelectedFile(null); setUploadSubState('idle'); }} style={{ padding: '7px 14px', background: 'white', border: '1px solid #fecaca', borderRadius: 7, fontSize: 12, cursor: 'pointer', color: '#dc2626', fontWeight: 600 }}>Try Different File</button>
+                        <button onClick={() => { setUploadError(''); setInputMode('paste'); }} style={{ padding: '7px 14px', background: '#6366f1', color: 'white', border: 'none', borderRadius: 7, fontSize: 12, cursor: 'pointer', fontWeight: 700 }}>Use Paste Text Instead →</button>
+                        <button onClick={() => downloadSectorTemplate(classification)} style={{ padding: '7px 14px', background: 'white', border: '1px solid #e2e8f0', borderRadius: 7, fontSize: 12, cursor: 'pointer', color: '#475569', fontWeight: 600 }}>Download Template</button>
+                      </div>
+                    </div>
                   </div>
                 </div>
-              ))}
-            </div>
-          </div>
+              )}
 
-          <div style={{ textAlign: 'center' }}>
-            <span style={{ fontSize: 12, color: '#94a3b8' }}>Don't have a protocol yet?{' '}
-              <button onClick={e => { e.stopPropagation(); downloadSectorTemplate(classification); }}
-                style={{ background: 'none', border: 'none', color: '#6366f1', cursor: 'pointer', fontSize: 12, fontWeight: 700, textDecoration: 'underline', padding: 0 }}>
-                Download our {classification} template →
-              </button>
-            </span>
-          </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 20 }}>
+                <div onClick={() => setSelectedParserMode('ai')} style={{ padding: '20px', borderRadius: 12, cursor: 'pointer', border: `2px solid ${selectedParserMode === 'ai' ? '#6366f1' : '#e2e8f0'}`, background: selectedParserMode === 'ai' ? 'linear-gradient(135deg, #eef2ff, #f0f9ff)' : 'white', transition: 'all 0.15s', position: 'relative' }}>
+                  <div style={{ position: 'absolute', top: -12, left: 20, background: '#6366f1', color: 'white', fontSize: 10, fontWeight: 800, padding: '3px 12px', borderRadius: 99, letterSpacing: '0.05em' }}>★ RECOMMENDED</div>
+                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
+                    <div style={{ width: 20, height: 20, borderRadius: '50%', border: `2px solid ${selectedParserMode === 'ai' ? '#6366f1' : '#cbd5e1'}`, background: selectedParserMode === 'ai' ? '#6366f1' : 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginTop: 2 }}>
+                      {selectedParserMode === 'ai' && <div style={{ width: 8, height: 8, borderRadius: '50%', background: 'white' }} />}
+                    </div>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                        <span style={{ fontSize: 20 }}>✨</span>
+                        <span style={{ fontSize: 15, fontWeight: 800, color: '#1e293b' }}>AI Protocol Normaliser</span>
+                      </div>
+                      <div style={{ fontSize: 12, color: '#475569', lineHeight: 1.6, marginBottom: selectedParserMode === 'ai' ? 12 : 0 }}>
+                        AI reads your document and converts every action into an individual executable step — automatically detecting timers, critical steps, measurements, and materials.
+                      </div>
+                      {selectedParserMode === 'ai' && (
+                        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                          {['⏱ Timers', '🔴 Critical steps', '📏 Measurements', '🧪 Materials'].map(tag => (
+                            <span key={tag} style={{ fontSize: 10, padding: '2px 8px', borderRadius: 99, background: 'rgba(99,102,241,0.12)', color: '#4338ca', fontWeight: 600 }}>{tag}</span>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+                <div onClick={() => setSelectedParserMode('smart')} style={{ padding: '16px 20px', borderRadius: 12, cursor: 'pointer', border: `2px solid ${selectedParserMode === 'smart' ? '#64748b' : '#e2e8f0'}`, background: selectedParserMode === 'smart' ? '#f8fafc' : 'white', transition: 'all 0.15s' }}>
+                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
+                    <div style={{ width: 20, height: 20, borderRadius: '50%', border: `2px solid ${selectedParserMode === 'smart' ? '#64748b' : '#cbd5e1'}`, background: selectedParserMode === 'smart' ? '#64748b' : 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginTop: 2 }}>
+                      {selectedParserMode === 'smart' && <div style={{ width: 8, height: 8, borderRadius: '50%', background: 'white' }} />}
+                    </div>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                        <span style={{ fontSize: 18 }}>⚡</span>
+                        <span style={{ fontSize: 14, fontWeight: 700, color: '#475569' }}>Smart Parser</span>
+                        <span style={{ fontSize: 10, color: '#94a3b8', fontWeight: 500 }}>Fallback option</span>
+                      </div>
+                      <div style={{ fontSize: 12, color: '#64748b', lineHeight: 1.5 }}>Regex-based structural parser. Fast and offline-capable. Works best with well-structured DOCX files using numbered steps.</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', gap: 10 }}>
+                <button onClick={() => { setSelectedFile(null); setUploadSubState('idle'); setSelectedParserMode('ai'); setUploadError(''); }}
+                  style={{ padding: '11px 20px', background: 'white', border: '1px solid #e2e8f0', borderRadius: 9, fontSize: 13, cursor: 'pointer', color: '#64748b', fontWeight: 600 }}>← Change File</button>
+                <button
+                  onClick={() => handleProcessFile(selectedFile)}
+                  style={{ flex: 1, padding: '11px', borderRadius: 9, fontSize: 14, fontWeight: 800, border: 'none', cursor: 'pointer', color: 'white', background: selectedParserMode === 'ai' ? 'linear-gradient(135deg, #6366f1, #4f46e5)' : '#475569' }}
+                >
+                  {selectedParserMode === 'ai' ? '✨ Normalise with AI →' : '⚡ Parse with Smart Parser →'}
+                </button>
+              </div>
+
+              {aiError && !uploadError && (
+                <div style={{ marginTop: 12, padding: '10px 14px', background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 8, fontSize: 12, color: '#92400e', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span>⚠ {aiError}</span>
+                  <button onClick={() => setAiError('')} style={{ background: 'none', border: 'none', color: '#92400e', cursor: 'pointer', fontSize: 16 }}>×</button>
+                </div>
+              )}
+            </div>
+          )}
 
           <div style={{ marginTop: 20 }}>
             <Button variant="outline" onClick={() => setStep(1)}>← Back</Button>
           </div>
-          <style>{`@keyframes bt-spin { to { transform: rotate(360deg); } }`}</style>
-        </div>
-      )}
-
-      {/* Step 2 — Selected: choose processing mode */}
-      {step === 2 && uploadSubState === 'selected' && selectedFile && (
-        <div style={{ maxWidth: 560, margin: '0 auto', fontFamily: 'system-ui, sans-serif' }}>
-          <div style={{ textAlign: 'center', marginBottom: 28 }}>
-            <div style={{ fontSize: 13, fontWeight: 700, color: '#6366f1', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 8 }}>Step 2 of 3</div>
-            <h2 style={{ fontSize: 22, fontWeight: 800, color: '#1e293b', margin: '0 0 8px' }}>How should we process this?</h2>
-          </div>
-
-          {/* File card */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 16px', background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 10, marginBottom: 24 }}>
-            <span style={{ fontSize: 24, flexShrink: 0 }}>📄</span>
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontSize: 13, fontWeight: 700, color: '#1e293b', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{selectedFile.name}</div>
-              <div style={{ fontSize: 11, color: '#64748b' }}>{(selectedFile.size / 1024).toFixed(1)} KB · {classification}</div>
-            </div>
-            <button onClick={() => { setSelectedFile(null); setUploadSubState('idle'); }}
-              style={{ background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer', fontSize: 20, flexShrink: 0 }}>×</button>
-          </div>
-
-          {/* Mode cards */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 20 }}>
-
-            {/* AI — PRIMARY */}
-            <div onClick={() => setSelectedParserMode('ai')} style={{ padding: '20px', borderRadius: 12, cursor: 'pointer', border: `2px solid ${selectedParserMode === 'ai' ? '#6366f1' : '#e2e8f0'}`, background: selectedParserMode === 'ai' ? 'linear-gradient(135deg, #eef2ff, #f0f9ff)' : 'white', transition: 'all 0.15s', position: 'relative' }}>
-              <div style={{ position: 'absolute', top: -12, left: 20, background: '#6366f1', color: 'white', fontSize: 10, fontWeight: 800, padding: '3px 12px', borderRadius: 99, letterSpacing: '0.05em' }}>★ RECOMMENDED</div>
-              <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
-                <div style={{ width: 20, height: 20, borderRadius: '50%', border: `2px solid ${selectedParserMode === 'ai' ? '#6366f1' : '#cbd5e1'}`, background: selectedParserMode === 'ai' ? '#6366f1' : 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginTop: 2 }}>
-                  {selectedParserMode === 'ai' && <div style={{ width: 8, height: 8, borderRadius: '50%', background: 'white' }} />}
-                </div>
-                <div style={{ flex: 1 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-                    <span style={{ fontSize: 20 }}>✨</span>
-                    <span style={{ fontSize: 15, fontWeight: 800, color: '#1e293b' }}>AI Protocol Normaliser</span>
-                  </div>
-                  <div style={{ fontSize: 12, color: '#475569', lineHeight: 1.6, marginBottom: 12 }}>
-                    AI reads your document and converts every action into an individual executable step — automatically detecting timers, critical steps, measurements, and materials. Subsection names become section headers. Works with any formatting.
-                  </div>
-                  {selectedParserMode === 'ai' && (
-                    <div>
-                      <div style={{ padding: '10px 12px', background: 'rgba(99,102,241,0.08)', border: '1px solid rgba(99,102,241,0.2)', borderRadius: 8, fontSize: 12, color: '#4338ca', lineHeight: 1.6, marginBottom: 10 }}>
-                        <strong>How AI extracts steps:</strong> Every individual action becomes its own executable step. Subsection names (e.g. "Intake Inspection") become section headers that group related steps — so operators can tick off each action individually during a run.
-                      </div>
-                      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                        {['⏱ Timers', '🔴 Critical steps', '📏 Measurements', '🧪 Materials'].map(tag => (
-                          <span key={tag} style={{ fontSize: 10, padding: '2px 8px', borderRadius: 99, background: 'rgba(99,102,241,0.12)', color: '#4338ca', fontWeight: 600 }}>{tag}</span>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
-
-            {/* Smart — SECONDARY */}
-            <div onClick={() => setSelectedParserMode('smart')} style={{ padding: '16px 20px', borderRadius: 12, cursor: 'pointer', border: `2px solid ${selectedParserMode === 'smart' ? '#64748b' : '#e2e8f0'}`, background: selectedParserMode === 'smart' ? '#f8fafc' : 'white', transition: 'all 0.15s' }}>
-              <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
-                <div style={{ width: 20, height: 20, borderRadius: '50%', border: `2px solid ${selectedParserMode === 'smart' ? '#64748b' : '#cbd5e1'}`, background: selectedParserMode === 'smart' ? '#64748b' : 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginTop: 2 }}>
-                  {selectedParserMode === 'smart' && <div style={{ width: 8, height: 8, borderRadius: '50%', background: 'white' }} />}
-                </div>
-                <div style={{ flex: 1 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-                    <span style={{ fontSize: 18 }}>⚡</span>
-                    <span style={{ fontSize: 14, fontWeight: 700, color: '#475569' }}>Smart Parser</span>
-                    <span style={{ fontSize: 10, color: '#94a3b8', fontWeight: 500 }}>Fallback option</span>
-                  </div>
-                  <div style={{ fontSize: 12, color: '#64748b', lineHeight: 1.5 }}>Regex-based structural parser. Fast and offline-capable. Works best with well-structured DOCX files using numbered steps. May require manual editing.</div>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Action buttons */}
-          <div style={{ display: 'flex', gap: 10 }}>
-            <button onClick={() => { setSelectedFile(null); setUploadSubState('idle'); setSelectedParserMode('ai'); }}
-              style={{ padding: '11px 20px', background: 'white', border: '1px solid #e2e8f0', borderRadius: 9, fontSize: 13, cursor: 'pointer', color: '#64748b', fontWeight: 600 }}>← Change File</button>
-            <button
-              onClick={async () => { setAiError(''); setUploadSubState('processing'); await handleProcessFile(selectedFile); }}
-              style={{ flex: 1, padding: '11px', borderRadius: 9, fontSize: 14, fontWeight: 800, border: 'none', cursor: 'pointer', color: 'white', background: selectedParserMode === 'ai' ? 'linear-gradient(135deg, #6366f1, #4f46e5)' : '#475569' }}
-            >
-              {selectedParserMode === 'ai' ? '✨ Normalise with AI →' : '⚡ Parse with Smart Parser →'}
-            </button>
-          </div>
-
-          {aiError && (
-            <div style={{ marginTop: 12, padding: '10px 14px', background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 8, fontSize: 12, color: '#92400e', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <span>⚠ {aiError}</span>
-              <button onClick={() => setAiError('')} style={{ background: 'none', border: 'none', color: '#92400e', cursor: 'pointer', fontSize: 16 }}>×</button>
-            </div>
-          )}
           <style>{`@keyframes bt-spin { to { transform: rotate(360deg); } }`}</style>
         </div>
       )}
