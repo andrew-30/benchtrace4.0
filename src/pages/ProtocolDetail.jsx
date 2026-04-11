@@ -8,7 +8,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { useToast } from "@/components/ui/use-toast";
+
 import { base44 } from "@/api/base44Client";
 
 // ─── StepSettingsPanel ───────────────────────────────────────────────────────
@@ -563,6 +563,32 @@ function PublishVersionModal({ protocol, onPublish, onClose, publishing }) {
   );
 }
 
+// ─── ProtocolToast ───────────────────────────────────────────────────────────
+let _toastTimeout = null;
+
+function ProtocolToast({ toast, onClear }) {
+  if (!toast) return null;
+  const colors = {
+    success: { bg: '#f0fdf4', border: '#16a34a', color: '#15803d', icon: '✓' },
+    error:   { bg: '#fef2f2', border: '#dc2626', color: '#dc2626', icon: '✗' },
+    info:    { bg: '#eff6ff', border: '#3b82f6', color: '#1d4ed8', icon: 'ℹ' },
+    warning: { bg: '#fffbeb', border: '#d97706', color: '#b45309', icon: '⚠' },
+  };
+  const c = colors[toast.type] || colors.info;
+  return (
+    <div style={{ padding: '12px 16px', background: c.bg, border: `2px solid ${c.border}`, borderRadius: 8, marginBottom: 16, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <span style={{ fontSize: 16, color: c.color, fontWeight: 800 }}>{c.icon}</span>
+        <span style={{ fontSize: 13, color: c.color, fontWeight: 600 }}>{toast.message}</span>
+      </div>
+      <button
+        onMouseDown={(e) => { e.stopPropagation(); e.preventDefault(); onClear(); }}
+        style={{ background: c.bg, border: `1px solid ${c.border}`, borderRadius: 4, color: c.color, cursor: 'pointer', fontSize: 16, fontWeight: 700, width: 28, height: 28, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, padding: 0 }}
+      >×</button>
+    </div>
+  );
+}
+
 // ─── Badge helpers ────────────────────────────────────────────────────────────
 const STATUS_STYLES = {
   active: "bg-emerald-50 text-emerald-700 border border-emerald-200",
@@ -582,7 +608,20 @@ const CLASS_STYLES = {
 // ─── Main Page ────────────────────────────────────────────────────────────────
 export default function ProtocolDetail() {
   const navigate = useNavigate();
-  const { toast } = useToast();
+  const [protoToast, setProtoToast] = useState(null);
+
+  const showToast = (message, type = 'success') => {
+    if (_toastTimeout) { clearTimeout(_toastTimeout); _toastTimeout = null; }
+    setProtoToast({ message, type });
+    if (type === 'success' || type === 'info') {
+      _toastTimeout = setTimeout(() => { setProtoToast(null); _toastTimeout = null; }, 6000);
+    }
+  };
+
+  const clearToast = () => {
+    if (_toastTimeout) { clearTimeout(_toastTimeout); _toastTimeout = null; }
+    setProtoToast(null);
+  };
   const orgId = localStorage.getItem("bt_org_id");
   const role = localStorage.getItem("bt_role");
   const isAdmin = role === "admin";
@@ -911,6 +950,7 @@ export default function ProtocolDetail() {
   }
 
   async function handlePublishVersion(changeSummary, changeType) {
+    if (publishing) return;
     setPublishing(true);
     try {
       const user = await base44.auth.me();
@@ -943,16 +983,17 @@ export default function ProtocolDetail() {
       setVersionHistory(prev => [newVerEntry, ...prev]);
       setHasUnpublishedChanges(false);
       setShowPublishVersionModal(false);
-      toast({ title: 'Protocol published', description: `Now active at v${newVersionNumber}.` });
+      showToast(`Protocol published as v${newVersionNumber}`, 'success');
     } catch(e) {
       console.error('Publish version failed:', e);
-      toast({ title: 'Publish failed', description: e.message, variant: 'destructive' });
+      showToast(`Publish failed: ${e.message}`, 'error');
     } finally {
       setPublishing(false);
     }
   }
 
   async function handleRevert() {
+    if (reverting) return;
     setReverting(true);
     try {
       const lastVersion = versionHistory[0];
@@ -998,10 +1039,10 @@ export default function ProtocolDetail() {
       setChecklistItems(reloadedChecklist.sort((a, b) => (a.item_order || 0) - (b.item_order || 0)));
       setHasUnpublishedChanges(false);
       setShowRevertConfirm(false);
-      toast({ title: `Reverted to v${lastVersion.version_number}`, description: `${snapshotSteps.length} steps restored.` });
+      showToast(`Reverted to v${lastVersion.version_number} — ${snapshotSteps.length} steps restored.`, 'success');
     } catch(e) {
       console.error('Revert failed:', e);
-      toast({ title: 'Revert failed', description: e.message, variant: 'destructive' });
+      showToast(`Revert failed: ${e.message}`, 'error');
     } finally {
       setReverting(false);
     }
@@ -1026,6 +1067,7 @@ export default function ProtocolDetail() {
 
   return (
     <div className="space-y-4">
+      <ProtocolToast toast={protoToast} onClear={clearToast} />
       {protocol?.status === 'active' && hasUnpublishedChanges && (
         <div style={{ background: 'linear-gradient(135deg, #fffbeb, #fef3c7)', border: '1px solid #fde68a', borderLeft: '4px solid #f59e0b', borderRadius: 8, marginBottom: 4, overflow: 'hidden', fontFamily: 'system-ui, sans-serif' }}>
           {!showRevertConfirm && (
