@@ -360,6 +360,7 @@ const SECTION_BORDER = {
 
 // ── Step row in review ────────────────────────────────────────────────────────
 function StepRow({ step, onDelete }) {
+  const isGrouped = !!(step.title && step.instruction && (step.instruction.includes('•') || step.instruction.includes('\n')) && step.instruction.length > 80);
   return (
     <div className="flex items-start gap-2 py-2 group">
       <span className="shrink-0 w-5 h-5 rounded-full bg-primary text-primary-foreground text-xs font-bold flex items-center justify-center mt-0.5">
