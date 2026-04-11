@@ -200,8 +200,9 @@ export default function Dashboard() {
             const proto = protocols.find(p => p.id === run.protocol_id);
             const STATE_COLOR = { signed: '#6366f1', completed: '#16a34a', in_progress: '#3b82f6', abandoned: '#64748b' };
             return (
-              <div key={run.id} onClick={() => navigate(`/run-detail?id=${run.id}`)}
-                style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 6px', borderBottom: '1px solid #f1f5f9', cursor: 'pointer', borderRadius: 6 }}
+              <div key={run.id}
+                onClick={() => run.run_state !== 'in_progress' && navigate(`/run-detail?id=${run.id}`)}
+                style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 6px', borderBottom: '1px solid #f1f5f9', cursor: run.run_state !== 'in_progress' ? 'pointer' : 'default', borderRadius: 6 }}
                 onMouseEnter={e => e.currentTarget.style.background = '#f8fafc'}
                 onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
               >
@@ -210,10 +211,14 @@ export default function Dashboard() {
                   <div style={{ fontSize: 12, fontWeight: 600, color: '#1e293b', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{proto?.name || 'Protocol'}</div>
                   <div style={{ fontSize: 10, color: '#94a3b8' }}>{new Date(run.run_started_at).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}</div>
                 </div>
-                {run.result_status && run.result_status !== 'pending' && (
-                  <span style={{ fontSize: 10, fontWeight: 700, padding: '1px 7px', borderRadius: 99, background: run.result_status === 'pass' ? '#f0fdf4' : '#fef2f2', color: run.result_status === 'pass' ? '#16a34a' : '#dc2626', border: `1px solid ${run.result_status === 'pass' ? '#bbf7d0' : '#fecaca'}`, flexShrink: 0 }}>
-                    {run.result_status === 'pass' ? 'PASS' : 'FAIL'}
-                  </span>
+                {run.run_state === 'in_progress' ? (
+                  <button onClick={() => navigate(`/run-execution?id=${run.id}`)} style={{ padding: '3px 10px', background: '#3b82f6', color: 'white', border: 'none', borderRadius: 6, fontSize: 10, fontWeight: 700, cursor: 'pointer', flexShrink: 0 }}>▶ Resume</button>
+                ) : (
+                  run.result_status && run.result_status !== 'pending' && (
+                    <span style={{ fontSize: 10, fontWeight: 700, padding: '1px 7px', borderRadius: 99, background: run.result_status === 'pass' ? '#f0fdf4' : '#fef2f2', color: run.result_status === 'pass' ? '#16a34a' : '#dc2626', border: `1px solid ${run.result_status === 'pass' ? '#bbf7d0' : '#fecaca'}`, flexShrink: 0 }}>
+                      {run.result_status === 'pass' ? 'PASS' : 'FAIL'}
+                    </span>
+                  )
                 )}
               </div>
             );

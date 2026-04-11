@@ -33,6 +33,21 @@ export default function TopNav({ user }) {
   const navigate = useNavigate();
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [planStatus, setPlanStatus] = useState(null);
+  const [activeRunCount, setActiveRunCount] = useState(0);
+
+  useEffect(() => {
+    const orgId = localStorage.getItem('bt_org_id');
+    if (!orgId) return;
+    const checkActiveRuns = async () => {
+      try {
+        const inProgressRuns = await base44.entities.Run.filter({ organization_id: orgId, run_state: 'in_progress' });
+        setActiveRunCount(inProgressRuns?.length || 0);
+      } catch(e) { console.error(e); }
+    };
+    checkActiveRuns();
+    const interval = setInterval(checkActiveRuns, 30000);
+    return () => clearInterval(interval);
+  }, []);
 
   useEffect(() => {
     const orgId = localStorage.getItem('bt_org_id');
@@ -61,7 +76,20 @@ export default function TopNav({ user }) {
           <nav className="hidden md:flex items-center gap-1">
             <NavLink to="/dashboard" label="Dashboard" />
             <NavLink to="/protocols" label="Protocols" />
-            <NavLink to="/runs" label="Runs" />
+            <Link
+              to="/runs"
+              className={`px-3 py-2 text-sm font-medium rounded-md transition-colors flex items-center gap-1.5 ${
+                location.pathname === '/runs' ? 'bg-primary/10 text-primary' : 'text-muted-foreground hover:text-foreground hover:bg-muted'
+              }`}
+            >
+              Runs
+              {activeRunCount > 0 && (
+                <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', minWidth: 18, height: 18, borderRadius: 99, background: '#3b82f6', color: 'white', fontSize: 10, fontWeight: 800, padding: '0 5px', animation: 'bt-pulse 1.5s infinite' }}>
+                  {activeRunCount}
+                </span>
+              )}
+            </Link>
+            <style>{`@keyframes bt-pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }`}</style>
             <NavLink to="/deviations" label="Deviations" />
             <NavLink to="/traceability" label="Traceability" />
             <NavLink to="/audit-readiness" label="Audit Readiness" />

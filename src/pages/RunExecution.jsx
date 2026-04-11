@@ -170,6 +170,7 @@ export default function RunExecution() {
   const runId = new URLSearchParams(window.location.search).get('id');
 
   const [run, setRun] = useState(null);
+  const [protocol, setProtocol] = useState(null);
   const [mergedSteps, setMergedSteps] = useState([]);
   const [currentStepIndex, setCurrentStepIndex] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -184,6 +185,7 @@ export default function RunExecution() {
   const timerIntervalRef = useRef(null);
   const elapsedRef = useRef(0);
 
+  const [showExitConfirm, setShowExitConfirm] = useState(false);
   const [showAbandon, setShowAbandon] = useState(false);
   const [abandoning, setAbandoning] = useState(false);
   const [completing, setCompleting] = useState(false);
@@ -250,7 +252,11 @@ export default function RunExecution() {
       if (!runData || runData.length === 0) { navigate('/runs'); return; }
       const r = runData[0];
 
-      const stepsData = await base44.entities.ProtocolStep.filter({ organization_id: orgId, protocol_id: r.protocol_id }, 'step_order');
+      const [stepsData, protocolData] = await Promise.all([
+        base44.entities.ProtocolStep.filter({ organization_id: orgId, protocol_id: r.protocol_id }, 'step_order'),
+        base44.entities.Protocol.filter({ organization_id: orgId, id: r.protocol_id }),
+      ]);
+      setProtocol(protocolData?.[0] || null);
 
       const merged = stepRunsData.map(sr => ({
         ...stepsData.find(s => s.id === sr.step_id),
@@ -416,7 +422,49 @@ export default function RunExecution() {
   const completedCount = mergedSteps.filter(s => s.step_state === 'completed' || s.step_state === 'skipped').length;
 
   return (
-    <div style={{ position: 'fixed', inset: 0, background: '#0f172a', color: 'white', display: 'flex', flexDirection: 'column', overflow: 'hidden', zIndex: 50 }}>
+    <>
+    {/* Persistent run header */}
+    <div style={{
+      position: 'fixed', top: 0, left: 0, right: 0, zIndex: 200,
+      background: '#0f172a', borderBottom: '1px solid rgba(255,255,255,0.1)',
+      padding: '8px 16px', display: 'flex', alignItems: 'center', gap: 12,
+      fontFamily: 'system-ui, sans-serif'
+    }}>
+      {!showExitConfirm ? (
+        <button
+          onClick={() => setShowExitConfirm(true)}
+          style={{ background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.15)', color: '#94a3b8', borderRadius: 6, padding: '5px 12px', fontSize: 12, cursor: 'pointer', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}
+        >
+          ← Runs
+        </button>
+      ) : (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+          <span style={{ fontSize: 11, color: '#fbbf24', fontWeight: 600 }}>Leave run? It stays in progress.</span>
+          <button onClick={() => navigate('/runs')} style={{ padding: '4px 12px', background: '#3b82f6', color: 'white', border: 'none', borderRadius: 5, fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>Yes, leave</button>
+          <button onClick={() => setShowExitConfirm(false)} style={{ padding: '4px 10px', background: 'rgba(255,255,255,0.1)', color: '#94a3b8', border: 'none', borderRadius: 5, fontSize: 11, cursor: 'pointer' }}>Cancel</button>
+        </div>
+      )}
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ fontSize: 12, fontWeight: 700, color: 'white', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{protocol?.name || 'Run in Progress'}</div>
+        <div style={{ fontSize: 10, color: '#64748b' }}>{run?.operator_name || '—'} · Started {run?.run_started_at ? new Date(run.run_started_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '—'}</div>
+      </div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+        <div style={{ textAlign: 'right' }}>
+          <div style={{ fontSize: 12, fontWeight: 700, color: '#a5b4fc' }}>Step {currentStepIndex + 1} of {mergedSteps?.length || 0}</div>
+          <div style={{ width: 80, height: 4, background: 'rgba(255,255,255,0.1)', borderRadius: 2, marginTop: 2 }}>
+            <div style={{ height: '100%', borderRadius: 2, background: '#6366f1', width: `${mergedSteps?.length > 0 ? ((currentStepIndex + 1) / mergedSteps.length) * 100 : 0}%`, transition: 'width 0.3s ease' }} />
+          </div>
+        </div>
+        <div style={{ padding: '3px 10px', borderRadius: 99, background: 'rgba(59,130,246,0.2)', border: '1px solid rgba(59,130,246,0.4)', fontSize: 10, fontWeight: 700, color: '#60a5fa', display: 'flex', alignItems: 'center', gap: 5 }}>
+          <div style={{ width: 6, height: 6, borderRadius: '50%', background: '#3b82f6', animation: 'bt-pulse 1.5s infinite' }} />
+          LIVE
+        </div>
+      </div>
+    </div>
+    <div style={{ height: 52 }} />
+    <style>{`@keyframes bt-pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }`}</style>
+
+    <div style={{ position: 'fixed', inset: 0, top: 52, background: '#0f172a', color: 'white', display: 'flex', flexDirection: 'column', overflow: 'hidden', zIndex: 50 }}>
 
       {/* Top bar */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 20px', borderBottom: '1px solid #1e293b', background: '#0f172a', flexShrink: 0 }}>
@@ -593,5 +641,6 @@ export default function RunExecution() {
         <AbandonModal onConfirm={handleAbandon} onCancel={() => setShowAbandon(false)} loading={abandoning} />
       )}
     </div>
+    </>  
   );
 }
