@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { base44 } from "@/api/base44Client";
+import DismissibleNotification from "@/components/DismissibleNotification";
 import { getPlanStatus } from "@/lib/planStatus";
 import { PLAN_CONFIG } from "@/lib/planConfig";
 
@@ -23,8 +24,14 @@ export default function Settings() {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [saveSuccess, setSaveSuccess] = useState('');
-  const [saveError, setSaveError] = useState('');
+  const [notification, setNotification] = useState(null);
+
+  function showNotification(message, type = 'success') {
+    setNotification({ message, type });
+    if (type === 'success' || type === 'info') {
+      setTimeout(() => setNotification(prev => prev?.message === message ? null : prev), 5000);
+    }
+  }
 
   const [orgName, setOrgName] = useState('');
   const [sector, setSector] = useState('Academic Research');
@@ -69,10 +76,9 @@ export default function Settings() {
       });
       localStorage.setItem('bt_tz', timezone);
       setOrg(prev => ({ ...prev, name: orgName.trim(), sector, timezone, plan }));
-      setSaveSuccess('Lab settings saved successfully.');
-      setTimeout(() => setSaveSuccess(''), 3000);
+      showNotification('Lab settings saved successfully.', 'success');
     } catch(e) {
-      setSaveError('Failed to save. Please try again.');
+      showNotification('Failed to save. Please try again.', 'error');
     } finally { setSaving(false); }
   }
 
@@ -125,16 +131,11 @@ export default function Settings() {
           </div>
         )}
 
-        {saveSuccess && (
-          <div style={{ padding: '8px 12px', background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 7, marginBottom: 14, fontSize: 12, color: '#16a34a', fontWeight: 600 }}>
-            ✓ {saveSuccess}
-          </div>
-        )}
-        {saveError && (
-          <div style={{ padding: '8px 12px', background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 7, marginBottom: 14, fontSize: 12, color: '#dc2626' }}>
-            {saveError}
-          </div>
-        )}
+        <DismissibleNotification
+          message={notification?.message}
+          type={notification?.type}
+          onDismiss={() => setNotification(null)}
+        />
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
           <div>

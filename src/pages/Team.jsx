@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { base44 } from "@/api/base44Client";
+import DismissibleNotification from "@/components/DismissibleNotification";
 
 export default function Team() {
   const orgId = localStorage.getItem('bt_org_id');
@@ -14,7 +15,14 @@ export default function Team() {
   const [inviteRole, setInviteRole] = useState('member');
   const [inviting, setInviting] = useState(false);
   const [inviteError, setInviteError] = useState('');
-  const [inviteSuccess, setInviteSuccess] = useState('');
+  const [notification, setNotification] = useState(null);
+
+  function showNotification(message, type = 'success') {
+    setNotification({ message, type });
+    if (type === 'success' || type === 'info') {
+      setTimeout(() => setNotification(prev => prev?.message === message ? null : prev), 5000);
+    }
+  }
   const [confirmRevokeId, setConfirmRevokeId] = useState(null);
 
   useEffect(() => {
@@ -73,11 +81,12 @@ export default function Team() {
         token,
       });
       setInvites(prev => [...prev, invite]);
-      setInviteSuccess(`Invite created for ${inviteEmail}. Share the BenchTrace app URL with them.`);
+      showNotification(`Invite created for ${inviteEmail}. Share the BenchTrace app URL with them.`, 'success');
       setInviteEmail('');
       setShowInviteForm(false);
     } catch(e) {
       setInviteError('Failed to create invite. Please try again.');
+      showNotification('Failed to create invite. Please try again.', 'error');
     } finally {
       setInviting(false);
     }
@@ -119,12 +128,11 @@ export default function Team() {
         )}
       </div>
 
-      {inviteSuccess && (
-        <div style={{ padding: '10px 14px', background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 8, marginBottom: 16, fontSize: 13, color: '#16a34a', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <span>✓ {inviteSuccess}</span>
-          <button onClick={() => setInviteSuccess('')} style={{ background: 'none', border: 'none', color: '#16a34a', cursor: 'pointer', fontSize: 16 }}>×</button>
-        </div>
-      )}
+      <DismissibleNotification
+        message={notification?.message}
+        type={notification?.type}
+        onDismiss={() => setNotification(null)}
+      />
 
       {showInviteForm && (
         <div style={{ background: 'white', borderRadius: 12, border: '1px solid #c7d2fe', borderTop: '3px solid #6366f1', padding: '20px 24px', marginBottom: 20 }}>
