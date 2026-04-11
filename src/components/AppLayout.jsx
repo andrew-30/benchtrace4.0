@@ -151,7 +151,32 @@ export default function AppLayout() {
   return (
     <div className="min-h-screen bg-background">
       <style>{`
-        * { box-sizing: border-box; }
+        * { -webkit-tap-highlight-color: transparent; box-sizing: border-box; }
+        input, select, textarea { font-size: 16px !important; }
+        button { min-height: 36px; cursor: pointer; }
+        @media (max-width: 767px) {
+          .desktop-nav { display: none !important; }
+          .mobile-bottom-nav { display: flex !important; }
+          .page-container { padding: 12px 12px 80px !important; }
+          .stat-grid { grid-template-columns: repeat(2, 1fr) !important; }
+          .hide-mobile { display: none !important; }
+          input, select, textarea { min-height: 44px !important; padding: 10px 12px !important; }
+        }
+        @media (min-width: 768px) {
+          .mobile-bottom-nav { display: none !important; }
+        }
+        @media (min-width: 768px) and (max-width: 1199px) {
+          .stat-grid { grid-template-columns: repeat(3, 1fr) !important; }
+          input, select, textarea { min-height: 44px !important; }
+          button { min-height: 44px !important; }
+        }
+        @media (hover: none) and (pointer: coarse) {
+          button { min-height: 44px !important; min-width: 44px !important; }
+        }
+        @keyframes bt-pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
+        * {
+          box-sizing: border-box;
+        }
         @media (max-width: 768px) {
           .stat-grid { grid-template-columns: repeat(2, 1fr) !important; }
           .two-col { grid-template-columns: 1fr !important; }

@@ -11,6 +11,23 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { base44 } from "@/api/base44Client";
 
+function useDeviceType() {
+  const [device, setDevice] = useState(() => {
+    const w = window.innerWidth;
+    return { isMobile: w < 768, isTablet: w >= 768 && w < 1200, isDesktop: w >= 1200, isTouch: 'ontouchstart' in window || navigator.maxTouchPoints > 0, isLandscape: window.innerWidth > window.innerHeight, width: w };
+  });
+  useEffect(() => {
+    const update = () => {
+      const w = window.innerWidth;
+      setDevice({ isMobile: w < 768, isTablet: w >= 768 && w < 1200, isDesktop: w >= 1200, isTouch: 'ontouchstart' in window || navigator.maxTouchPoints > 0, isLandscape: window.innerWidth > window.innerHeight, width: w });
+    };
+    window.addEventListener('resize', update);
+    window.addEventListener('orientationchange', update);
+    return () => { window.removeEventListener('resize', update); window.removeEventListener('orientationchange', update); };
+  }, []);
+  return device;
+}
+
 function NavLink({ to, label }) {
   const location = useLocation();
   const isActive = location.pathname === to;
@@ -31,6 +48,7 @@ function NavLink({ to, label }) {
 
 export default function TopNav({ user }) {
   const navigate = useNavigate();
+  const device = useDeviceType();
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [planStatus, setPlanStatus] = useState(null);
   const [activeRunCount, setActiveRunCount] = useState(0);
@@ -65,6 +83,7 @@ export default function TopNav({ user }) {
   }
 
   return (
+    <>
     <header className="sticky top-0 z-50 bg-card border-b border-border" style={{ position: 'relative' }}>
       <div className="max-w-7xl mx-auto px-6 h-14 flex items-center justify-between">
         <div className="flex items-center gap-8">
@@ -226,5 +245,39 @@ export default function TopNav({ user }) {
         </div>
       )}
     </header>
-  );
+
+    {/* Mobile Bottom Navigation */}
+    <div style={{
+      display: 'none',
+      position: 'fixed', bottom: 0, left: 0, right: 0,
+      background: 'white', borderTop: '1px solid #e2e8f0',
+      zIndex: 100, padding: '4px 0 8px',
+      boxShadow: '0 -4px 16px rgba(0,0,0,0.08)',
+    }} className="mobile-bottom-nav">
+      {[
+        { icon: '🏠', label: 'Home', path: '/dashboard' },
+        { icon: '📋', label: 'Protocols', path: '/protocols' },
+        { icon: '▶', label: 'Runs', path: '/runs', badge: activeRunCount > 0 ? activeRunCount : null },
+        { icon: '⚠', label: 'Deviations', path: '/deviations' },
+        { icon: '⚙', label: 'Settings', path: '/settings' },
+      ].map(item => {
+        const isActive = window.location.pathname === item.path;
+        return (
+          <button key={item.path} onClick={() => navigate(item.path)} style={{
+            flex: 1, display: 'flex', flexDirection: 'column',
+            alignItems: 'center', justifyContent: 'center',
+            gap: 3, padding: '6px 4px',
+            background: 'none', border: 'none', cursor: 'pointer',
+            position: 'relative', minHeight: 52,
+          }}>
+            <span style={{ fontSize: 20, lineHeight: 1 }}>{item.icon}</span>
+            <span style={{ fontSize: 10, fontWeight: isActive ? 700 : 500, color: isActive ? '#6366f1' : '#94a3b8' }}>{item.label}</span>
+            {item.badge && (
+              <div style={{ position: 'absolute', top: 4, right: '20%', width: 16, height: 16, borderRadius: '50%', background: '#3b82f6', color: 'white', fontSize: 9, fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{item.badge}</div>
+            )}
+          </button>
+        );
+      })}
+    </div>
+  </>);
 }
