@@ -187,6 +187,8 @@ export default function RunExecution() {
 
   const [showExitConfirm, setShowExitConfirm] = useState(false);
   const [showAbandon, setShowAbandon] = useState(false);
+  const [timerResumedToast, setTimerResumedToast] = useState(false);
+  const [timerResumedSeconds, setTimerResumedSeconds] = useState(0);
   const [abandoning, setAbandoning] = useState(false);
   const [completing, setCompleting] = useState(false);
   const [showSkipConfirm, setShowSkipConfirm] = useState(false);
@@ -201,17 +203,33 @@ export default function RunExecution() {
     }
   };
 
-  const handleStartTimer = () => {
-    setTimerState('running');
+  const handleStartTimer = async () => {
+    const now = new Date().toISOString();
     timerIntervalRef.current = setInterval(() => {
       elapsedRef.current += 1;
       setElapsed(elapsedRef.current);
     }, 1000);
+    setTimerState('running');
+    try {
+      if (currentStep?.stepRunId) {
+        await base44.entities.StepRun.update(currentStep.stepRunId, {
+          step_started_at: now,
+          step_state: 'active',
+        });
+      }
+    } catch(e) { console.error('Failed to persist timer start:', e); }
   };
 
-  const handlePauseTimer = () => {
+  const handlePauseTimer = async () => {
     clearTimerInterval();
     setTimerState('paused');
+    try {
+      if (currentStep?.stepRunId) {
+        await base44.entities.StepRun.update(currentStep.stepRunId, {
+          timer_elapsed_seconds: elapsedRef.current,
+        });
+      }
+    } catch(e) { console.error('Failed to save elapsed on pause:', e); }
   };
 
   const handleRestartTimer = () => {
@@ -228,11 +246,71 @@ export default function RunExecution() {
     setTimerState('idle');
   };
 
-  // Reset timer on step change
+  // Reset timer on step change + restore if step was already started
   useEffect(() => {
-    resetTimer();
+    clearTimerInterval();
+    elapsedRef.current = 0;
+    setElapsed(0);
+    setTimerState('idle');
+
+    const step = mergedSteps?.[currentStepIndex];
+    if (
+      step?.timing_mode !== 'none' &&
+      step?.expected_duration_seconds > 0 &&
+      run?.run_state === 'in_progress' &&
+      step?.stepRunId
+    ) {
+      const restoreTimer = async () => {
+        try {
+          const rows = await base44.entities.StepRun.filter({ id: step.stepRunId });
+          const stepRunData = rows?.[0];
+          if (!stepRunData) return;
+
+          if (stepRunData.step_started_at && !stepRunData.step_completed_at) {
+            const wallClockElapsed = Math.floor((Date.now() - new Date(stepRunData.step_started_at).getTime()) / 1000);
+            if (wallClockElapsed > 0 && wallClockElapsed < 86400) {
+              elapsedRef.current = wallClockElapsed;
+              setElapsed(wallClockElapsed);
+              setTimerState('running');
+              timerIntervalRef.current = setInterval(() => {
+                elapsedRef.current += 1;
+                setElapsed(elapsedRef.current);
+              }, 1000);
+              setTimerResumedSeconds(wallClockElapsed);
+              setTimerResumedToast(true);
+              setTimeout(() => setTimerResumedToast(false), 4000);
+              return;
+            }
+          }
+
+          if (stepRunData.timer_elapsed_seconds > 0 && !stepRunData.step_completed_at) {
+            elapsedRef.current = stepRunData.timer_elapsed_seconds;
+            setElapsed(stepRunData.timer_elapsed_seconds);
+            setTimerState('paused');
+          }
+        } catch(e) { console.error('Timer restore failed:', e); }
+      };
+      restoreTimer();
+    }
+
     return () => clearTimerInterval();
-  }, [currentStepIndex]);
+  }, [currentStepIndex, run?.run_state]);
+
+  // Periodic timer save — every 10 seconds while running
+  useEffect(() => {
+    if (timerState !== 'running') return;
+    const saveInterval = setInterval(async () => {
+      try {
+        const step = mergedSteps?.[currentStepIndex];
+        if (step?.stepRunId && elapsedRef.current > 0) {
+          await base44.entities.StepRun.update(step.stepRunId, {
+            timer_elapsed_seconds: elapsedRef.current,
+          });
+        }
+      } catch(e) { console.error('Periodic timer save failed:', e); }
+    }, 10000);
+    return () => clearInterval(saveInterval);
+  }, [timerState, currentStepIndex]);
 
   // Cleanup on unmount
   useEffect(() => {
@@ -463,6 +541,15 @@ export default function RunExecution() {
     </div>
     <div style={{ height: 52 }} />
     <style>{`@keyframes bt-pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }`}</style>
+
+    {timerResumedToast && (
+      <div style={{ position: 'fixed', top: 64, left: '50%', transform: 'translateX(-50%)', background: '#1e293b', border: '1px solid #3b82f6', borderRadius: 8, padding: '10px 16px', zIndex: 300, display: 'flex', alignItems: 'center', gap: 8, boxShadow: '0 4px 16px rgba(0,0,0,0.4)', fontFamily: 'system-ui, sans-serif' }}>
+        <span style={{ fontSize: 14 }}>⏱</span>
+        <span style={{ fontSize: 12, color: '#a5b4fc', fontWeight: 600 }}>
+          Timer resumed — {timerResumedSeconds >= 60 ? `${Math.floor(timerResumedSeconds / 60)}m ${timerResumedSeconds % 60}s` : `${timerResumedSeconds}s`} elapsed
+        </span>
+      </div>
+    )}
 
     <div style={{ position: 'fixed', inset: 0, top: 52, background: '#0f172a', color: 'white', display: 'flex', flexDirection: 'column', overflow: 'hidden', zIndex: 50 }}>
 
