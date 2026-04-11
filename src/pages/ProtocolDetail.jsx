@@ -684,6 +684,7 @@ export default function ProtocolDetail() {
       ]);
       if (!protos || protos.length === 0) { navigate("/protocols"); return; }
       setProtocol(protos[0]);
+      setHasUnpublishedChanges(protos[0].has_unpublished_changes === true);
       setSteps(stepsData);
       setChecklistItems(checkData);
       const versions = await base44.entities.ProtocolVersion.filter({ organization_id: orgId, protocol_id: protos[0].id });
@@ -692,6 +693,14 @@ export default function ProtocolDetail() {
     }
     load();
   }, [protocolId, orgId]);
+
+  useEffect(() => {
+    if (!protocol?.id) return;
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('publish') === 'true' && protocol?.has_unpublished_changes) {
+      setShowPublishVersionModal(true);
+    }
+  }, [protocol?.id, protocol?.has_unpublished_changes]);
 
   async function handleDragEnd(result) {
     if (!result.destination) return;
@@ -717,7 +726,7 @@ export default function ProtocolDetail() {
       const fresh = await base44.entities.ProtocolStep.filter({ protocol_id: protocol.id, organization_id: orgId });
       setSteps(fresh.sort((a, b) => a.step_order - b.step_order));
       setSettingsOpenStepId(null);
-      if (protocol.status === 'active') setHasUnpublishedChanges(true);
+      markAsEdited();
     } catch(e) {
       console.error('Settings save failed:', e);
     } finally {
@@ -745,7 +754,7 @@ export default function ProtocolDetail() {
       await Promise.all(sortedFresh.map((s, i) => base44.entities.ProtocolStep.update(s.id, { step_order: i + 1 })));
       const reloaded = await base44.entities.ProtocolStep.filter({ protocol_id: protocol.id, organization_id: orgId });
       setSteps(reloaded.sort((a, b) => a.step_order - b.step_order));
-      if (protocol.status === 'active') setHasUnpublishedChanges(true);
+      markAsEdited();
     } catch(e) {
       console.error('Delete step failed:', e);
       setStepError('Failed to delete step: ' + (e.message || 'Unknown error'));
@@ -770,7 +779,7 @@ export default function ProtocolDetail() {
       });
       const reloaded = await base44.entities.ProtocolStep.filter({ protocol_id: protocol.id, organization_id: orgId });
       setSteps(reloaded.sort((a, b) => a.step_order - b.step_order));
-      if (protocol.status === 'active') setHasUnpublishedChanges(true);
+      markAsEdited();
       setEditingStepId(newStep.id);
       setEditingStepTitle("");
       setEditingStepInstruction("New step — click to edit");
@@ -803,7 +812,7 @@ export default function ProtocolDetail() {
       });
       const reloaded = await base44.entities.ProtocolStep.filter({ protocol_id: protocol.id, organization_id: orgId });
       setSteps(reloaded.sort((a, b) => a.step_order - b.step_order));
-      if (protocol.status === 'active') setHasUnpublishedChanges(true);
+      markAsEdited();
     } catch(e) {
       console.error('Duplicate step failed:', e);
       setStepError('Failed to duplicate step: ' + (e.message || 'Unknown error'));
@@ -811,6 +820,24 @@ export default function ProtocolDetail() {
   }
 
 
+
+  const markAsEdited = async () => {
+    if (protocol?.status !== 'active') return;
+    try {
+      const user = await base44.auth.me();
+      const now = new Date().toISOString();
+      await base44.entities.Protocol.update(protocol.id, {
+        has_unpublished_changes: true,
+        last_edited_at: now,
+        last_edited_by: user.email,
+      });
+      setHasUnpublishedChanges(true);
+      setProtocol(prev => ({ ...prev, has_unpublished_changes: true, last_edited_at: now, last_edited_by: user.email }));
+    } catch(e) {
+      console.error('Failed to mark protocol as edited:', e);
+      setHasUnpublishedChanges(true);
+    }
+  };
 
   const handleDeleteChecklistItem = (itemId) => setConfirmDeleteChecklistId(itemId);
 
@@ -820,7 +847,7 @@ export default function ProtocolDetail() {
       await base44.entities.ProtocolChecklistItem.delete(itemId);
       const fresh = await base44.entities.ProtocolChecklistItem.filter({ protocol_id: protocol.id, organization_id: orgId });
       setChecklistItems(fresh.sort((a, b) => (a.item_order || 0) - (b.item_order || 0)));
-      if (protocol.status === 'active') setHasUnpublishedChanges(true);
+      markAsEdited();
     } catch(e) {
       setChecklistError('Failed to delete item. Please try again.');
     }
@@ -833,7 +860,7 @@ export default function ProtocolDetail() {
       const fresh = await base44.entities.ProtocolChecklistItem.filter({ protocol_id: protocol.id, organization_id: orgId });
       setChecklistItems(fresh.sort((a, b) => (a.item_order || 0) - (b.item_order || 0)));
       setEditingChecklistId(null);
-      if (protocol.status === 'active') setHasUnpublishedChanges(true);
+      markAsEdited();
     } catch(e) {
       setChecklistError('Failed to save. Please try again.');
     }
@@ -849,7 +876,7 @@ export default function ProtocolDetail() {
       setNewChecklistText('');
       setNewChecklistCategory('reagent');
       setAddingChecklistItem(false);
-      if (protocol.status === 'active') setHasUnpublishedChanges(true);
+      markAsEdited();
     } catch(e) {
       setChecklistError('Failed to add item. Please try again.');
     }
@@ -909,7 +936,7 @@ export default function ProtocolDetail() {
       });
       setProtocol(prev => ({ ...prev, name: editName.trim(), description: editDescription.trim(), classification: editClassification, estimated_duration_minutes: editEstimatedDuration ? parseInt(editEstimatedDuration) : null, sections_json: updatedSectionsJson }));
       setEditingOverview(false);
-      if (protocol.status === 'active') setHasUnpublishedChanges(true);
+      markAsEdited();
     } catch(e) {
       setOverviewError('Failed to save. Please try again.');
     } finally {
@@ -971,7 +998,7 @@ export default function ProtocolDetail() {
         },
         change_summary: changeSummary, created_by_id: user.id,
       });
-      await base44.entities.Protocol.update(protocol.id, { version: newVersionNumber, status: 'active' });
+      await base44.entities.Protocol.update(protocol.id, { version: newVersionNumber, status: 'active', has_unpublished_changes: false });
       await base44.entities.AuditLog.create({
         organization_id: orgId, entity_type: 'Protocol', entity_id: protocol.id, event_type: 'protocol_published',
         actor_user_id: user.id, actor_email: user.email,
@@ -1037,7 +1064,9 @@ export default function ProtocolDetail() {
       setSteps(createdSteps.sort((a, b) => a.step_order - b.step_order));
       const reloadedChecklist = await base44.entities.ProtocolChecklistItem.filter({ protocol_id: protocol.id, organization_id: orgId });
       setChecklistItems(reloadedChecklist.sort((a, b) => (a.item_order || 0) - (b.item_order || 0)));
+      await base44.entities.Protocol.update(protocol.id, { has_unpublished_changes: false, last_edited_at: new Date().toISOString() });
       setHasUnpublishedChanges(false);
+      setProtocol(prev => ({ ...prev, has_unpublished_changes: false }));
       setShowRevertConfirm(false);
       showToast(`Reverted to v${lastVersion.version_number} — ${snapshotSteps.length} steps restored.`, 'success');
     } catch(e) {
@@ -1076,7 +1105,7 @@ export default function ProtocolDetail() {
                 <span style={{ fontSize: 16 }}>⚠️</span>
                 <div>
                   <div style={{ fontSize: 13, fontWeight: 700, color: '#92400e' }}>Unpublished changes — currently on v{protocol.version}</div>
-                  <div style={{ fontSize: 11, color: '#78350f' }}>Edits are saved but not yet versioned. Publish to create a permanent record.</div>
+                  <div style={{ fontSize: 11, color: '#78350f' }}>Edits are saved but not yet versioned. Publish to create a permanent record.{protocol?.last_edited_at && (<span> Last edited {new Date(protocol.last_edited_at).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}{protocol?.last_edited_by && ` by ${protocol.last_edited_by}`}.</span>)}</div>
                 </div>
               </div>
               <div style={{ display: 'flex', gap: 8, flexShrink: 0, flexWrap: 'wrap' }}>

@@ -4,7 +4,7 @@ import { FlaskConical, Upload, Plus, Clock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { base44 } from "@/api/base44Client";
 
-const FILTER_TABS = ["All", "Active", "Draft", "Archived"];
+const FILTER_TABS = ["All", "Active", "Draft", "Archived", "Pending"];
 
 const STATUS_CONFIG = {
   active:   { label: 'Active',   bg: '#f0fdf4', color: '#16a34a', border: '#bbf7d0' },
@@ -46,6 +46,11 @@ function ProtocolCard({
           {sc.label}
         </span>
       </div>
+      {protocol.has_unpublished_changes && protocol.status === 'active' && (
+        <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 99, background: '#fffbeb', color: '#d97706', border: '1px solid #fde68a', display: 'inline-flex', alignItems: 'center', gap: 4, marginTop: 4 }}>
+          ⚠ Unpublished edits
+        </span>
+      )}
 
       <div className="flex flex-wrap gap-1.5 items-center">
         <span className={`text-xs px-2 py-0.5 rounded-md font-medium ${CLASS_STYLES[protocol.classification] || CLASS_STYLES.General}`}>
@@ -202,9 +207,19 @@ function ProtocolCard({
             )}
           </div>
 
-          <Button size="sm" variant="outline" onClick={() => onView(protocol.id)}>
-            View
-          </Button>
+          <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+            {protocol.has_unpublished_changes && protocol.status === 'active' && isAdmin && (
+              <button
+                onClick={(e) => { e.stopPropagation(); onView(protocol.id, true); }}
+                style={{ padding: '4px 12px', background: '#f59e0b', color: 'white', border: 'none', borderRadius: 6, fontSize: 11, fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap' }}
+              >
+                Publish →
+              </button>
+            )}
+            <Button size="sm" variant="outline" onClick={() => onView(protocol.id)}>
+              View
+            </Button>
+          </div>
         </div>
       </div>
     </div>
@@ -307,11 +322,14 @@ export default function Protocols() {
     }
   };
 
+  const pendingCount = protocols.filter(p => p.has_unpublished_changes && p.status === 'active').length;
+
   const filtered = protocols.filter(p => {
     if (activeFilter === 'All') return p.status !== 'archived';
     if (activeFilter === 'Active') return p.status === 'active';
     if (activeFilter === 'Draft') return p.status === 'draft';
     if (activeFilter === 'Archived') return p.status === 'archived';
+    if (activeFilter === 'Pending') return p.has_unpublished_changes === true && p.status === 'active';
     return p.status !== 'archived';
   });
 
@@ -335,18 +353,19 @@ export default function Protocols() {
         </div>
       </div>
 
-      <div className="flex items-center gap-1 bg-muted rounded-lg p-1 w-fit">
+      <div className="flex items-center gap-1 flex-wrap">
         {FILTER_TABS.map(tab => (
           <button
             key={tab}
             onClick={() => setActiveFilter(tab)}
-            className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${
-              activeFilter === tab
-                ? "bg-card text-foreground shadow-sm"
-                : "text-muted-foreground hover:text-foreground"
-            }`}
+            style={{ padding: '6px 14px', borderRadius: 99, fontSize: 12, fontWeight: 600, cursor: 'pointer', border: 'none', background: activeFilter === tab ? (tab === 'Pending' ? '#f59e0b' : '#6366f1') : '#f1f5f9', color: activeFilter === tab ? 'white' : '#64748b', display: 'inline-flex', alignItems: 'center', gap: 6 }}
           >
             {tab}
+            {tab === 'Pending' && pendingCount > 0 && (
+              <span style={{ fontSize: 9, fontWeight: 800, background: activeFilter === 'Pending' ? 'rgba(255,255,255,0.3)' : '#f59e0b', color: 'white', padding: '1px 5px', borderRadius: 99 }}>
+                {pendingCount}
+              </span>
+            )}
           </button>
         ))}
       </div>
@@ -380,7 +399,7 @@ export default function Protocols() {
               key={p.id}
               protocol={p}
               stepCounts={stepCounts}
-              onView={(id) => navigate(`/protocol-detail?id=${id}`)}
+              onView={(id, publish) => navigate(`/protocol-detail?id=${id}${publish ? '&publish=true' : ''}`)}
               onArchive={handleArchiveProtocol}
               onRestore={(id) => setProtocols(prev => prev.map(pr => pr.id === id ? { ...pr, status: 'draft' } : pr))}
               onDelete={handleDeleteProtocol}

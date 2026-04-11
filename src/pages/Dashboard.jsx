@@ -60,6 +60,8 @@ export default function Dashboard() {
   const resolvedDeviations = deviations.filter(d => d.status === 'resolved').length;
   const passRate = (passRuns + failRuns) > 0 ? Math.round((passRuns / (passRuns + failRuns)) * 100) : null;
 
+  const pendingProtocols = protocols.filter(p => p.has_unpublished_changes && p.status === 'active');
+
   const weekData = getWeeklyRunData(runs);
   const maxCount = Math.max(...weekData.map(w => w.count), 1);
 
@@ -92,6 +94,22 @@ export default function Dashboard() {
           {org?.sector || 'Laboratory'} · {now.toLocaleDateString('en-GB', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' })}
         </p>
       </div>
+
+      {/* Pending publish alert */}
+      {!loading && pendingProtocols.length > 0 && (
+        <div
+          onClick={() => navigate('/protocols?filter=Pending')}
+          style={{ cursor: 'pointer', padding: '14px 18px', background: '#fffbeb', borderRadius: 10, border: '1px solid #fde68a', borderTop: '3px solid #f59e0b', marginBottom: 16, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}
+          onMouseEnter={e => e.currentTarget.style.boxShadow = '0 4px 12px rgba(245,158,11,0.15)'}
+          onMouseLeave={e => e.currentTarget.style.boxShadow = 'none'}
+        >
+          <div>
+            <div style={{ fontSize: 11, fontWeight: 700, color: '#92400e', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>Pending Publish</div>
+            <div style={{ fontSize: 13, color: '#78350f' }}><strong>{pendingProtocols.length}</strong> protocol{pendingProtocols.length !== 1 ? 's have' : ' has'} unpublished edits</div>
+          </div>
+          <span style={{ fontSize: 28, fontWeight: 900, color: '#f59e0b' }}>{pendingProtocols.length}</span>
+        </div>
+      )}
 
       {/* Stat cards */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 12, marginBottom: 24 }}>

@@ -1,0 +1,89 @@
+{
+  "name": "Protocol",
+  "type": "object",
+  "properties": {
+    "organization_id": {
+      "type": "string",
+      "title": "Organization ID"
+    },
+    "name": {
+      "type": "string",
+      "title": "Name"
+    },
+    "description": {
+      "type": "string",
+      "title": "Description"
+    },
+    "status": {
+      "type": "string",
+      "title": "Status",
+      "enum": [
+        "draft",
+        "active",
+        "archived"
+      ],
+      "default": "draft"
+    },
+    "classification": {
+      "type": "string",
+      "title": "Classification",
+      "enum": [
+        "Academic Research",
+        "Clinical Diagnostic",
+        "GMP Manufacturing",
+        "ISO Accredited",
+        "CRO Study",
+        "Biotech Startup",
+        "General"
+      ],
+      "default": "Academic Research"
+    },
+    "compliance_tags": {
+      "type": "array",
+      "title": "Compliance Tags",
+      "items": {
+        "type": "string"
+      }
+    },
+    "sections_json": {
+      "type": "array",
+      "title": "Sections JSON",
+      "items": {
+        "type": "object",
+        "additionalProperties": true
+      }
+    },
+    "estimated_duration_minutes": {
+      "type": "integer",
+      "title": "Estimated Duration (min)"
+    },
+    "created_by_id": {
+      "type": "string",
+      "title": "Created By ID"
+    },
+    "version": {
+      "type": "integer",
+      "title": "Version",
+      "default": 1
+    },
+    "has_unpublished_changes": {
+      "type": "boolean",
+      "title": "Has Unpublished Changes",
+      "default": false
+    },
+    "last_edited_at": {
+      "type": "string",
+      "format": "date-time",
+      "title": "Last Edited At"
+    },
+    "last_edited_by": {
+      "type": "string",
+      "title": "Last Edited By"
+    }
+  },
+  "required": [
+    "organization_id",
+    "name",
+    "created_by_id"
+  ]
+}
