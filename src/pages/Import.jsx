@@ -1205,19 +1205,15 @@ ${extractedText.substring(0, 12000)}`;
 
       {/* Step 4 — Review */}
       {step === 4 && parsed && (
-        <div className="space-y-4">
-          <div className="flex items-center justify-between" style={{ marginBottom: 12 }}>
-            <h2 className="text-base font-semibold text-foreground">Review & Edit</h2>
-          </div>
-
+        <div>
           {/* AI Normalisation stats badge */}
-          {parsed?._parser_mode === 'ai_normalise' && parsed?._ai_stats && (
+          {parsed._parser_mode === 'ai_normalise' && parsed._ai_stats && (
             <div style={{ padding: '14px 16px', background: 'linear-gradient(135deg, #eef2ff, #f0f9ff)', border: '1px solid #c7d2fe', borderRadius: 10, marginBottom: 16 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
                 <span style={{ fontSize: 18 }}>✨</span>
                 <div>
-                  <div style={{ fontSize: 13, fontWeight: 800, color: '#4338ca' }}>AI Normalised — {parsed._ai_stats.sector} Protocol</div>
-                  <div style={{ fontSize: 11, color: '#6366f1' }}>{parsed._detected_section} · Review and save when ready</div>
+                  <div style={{ fontSize: 13, fontWeight: 800, color: '#4338ca' }}>AI Normalised — {parsed._ai_stats.sector || classification}</div>
+                  <div style={{ fontSize: 11, color: '#6366f1' }}>{parsed._detected_section || 'AI Parsed'} · Review carefully then save</div>
                 </div>
               </div>
               <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
@@ -1230,19 +1226,15 @@ ${extractedText.substring(0, 12000)}`;
                 ].map(stat => (
                   <div key={stat.label} style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '4px 10px', background: 'white', borderRadius: 99, border: '1px solid #e0e7ff' }}>
                     <span style={{ fontSize: 12 }}>{stat.icon}</span>
-                    <span style={{ fontSize: 11, fontWeight: 700, color: stat.color }}>{stat.value}</span>
+                    <span style={{ fontSize: 11, fontWeight: 700, color: stat.color }}>{stat.value || 0}</span>
                     <span style={{ fontSize: 10, color: '#64748b' }}>{stat.label}</span>
                   </div>
                 ))}
               </div>
-              {parsed._ai_stats.warnings?.length > 0 && (
-                <div style={{ marginTop: 8, padding: '6px 10px', background: '#fffbeb', borderRadius: 6, fontSize: 11, color: '#92400e' }}>⚠ {parsed._ai_stats.warnings.join(' · ')}</div>
-              )}
-              {/* Mode indicator */}
               <div style={{ marginTop: 8, fontSize: 11, color: '#4338ca' }}>
-                {parsed._ai_stats?.granularity === 'grouped'
-                  ? `📦 Grouped mode — ${parsed._ai_stats.total_steps} section groups, each containing multiple actions`
-                  : `◉ Individual mode — ${parsed._ai_stats.total_steps} individual executable steps`
+                {(parsed._ai_stats.granularity || stepGranularity) === 'grouped'
+                  ? `📦 Grouped mode — ${parsed._ai_stats.total_steps} section groups`
+                  : `◉ Individual mode — ${parsed._ai_stats.total_steps} individual steps`
                 }
               </div>
               {parsed._ai_fallback && (
@@ -1251,208 +1243,106 @@ ${extractedText.substring(0, 12000)}`;
             </div>
           )}
 
-          {/* Medium confidence warning — non-blocking amber banner */}
-          {parsed._confidence === 'medium' && gateChoice !== 'continue' && (
-            <div style={{ padding: '12px 16px', background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 8, marginBottom: 4, display: 'flex', gap: 12, alignItems: 'flex-start' }}>
-              <span style={{ fontSize: 18, flexShrink: 0 }}>⚠️</span>
-              <div style={{ flex: 1 }}>
-                <div style={{ fontSize: 13, fontWeight: 700, color: '#92400e', marginBottom: 3 }}>Medium confidence — review carefully</div>
-                <div style={{ fontSize: 12, color: '#78350f', lineHeight: 1.6 }}>
-                  Some steps may be incomplete or incorrectly grouped. Check each step below before saving.
-                  For future imports, <button onClick={() => downloadSectorTemplate(classification)} style={{ background: 'none', border: 'none', color: '#6366f1', cursor: 'pointer', fontSize: 12, fontWeight: 700, textDecoration: 'underline', padding: 0 }}>download our {classification} template</button> for better results.
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Low confidence warning — shown when user chose Continue Anyway */}
-          {gateChoice === 'continue' && (
-            <div style={{ padding: '12px 16px', background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 8, marginBottom: 4, display: 'flex', gap: 12, alignItems: 'flex-start' }}>
-              <span style={{ fontSize: 18, flexShrink: 0 }}>🔴</span>
-              <div style={{ flex: 1 }}>
-                <div style={{ fontSize: 13, fontWeight: 700, color: '#dc2626', marginBottom: 3 }}>Low confidence import — manual review required</div>
-                <div style={{ fontSize: 12, color: '#b91c1c', lineHeight: 1.6 }}>
-                  Most steps will need manual editing. Review each step carefully and add any missing steps before saving. Consider using our <button onClick={() => downloadSectorTemplate(classification)} style={{ background: 'none', border: 'none', color: '#6366f1', cursor: 'pointer', fontSize: 12, fontWeight: 700, textDecoration: 'underline', padding: 0 }}>{classification} template</button> for future imports.
-                </div>
-              </div>
-            </div>
-          )}
-
-          <div style={{ marginBottom: 14 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 8 }}>
-              <span style={{ padding: '3px 10px', borderRadius: 99, fontSize: 11, fontWeight: 700, background: parsed._confidence === 'high' ? '#f0fdf4' : parsed._confidence === 'medium' ? '#fffbeb' : '#fef2f2', color: parsed._confidence === 'high' ? '#16a34a' : parsed._confidence === 'medium' ? '#d97706' : '#dc2626', border: `1px solid ${parsed._confidence === 'high' ? '#bbf7d0' : parsed._confidence === 'medium' ? '#fde68a' : '#fecaca'}` }}>
-                {parsed._confidence === 'high' ? '✓ High confidence' : parsed._confidence === 'medium' ? '⚠ Medium confidence' : '⚠ Low confidence'}
-              </span>
-              {parsed._detected_section && (
-                <span style={{ fontSize: 11, color: '#6366f1', background: '#eef2ff', padding: '3px 10px', borderRadius: 99 }}>Execution section: "{parsed._detected_section}"</span>
-              )}
-            </div>
-            {parsed._confidence !== 'high' && (
-              <div style={{ padding: '12px 14px', background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 8 }}>
-                <div style={{ fontSize: 12, fontWeight: 700, color: '#92400e', marginBottom: 8 }}>Parser feedback — please review carefully:</div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
-                  {[
-                    { label: 'Execution section found', found: !!parsed._detected_section || (parsed.steps && parsed.steps.length > 0) },
-                    { label: 'Numbered subsections (3.1, 3.2...)', found: parsed.steps?.some(s => s.title) },
-                    { label: 'Materials / Reagents section', found: parsed.sections_json?.some(s => s.type === 'materials') },
-                    { label: 'Purpose / Objective section', found: parsed.sections_json?.some(s => s.type === 'purpose') },
-                  ].map((check, i) => (
-                    <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                      <span style={{ fontSize: 12, fontWeight: 700, color: check.found ? '#16a34a' : '#ef4444' }}>{check.found ? '✓' : '✗'}</span>
-                      <span style={{ fontSize: 12, color: check.found ? '#374151' : '#6b7280' }}>{check.label}</span>
-                    </div>
-                  ))}
-                </div>
-                <div style={{ marginTop: 10, paddingTop: 10, borderTop: '1px solid #fde68a', fontSize: 11, color: '#92400e' }}>
-                  <strong>Tip:</strong> For best results, download and use the <strong>{classification}</strong> template from Step 1.
-                  It's pre-structured with the exact section headers BenchTrace expects.
-                  <button onClick={() => setStep(1)} style={{ marginLeft: 8, fontSize: 11, color: '#6366f1', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 700, textDecoration: 'underline' }}>← Go back to download template</button>
-                </div>
-              </div>
-            )}
+          {/* Protocol name */}
+          <div style={{ marginBottom: 16 }}>
+            <label style={{ fontSize: 11, fontWeight: 700, color: '#374151', display: 'block', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Protocol Name</label>
+            <input
+              value={editName}
+              onChange={e => setEditName(e.target.value)}
+              style={{ width: '100%', padding: '10px 12px', border: '1px solid #e2e8f0', borderRadius: 8, fontSize: 14, fontWeight: 600, boxSizing: 'border-box', fontFamily: 'inherit' }}
+            />
           </div>
 
-          {error && (
-            <div className="flex items-center gap-2 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
-              <AlertCircle className="w-4 h-4 shrink-0" /> {error}
-            </div>
-          )}
+          {/* Steps list */}
+          <div style={{ fontSize: 11, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 10 }}>
+            Execution Steps ({editSteps.length})
+          </div>
+          {editSteps.map((step, index) => {
+            if (!step) return null;
+            const isGrouped = !!(step.instruction && (step.instruction.includes('•') || step.instruction.includes('\n')) && step.instruction.length > 60);
+            const timingMode = step.timing_mode || 'none';
+            const isCritical = step.is_critical === true;
+            const requiresMeasurement = step.requires_measurement === true;
+            const hasDuration = !!(timingMode !== 'none' && step.expected_duration_seconds > 0);
+            const durationLabel = hasDuration
+              ? step.expected_duration_seconds >= 60
+                ? `${Math.round(step.expected_duration_seconds / 60)}min`
+                : `${step.expected_duration_seconds}s`
+              : '';
 
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-            {/* Left: Metadata */}
-            <div className="space-y-3">
-              <div className="bg-card border border-border rounded-lg p-4 space-y-3">
-                <h3 className="text-sm font-semibold text-foreground">Metadata</h3>
-                <div className="space-y-2">
-                  <div>
-                    <label className="text-xs text-muted-foreground font-medium">Protocol Title</label>
-                    <Input value={editName} onChange={e => setEditName(e.target.value)} className="mt-1" />
-                  </div>
-                  <div>
-                    <label className="text-xs text-muted-foreground font-medium">Description</label>
-                    <Textarea value={editDesc} onChange={e => setEditDesc(e.target.value)} rows={3} className="mt-1 text-sm" />
-                  </div>
-                  <div>
-                    <label className="text-xs text-muted-foreground font-medium">Classification</label>
-                    <select value={editClass} onChange={e => setEditClass(e.target.value)}
-                      className="mt-1 w-full border border-input rounded-md px-3 py-2 text-sm bg-card text-foreground">
-                      {CLASSIFICATIONS.map(c => <option key={c} value={c}>{c}</option>)}
-                    </select>
-                  </div>
-                  <div>
-                    <label className="text-xs text-muted-foreground font-medium">Est. Duration (min)</label>
-                    <Input type="number" value={editDuration} onChange={e => setEditDuration(e.target.value)} className="mt-1" placeholder="e.g. 45" />
-                  </div>
-                </div>
-              </div>
-
-              <div className="bg-card border border-border rounded-lg p-4">
-                <h3 className="text-sm font-semibold text-foreground mb-2">Detected</h3>
-                <div className="space-y-1 text-xs text-muted-foreground">
-                  <p>{editSteps.length} steps parsed</p>
-                  <p>{editChecklist.length} checklist items</p>
-                  <p>{editSections.length} sections</p>
-                  {(parsed.compliance_tags || []).length > 0 && (
-                    <div className="flex flex-wrap gap-1 pt-1">
-                      {parsed.compliance_tags.map(t => (
-                        <span key={t} className="px-1.5 py-0.5 rounded bg-primary/10 text-primary text-xs font-medium">{t}</span>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
-
-            {/* Right: Full editor */}
-            <div className="lg:col-span-2 space-y-3">
-              {/* Non-execution sections */}
-              {editSections.filter(s => s.type !== "procedure").map(sec => {
-                const borderClass = SECTION_BORDER[sec.type] || SECTION_BORDER.general;
-                if (sec.type === "materials" && sec.subsections?.length > 0) {
-                  return (
-                    <div key={sec.id} className={`bg-card border border-border rounded-lg p-4 ${borderClass}`}>
-                      <h4 className="text-sm font-semibold text-foreground mb-3">{sec.title}</h4>
-                      <div className="grid grid-cols-2 gap-4">
-                        {sec.subsections.map(sub => (
-                          <div key={sub.id}>
-                            <p className="text-xs font-semibold uppercase text-muted-foreground mb-1">{sub.title}</p>
-                            <ul className="space-y-0.5">
-                              {(sub.items || []).map((item, i) => (
-                                <li key={i} className="flex items-center gap-1 text-xs text-foreground group">
-                                  <span className="flex-1">{item}</span>
-                                  {sub.type === "reagents" && (
-                                    <button
-                                      onClick={() => {
-                                        setEditSections(prev => prev.map(s => {
-                                          if (s.id !== sec.id) return s;
-                                          const newSubs = s.subsections.map(ss => {
-                                            if (ss.id === "sub_r") return { ...ss, items: ss.items.filter((_, idx) => idx !== i) };
-                                            if (ss.id === "sub_e") return { ...ss, items: [...(ss.items || []), item] };
-                                            return ss;
-                                          });
-                                          return { ...s, subsections: newSubs };
-                                        }));
-                                      }}
-                                      className="opacity-0 group-hover:opacity-100 text-xs text-blue-600 hover:underline px-1">
-                                      Equip
-                                    </button>
-                                  )}
-                                  {sub.type === "equipment" && (
-                                    <button
-                                      onClick={() => {
-                                        setEditSections(prev => prev.map(s => {
-                                          if (s.id !== sec.id) return s;
-                                          const newSubs = s.subsections.map(ss => {
-                                            if (ss.id === "sub_e") return { ...ss, items: ss.items.filter((_, idx) => idx !== i) };
-                                            if (ss.id === "sub_r") return { ...ss, items: [...(ss.items || []), item] };
-                                            return ss;
-                                          });
-                                          return { ...s, subsections: newSubs };
-                                        }));
-                                      }}
-                                      className="opacity-0 group-hover:opacity-100 text-xs text-violet-600 hover:underline px-1">
-                                      Reagent
-                                    </button>
-                                  )}
-                                </li>
-                              ))}
-                            </ul>
-                          </div>
-                        ))}
+            return (
+              <div key={step._id || step.step_order || index} style={{
+                background: 'white', borderRadius: 10,
+                border: `1px solid ${isCritical ? '#fecaca' : '#e2e8f0'}`,
+                borderLeft: `3px solid ${isCritical ? '#ef4444' : timingMode === 'strict' ? '#dc2626' : timingMode === 'advisory' ? '#3b82f6' : '#e2e8f0'}`,
+                padding: '12px 16px', marginBottom: 8
+              }}>
+                <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
+                  <span style={{ fontSize: 11, fontWeight: 800, color: '#94a3b8', flexShrink: 0, minWidth: 22, marginTop: 2 }}>
+                    {step.step_order || index + 1}.
+                  </span>
+                  <div style={{ flex: 1 }}>
+                    {step.title && step.title !== step.instruction && (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+                        {isGrouped && <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 6px', borderRadius: 4, background: '#eef2ff', color: '#4338ca', border: '1px solid #c7d2fe' }}>GROUP</span>}
+                        <span style={{ fontSize: 11, fontWeight: 700, color: '#4338ca', textTransform: 'uppercase', letterSpacing: '0.04em' }}>{step.title}</span>
                       </div>
+                    )}
+                    {(() => {
+                      const instruction = step.instruction || '';
+                      const lines = instruction.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+                      const hasBullets = lines.length > 1 && lines.some(l => l.startsWith('•') || l.startsWith('-'));
+                      if (hasBullets) {
+                        return (
+                          <ul style={{ margin: '4px 0 0', padding: 0, listStyle: 'none' }}>
+                            {lines.map((line, li) => {
+                              const clean = line.replace(/^[•\-\*]\s*/, '').trim();
+                              if (!clean) return null;
+                              return (
+                                <li key={li} style={{ display: 'flex', gap: 8, marginBottom: 3 }}>
+                                  <span style={{ color: '#6366f1', flexShrink: 0, fontSize: 14, lineHeight: '1.4' }}>•</span>
+                                  <span style={{ fontSize: 12, color: '#374151', lineHeight: 1.6 }}>{clean}</span>
+                                </li>
+                              );
+                            })}
+                          </ul>
+                        );
+                      }
+                      return <div style={{ fontSize: 12, color: '#374151', lineHeight: 1.6 }}>{instruction}</div>;
+                    })()}
+                    <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', marginTop: 6 }}>
+                      {isCritical && <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 6px', borderRadius: 99, background: '#fef2f2', color: '#dc2626', border: '1px solid #fecaca' }}>🔴 CRITICAL</span>}
+                      {timingMode === 'strict' && <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 6px', borderRadius: 99, background: '#fef2f2', color: '#dc2626', border: '1px solid #fecaca' }}>⏱ STRICT {durationLabel}</span>}
+                      {timingMode === 'advisory' && <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 6px', borderRadius: 99, background: '#eff6ff', color: '#1d4ed8', border: '1px solid #bfdbfe' }}>⏱ ADVISORY {durationLabel}</span>}
+                      {requiresMeasurement && <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 6px', borderRadius: 99, background: '#faf5ff', color: '#7c3aed', border: '1px solid #e9d5ff' }}>📏 MEASURE</span>}
                     </div>
-                  );
-                }
-                return (
-                  <div key={sec.id} className={`bg-card border border-border rounded-lg p-4 ${borderClass}`}>
-                    <h4 className="text-sm font-semibold text-foreground mb-2">{sec.title}</h4>
-                    <ul className="space-y-1">
-                      {(sec.items || []).map((item, i) => (
-                        <li key={i} className="text-sm text-foreground">{item}</li>
-                      ))}
-                    </ul>
                   </div>
-                );
-              })}
-
-              {/* Execution steps */}
-              <div className="bg-card border-l-4 border-l-purple-400 border border-border rounded-lg p-4">
-                <h4 className="text-sm font-semibold text-foreground mb-3">Execution Steps ({editSteps.length})</h4>
-                <div className="divide-y divide-border">
-                  {editSteps.map((s, idx) => (
-                    <StepRow key={s._id || idx} step={s}
-                      onDelete={() => setEditSteps(prev => prev.filter((_, i) => i !== idx).map((st, i) => ({ ...st, step_order: i + 1 })))} />
-                  ))}
+                  <button
+                    onClick={() => setEditSteps(prev => prev.filter((_, i) => i !== index).map((st, i) => ({ ...st, step_order: i + 1 })))}
+                    style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#cbd5e1', fontSize: 16, flexShrink: 0, padding: '0 2px' }}
+                    onMouseEnter={e => e.currentTarget.style.color = '#ef4444'}
+                    onMouseLeave={e => e.currentTarget.style.color = '#cbd5e1'}
+                  >×</button>
                 </div>
               </div>
-            </div>
-          </div>
+            );
+          })}
 
-          <div className="flex items-center gap-3 pt-2">
-            <Button onClick={handleSave} disabled={saving || !editName.trim()}>
-              {saving ? "Saving..." : "Save Protocol"}
-            </Button>
-            <Button variant="outline" onClick={() => setStep(2)}>Back</Button>
+          {/* Save / back */}
+          <div style={{ marginTop: 20, display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
+            <button
+              onClick={() => { setStep(2); setUploadSubState('idle'); setParsed(null); }}
+              style={{ padding: '10px 20px', background: 'white', border: '1px solid #e2e8f0', borderRadius: 8, fontSize: 13, cursor: 'pointer', color: '#475569', fontWeight: 600 }}
+            >
+              ← Start Over
+            </button>
+            <button
+              onClick={handleSave}
+              disabled={saving || !editName.trim()}
+              style={{ padding: '10px 28px', background: saving || !editName.trim() ? '#94a3b8' : '#6366f1', color: 'white', border: 'none', borderRadius: 8, fontSize: 14, fontWeight: 700, cursor: saving || !editName.trim() ? 'not-allowed' : 'pointer' }}
+            >
+              {saving ? 'Saving...' : `Save Protocol (${editSteps.length} steps) →`}
+            </button>
           </div>
         </div>
       )}
