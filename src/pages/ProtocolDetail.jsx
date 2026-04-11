@@ -463,6 +463,106 @@ function PreRunModal({ protocol, steps, checklistItems, onStart, onCancel }) {
   );
 }
 
+// ─── PublishVersionModal ─────────────────────────────────────────────────────
+function PublishVersionModal({ protocol, onPublish, onClose, publishing }) {
+  const [changeSummary, setChangeSummary] = useState('');
+  const [changeType, setChangeType] = useState('minor');
+  const [summaryError, setSummaryError] = useState('');
+
+  const CHANGE_TYPES = [
+    { value: 'minor', label: 'Minor Update', desc: 'Small corrections, typos, clarifications', color: '#16a34a' },
+    { value: 'moderate', label: 'Moderate Change', desc: 'Step modifications, timing updates, new materials', color: '#d97706' },
+    { value: 'major', label: 'Major Revision', desc: 'New steps, removed steps, critical procedure changes', color: '#dc2626' },
+  ];
+
+  const CHANGE_TEMPLATES = [
+    'Updated incubation time and temperature parameters',
+    'Added new quality control step',
+    'Revised measurement acceptance criteria',
+    'Updated reagent specifications and lot requirements',
+    'Corrected procedural sequence and step instructions',
+    'Added critical step flags based on risk assessment',
+  ];
+
+  const handleSubmit = () => {
+    if (!changeSummary.trim()) { setSummaryError('A change summary is required for compliance records.'); return; }
+    if (changeSummary.trim().length < 10) { setSummaryError('Please provide a more descriptive summary (at least 10 characters).'); return; }
+    onPublish(changeSummary.trim(), changeType);
+  };
+
+  const newVer = (protocol?.version || 1) + 1;
+  const isDraft = protocol?.status === 'draft';
+
+  return (
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: 24, fontFamily: 'system-ui, sans-serif' }}>
+      <div style={{ background: 'white', borderRadius: 14, width: '100%', maxWidth: 520, boxShadow: '0 20px 60px rgba(0,0,0,0.3)', overflow: 'hidden', maxHeight: '90vh', display: 'flex', flexDirection: 'column' }}>
+        <div style={{ background: '#1e293b', padding: '18px 24px', flexShrink: 0 }}>
+          <div style={{ fontSize: 16, fontWeight: 800, color: 'white', marginBottom: 2 }}>
+            {isDraft ? 'Publish Protocol v1' : `Publish Protocol v${newVer}`}
+          </div>
+          <div style={{ fontSize: 12, color: '#94a3b8' }}>{protocol?.name} · This action creates a permanent version record</div>
+        </div>
+        <div style={{ padding: '22px 24px', overflowY: 'auto' }}>
+          {!isDraft && (
+            <div style={{ display: 'flex', gap: 10, marginBottom: 20 }}>
+              <div style={{ flex: 1, padding: '10px 14px', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 8, textAlign: 'center' }}>
+                <div style={{ fontSize: 11, color: '#64748b', marginBottom: 4 }}>Current Version</div>
+                <div style={{ fontSize: 22, fontWeight: 900, color: '#94a3b8' }}>v{protocol?.version || 1}</div>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', color: '#94a3b8', fontSize: 18 }}>→</div>
+              <div style={{ flex: 1, padding: '10px 14px', background: '#eef2ff', border: '2px solid #6366f1', borderRadius: 8, textAlign: 'center' }}>
+                <div style={{ fontSize: 11, color: '#6366f1', marginBottom: 4, fontWeight: 600 }}>New Version</div>
+                <div style={{ fontSize: 22, fontWeight: 900, color: '#6366f1' }}>v{newVer}</div>
+              </div>
+            </div>
+          )}
+          <div style={{ marginBottom: 16 }}>
+            <label style={{ fontSize: 11, fontWeight: 700, color: '#374151', display: 'block', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Change Type *</label>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              {CHANGE_TYPES.map(ct => (
+                <button key={ct.value} onClick={() => setChangeType(ct.value)}
+                  style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', borderRadius: 8, cursor: 'pointer', textAlign: 'left', border: `2px solid ${changeType === ct.value ? ct.color : '#e2e8f0'}`, background: changeType === ct.value ? `${ct.color}18` : 'white' }}>
+                  <div style={{ width: 10, height: 10, borderRadius: '50%', background: ct.color, flexShrink: 0 }} />
+                  <div>
+                    <div style={{ fontSize: 12, fontWeight: 700, color: '#1e293b' }}>{ct.label}</div>
+                    <div style={{ fontSize: 11, color: '#64748b' }}>{ct.desc}</div>
+                  </div>
+                </button>
+              ))}
+            </div>
+          </div>
+          <div style={{ marginBottom: 16 }}>
+            <label style={{ fontSize: 11, fontWeight: 700, color: '#374151', display: 'block', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Change Summary * <span style={{ fontSize: 10, fontWeight: 400, color: '#94a3b8', textTransform: 'none' }}>(required for compliance)</span></label>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginBottom: 8 }}>
+              {CHANGE_TEMPLATES.map((tmpl, i) => (
+                <button key={i} onClick={() => { setChangeSummary(tmpl); setSummaryError(''); }}
+                  style={{ padding: '3px 8px', background: changeSummary === tmpl ? '#eef2ff' : '#f8fafc', border: `1px solid ${changeSummary === tmpl ? '#c7d2fe' : '#e2e8f0'}`, borderRadius: 99, fontSize: 10, cursor: 'pointer', color: changeSummary === tmpl ? '#4338ca' : '#64748b', fontWeight: changeSummary === tmpl ? 600 : 400 }}>
+                  {tmpl}
+                </button>
+              ))}
+            </div>
+            <textarea value={changeSummary} onChange={e => { setChangeSummary(e.target.value); setSummaryError(''); }}
+              placeholder="Describe what changed and why — this becomes part of the permanent audit record..." rows={3}
+              style={{ width: '100%', padding: '10px 12px', resize: 'none', border: `1px solid ${summaryError ? '#ef4444' : '#e2e8f0'}`, borderRadius: 8, fontSize: 13, boxSizing: 'border-box', fontFamily: 'inherit' }} />
+            {summaryError && <div style={{ fontSize: 11, color: '#ef4444', marginTop: 4 }}>{summaryError}</div>}
+          </div>
+          <div style={{ padding: '8px 12px', background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 7, marginBottom: 20, fontSize: 11, color: '#92400e' }}>
+            📋 This version will be permanently recorded with your name, timestamp, and change summary. All future runs will execute on v{isDraft ? 1 : newVer}.
+          </div>
+          <div style={{ display: 'flex', gap: 10 }}>
+            <button onClick={(e) => { e.stopPropagation(); onClose(); }} disabled={publishing}
+              style={{ flex: 1, padding: '10px', background: 'white', border: '1px solid #e2e8f0', borderRadius: 8, fontSize: 13, cursor: 'pointer', color: '#475569', fontWeight: 600 }}>Cancel</button>
+            <button onClick={handleSubmit} disabled={publishing}
+              style={{ flex: 2, padding: '10px', background: publishing ? '#94a3b8' : '#6366f1', color: 'white', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: publishing ? 'not-allowed' : 'pointer' }}>
+              {publishing ? 'Publishing...' : `Publish v${isDraft ? 1 : newVer} →`}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── Badge helpers ────────────────────────────────────────────────────────────
 const STATUS_STYLES = {
   active: "bg-emerald-50 text-emerald-700 border border-emerald-200",
@@ -497,6 +597,10 @@ export default function ProtocolDetail() {
   const [loading, setLoading] = useState(true);
   const [publishing, setPublishing] = useState(false);
   const [showPreRunModal, setShowPreRunModal] = useState(false);
+  const [hasUnpublishedChanges, setHasUnpublishedChanges] = useState(false);
+  const [showPublishVersionModal, setShowPublishVersionModal] = useState(false);
+  const [versionHistory, setVersionHistory] = useState([]);
+  const [showVersionHistory, setShowVersionHistory] = useState(false);
 
   const [editingStepId, setEditingStepId] = useState(null);
   const [editingStepTitle, setEditingStepTitle] = useState("");
@@ -541,6 +645,8 @@ export default function ProtocolDetail() {
       setProtocol(protos[0]);
       setSteps(stepsData);
       setChecklistItems(checkData);
+      const versions = await base44.entities.ProtocolVersion.filter({ organization_id: orgId, protocol_id: protos[0].id });
+      setVersionHistory((versions || []).sort((a, b) => b.version_number - a.version_number));
       setLoading(false);
     }
     load();
@@ -570,6 +676,7 @@ export default function ProtocolDetail() {
       const fresh = await base44.entities.ProtocolStep.filter({ protocol_id: protocol.id, organization_id: orgId });
       setSteps(fresh.sort((a, b) => a.step_order - b.step_order));
       setSettingsOpenStepId(null);
+      if (protocol.status === 'active') setHasUnpublishedChanges(true);
     } catch(e) {
       console.error('Settings save failed:', e);
     } finally {
@@ -581,6 +688,7 @@ export default function ProtocolDetail() {
     await base44.entities.ProtocolStep.update(stepId, { title: editingStepTitle.trim() || null, instruction: editingStepInstruction.trim() });
     setSteps(prev => prev.map(s => s.id === stepId ? { ...s, title: editingStepTitle.trim() || null, instruction: editingStepInstruction.trim() } : s));
     setEditingStepId(null);
+    if (protocol.status === 'active') setHasUnpublishedChanges(true);
   }
 
   function handleDeleteStep(stepId) {
@@ -596,6 +704,7 @@ export default function ProtocolDetail() {
       await Promise.all(sortedFresh.map((s, i) => base44.entities.ProtocolStep.update(s.id, { step_order: i + 1 })));
       const reloaded = await base44.entities.ProtocolStep.filter({ protocol_id: protocol.id, organization_id: orgId });
       setSteps(reloaded.sort((a, b) => a.step_order - b.step_order));
+      if (protocol.status === 'active') setHasUnpublishedChanges(true);
     } catch(e) {
       console.error('Delete step failed:', e);
       setStepError('Failed to delete step: ' + (e.message || 'Unknown error'));
@@ -620,6 +729,7 @@ export default function ProtocolDetail() {
       });
       const reloaded = await base44.entities.ProtocolStep.filter({ protocol_id: protocol.id, organization_id: orgId });
       setSteps(reloaded.sort((a, b) => a.step_order - b.step_order));
+      if (protocol.status === 'active') setHasUnpublishedChanges(true);
       setEditingStepId(newStep.id);
       setEditingStepTitle("");
       setEditingStepInstruction("New step — click to edit");
@@ -652,6 +762,7 @@ export default function ProtocolDetail() {
       });
       const reloaded = await base44.entities.ProtocolStep.filter({ protocol_id: protocol.id, organization_id: orgId });
       setSteps(reloaded.sort((a, b) => a.step_order - b.step_order));
+      if (protocol.status === 'active') setHasUnpublishedChanges(true);
     } catch(e) {
       console.error('Duplicate step failed:', e);
       setStepError('Failed to duplicate step: ' + (e.message || 'Unknown error'));
@@ -668,6 +779,7 @@ export default function ProtocolDetail() {
       await base44.entities.ProtocolChecklistItem.delete(itemId);
       const fresh = await base44.entities.ProtocolChecklistItem.filter({ protocol_id: protocol.id, organization_id: orgId });
       setChecklistItems(fresh.sort((a, b) => (a.item_order || 0) - (b.item_order || 0)));
+      if (protocol.status === 'active') setHasUnpublishedChanges(true);
     } catch(e) {
       setChecklistError('Failed to delete item. Please try again.');
     }
@@ -680,6 +792,7 @@ export default function ProtocolDetail() {
       const fresh = await base44.entities.ProtocolChecklistItem.filter({ protocol_id: protocol.id, organization_id: orgId });
       setChecklistItems(fresh.sort((a, b) => (a.item_order || 0) - (b.item_order || 0)));
       setEditingChecklistId(null);
+      if (protocol.status === 'active') setHasUnpublishedChanges(true);
     } catch(e) {
       setChecklistError('Failed to save. Please try again.');
     }
@@ -695,6 +808,7 @@ export default function ProtocolDetail() {
       setNewChecklistText('');
       setNewChecklistCategory('reagent');
       setAddingChecklistItem(false);
+      if (protocol.status === 'active') setHasUnpublishedChanges(true);
     } catch(e) {
       setChecklistError('Failed to add item. Please try again.');
     }
@@ -754,6 +868,7 @@ export default function ProtocolDetail() {
       });
       setProtocol(prev => ({ ...prev, name: editName.trim(), description: editDescription.trim(), classification: editClassification, estimated_duration_minutes: editEstimatedDuration ? parseInt(editEstimatedDuration) : null, sections_json: updatedSectionsJson }));
       setEditingOverview(false);
+      if (protocol.status === 'active') setHasUnpublishedChanges(true);
     } catch(e) {
       setOverviewError('Failed to save. Please try again.');
     } finally {
@@ -793,24 +908,46 @@ export default function ProtocolDetail() {
     navigate(`/run-execution?id=${run.id}`);
   }
 
-  async function handlePublish() {
+  async function handlePublishVersion(changeSummary, changeType) {
     setPublishing(true);
-    const user = await base44.auth.me();
-    const newVer = (protocol.version || 1) + 1;
-    await base44.entities.ProtocolVersion.create({
-      organization_id: orgId, protocol_id: protocol.id, version_number: protocol.version || 1,
-      snapshot_json: { name: protocol.name, steps: steps.map(s => ({ id: s.id, step_order: s.step_order, title: s.title, instruction: s.instruction, is_critical: s.is_critical, timing_mode: s.timing_mode, expected_duration_seconds: s.expected_duration_seconds, tolerance_lower_seconds: s.tolerance_lower_seconds, tolerance_upper_seconds: s.tolerance_upper_seconds, requires_measurement: s.requires_measurement, measurement_parameters: s.measurement_parameters })), checklist: checklistItems, sections: protocol.sections_json || [], metadata: { classification: protocol.classification, compliance_tags: protocol.compliance_tags, estimated_duration_minutes: protocol.estimated_duration_minutes } },
-      change_summary: `Version ${protocol.version || 1} published`, created_by_id: user.id,
-    });
-    await base44.entities.Protocol.update(protocol.id, { status: "active", version: newVer });
-    const now = new Date().toISOString();
-    await base44.entities.AuditLog.create({
-      organization_id: orgId, entity_type: "Protocol", entity_id: protocol.id, event_type: "protocol_published",
-      actor_user_id: user.id, actor_email: user.email, metadata: { version_number: protocol.version || 1 }, created_at: now,
-    });
-    setProtocol(p => ({ ...p, status: "active", version: newVer }));
-    setPublishing(false);
-    toast({ title: "Protocol published", description: `Now active at version ${newVer}.` });
+    try {
+      const user = await base44.auth.me();
+      const now = new Date().toISOString();
+      const isDraft = protocol.status === 'draft';
+      const newVersionNumber = isDraft ? 1 : (protocol.version || 1) + 1;
+      const [freshSteps, freshChecklist] = await Promise.all([
+        base44.entities.ProtocolStep.filter({ protocol_id: protocol.id, organization_id: orgId }),
+        base44.entities.ProtocolChecklistItem.filter({ protocol_id: protocol.id, organization_id: orgId }),
+      ]);
+      await base44.entities.ProtocolVersion.create({
+        organization_id: orgId, protocol_id: protocol.id, version_number: newVersionNumber,
+        snapshot_json: {
+          name: protocol.name,
+          steps: freshSteps.sort((a, b) => a.step_order - b.step_order).map(s => ({ id: s.id, step_order: s.step_order, title: s.title, instruction: s.instruction, is_critical: s.is_critical, timing_mode: s.timing_mode, expected_duration_seconds: s.expected_duration_seconds, tolerance_lower_seconds: s.tolerance_lower_seconds, tolerance_upper_seconds: s.tolerance_upper_seconds, requires_measurement: s.requires_measurement, measurement_parameters: s.measurement_parameters || [] })),
+          checklist: freshChecklist,
+          metadata: { classification: protocol.classification, compliance_tags: protocol.compliance_tags || [], estimated_duration_minutes: protocol.estimated_duration_minutes, change_type: changeType },
+        },
+        change_summary: changeSummary, created_by_id: user.id,
+      });
+      await base44.entities.Protocol.update(protocol.id, { version: newVersionNumber, status: 'active' });
+      await base44.entities.AuditLog.create({
+        organization_id: orgId, entity_type: 'Protocol', entity_id: protocol.id, event_type: 'protocol_published',
+        actor_user_id: user.id, actor_email: user.email,
+        metadata: { version_number: newVersionNumber, change_summary: changeSummary, change_type: changeType, step_count: freshSteps.length },
+        created_at: now,
+      });
+      const newVerEntry = { version_number: newVersionNumber, change_summary: changeSummary, created_by_id: user.id, created_date: now, id: `local_${Date.now()}` };
+      setProtocol(prev => ({ ...prev, version: newVersionNumber, status: 'active' }));
+      setVersionHistory(prev => [newVerEntry, ...prev]);
+      setHasUnpublishedChanges(false);
+      setShowPublishVersionModal(false);
+      toast({ title: 'Protocol published', description: `Now active at v${newVersionNumber}.` });
+    } catch(e) {
+      console.error('Publish version failed:', e);
+      toast({ title: 'Publish failed', description: e.message, variant: 'destructive' });
+    } finally {
+      setPublishing(false);
+    }
   }
 
   if (loading) {
@@ -832,6 +969,23 @@ export default function ProtocolDetail() {
 
   return (
     <div className="space-y-4">
+      {protocol?.status === 'active' && hasUnpublishedChanges && (
+        <div style={{ padding: '10px 16px', background: 'linear-gradient(135deg, #fffbeb, #fef3c7)', border: '1px solid #fde68a', borderLeft: '4px solid #f59e0b', borderRadius: 8, marginBottom: 4, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span style={{ fontSize: 16 }}>⚠️</span>
+            <div>
+              <div style={{ fontSize: 13, fontWeight: 700, color: '#92400e' }}>Unpublished changes — currently on v{protocol.version}</div>
+              <div style={{ fontSize: 11, color: '#78350f' }}>Edits are saved but not yet versioned. Publish to create v{(protocol.version || 1) + 1} and notify your team.</div>
+            </div>
+          </div>
+          {isAdmin && (
+            <button onClick={(e) => { e.stopPropagation(); setShowPublishVersionModal(true); }}
+              style={{ padding: '7px 16px', background: '#f59e0b', color: 'white', border: 'none', borderRadius: 7, fontSize: 12, fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0 }}>
+              Publish v{(protocol.version || 1) + 1} →
+            </button>
+          )}
+        </div>
+      )}
       {!isAdmin && (
         <div style={{ padding: '8px 16px', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 7, marginBottom: 14, fontSize: 12, color: '#64748b', display: 'flex', alignItems: 'center', gap: 8 }}>
           <span>👁</span>
@@ -871,6 +1025,37 @@ export default function ProtocolDetail() {
                 <div style={{ padding: '8px 12px', background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 6, fontSize: 12, color: '#dc2626', marginBottom: 12, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <span>{overviewError}</span>
                   <button onClick={() => setOverviewError('')} style={{ background: 'none', border: 'none', color: '#dc2626', cursor: 'pointer', fontSize: 14 }}>×</button>
+                </div>
+              )}
+
+              {/* Version History */}
+              {versionHistory.length > 0 && (
+                <div style={{ marginBottom: 16 }}>
+                  <button onClick={(e) => { e.stopPropagation(); setShowVersionHistory(prev => !prev); }}
+                    style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'none', border: 'none', cursor: 'pointer', padding: '4px 0', marginBottom: 8 }}>
+                    <span style={{ fontSize: 11, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Version History ({versionHistory.length})</span>
+                    <span style={{ color: '#94a3b8', fontSize: 12 }}>{showVersionHistory ? '▲' : '▼'}</span>
+                  </button>
+                  {showVersionHistory && (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                      {versionHistory.map((ver, i) => (
+                        <div key={ver.id} style={{ padding: '10px 14px', background: i === 0 ? '#eef2ff' : '#f8fafc', border: `1px solid ${i === 0 ? '#c7d2fe' : '#e2e8f0'}`, borderRadius: 8, display: 'flex', alignItems: 'flex-start', gap: 12 }}>
+                          <div style={{ width: 36, height: 36, borderRadius: 8, flexShrink: 0, background: i === 0 ? '#6366f1' : '#e2e8f0', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                            <span style={{ fontSize: 11, fontWeight: 800, color: i === 0 ? 'white' : '#64748b' }}>v{ver.version_number}</span>
+                          </div>
+                          <div style={{ flex: 1 }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 3 }}>
+                              <span style={{ fontSize: 12, fontWeight: 700, color: '#1e293b' }}>{ver.change_summary || 'Initial version'}</span>
+                              {i === 0 && <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 6px', borderRadius: 99, background: '#6366f1', color: 'white' }}>CURRENT</span>}
+                            </div>
+                            <div style={{ fontSize: 11, color: '#94a3b8' }}>
+                              {ver.created_date ? new Date(ver.created_date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—'}
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -1260,10 +1445,17 @@ export default function ProtocolDetail() {
           <Button className="w-full" onClick={() => setShowPreRunModal(true)}>
             <Play className="w-4 h-4 mr-2" /> Start Run
           </Button>
-          {isAdmin && protocol.status !== "active" && (
-            <Button variant="outline" className="w-full" onClick={handlePublish} disabled={publishing}>
-              {publishing ? "Publishing..." : "Publish Version"}
-            </Button>
+          {isAdmin && protocol.status === 'draft' && (
+            <button onClick={() => setShowPublishVersionModal(true)}
+              style={{ width: '100%', padding: '9px', background: '#16a34a', color: 'white', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>
+              Publish v1 →
+            </button>
+          )}
+          {isAdmin && protocol.status === 'active' && hasUnpublishedChanges && (
+            <button onClick={() => setShowPublishVersionModal(true)}
+              style={{ width: '100%', padding: '9px', background: '#f59e0b', color: 'white', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>
+              Publish v{(protocol.version || 1) + 1} →
+            </button>
           )}
         </div>
       </div>
@@ -1275,6 +1467,14 @@ export default function ProtocolDetail() {
           checklistItems={checklistItems}
           onStart={handleStartRun}
           onCancel={() => setShowPreRunModal(false)}
+        />
+      )}
+      {showPublishVersionModal && (
+        <PublishVersionModal
+          protocol={protocol}
+          onPublish={handlePublishVersion}
+          onClose={() => setShowPublishVersionModal(false)}
+          publishing={publishing}
         />
       )}
     </div>
