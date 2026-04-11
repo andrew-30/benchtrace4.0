@@ -366,8 +366,15 @@ function StepRow({ step, onDelete }) {
         {step.step_order}
       </span>
       <div className="flex-1 min-w-0">
-        {step.title && <p className="text-xs font-semibold text-primary uppercase">{step.title}</p>}
-        <p className="text-sm text-foreground whitespace-pre-line">{step.instruction}</p>
+        {step.title && step.title !== step.instruction && (
+          <div style={{ fontSize: 10, fontWeight: 700, color: '#6366f1', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4, display: 'flex', alignItems: 'center', gap: 6 }}>
+            {isGrouped && (
+              <span style={{ padding: '1px 6px', background: '#eef2ff', border: '1px solid #c7d2fe', borderRadius: 4, fontSize: 9 }}>GROUP</span>
+            )}
+            {step.title}
+          </div>
+        )}
+        {renderStepInstruction(step.instruction)}
         <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', marginTop: 4 }}>
           {step.is_critical && (
             <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 6px', borderRadius: 99, background: '#fef2f2', color: '#dc2626', border: '1px solid #fecaca' }}>🔴 CRITICAL</span>
@@ -674,14 +681,19 @@ export default function Import() {
 
     const granularityInstruction = stepGranularity === 'individual'
       ? `STEP GRANULARITY — INDIVIDUAL MODE:
-Extract each individual action or bullet point as a SEPARATE step.
-If a subsection "6.1 RNA Quality Assessment" has 3 bullet points → create 3 separate steps.
-Each bullet = its own step. Step title = subsection name (max 60 chars).
-Step instruction = the individual bullet text ONLY — never repeat the title.`
+Extract each bullet point or individual action as a SEPARATE step.
+If subsection "6.1 Intake Inspection" has 6 bullet points → create 6 separate steps.
+Each bullet = its own step with its own step_order.
+Step title = the subsection name (e.g. "Intake Inspection") — max 60 chars.
+Step instruction = the single bullet text ONLY — never repeat the title in the instruction.
+Total steps = total number of individual bullet points and numbered actions across the entire procedure.`
       : `STEP GRANULARITY — GROUPED MODE:
-Extract each subsection as ONE grouped step.
-Step title = subsection name (max 60 chars).
-Step instruction = all bullet points joined with newline characters.`;
+Each subsection becomes exactly ONE step.
+Step title = the subsection name (e.g. "Intake Inspection") — max 60 chars.
+Step instruction = ALL bullet points from that subsection joined together, with EACH bullet on its own line starting with "• " (bullet character then space).
+EXAMPLE of correct grouped instruction format:
+"• Verify supplier documentation and traceability\n• Check product temperature on arrival\n• Inspect for visible defects (damage, mould, contamination)\n• Assess size, colour, ripeness against specification"
+IMPORTANT: every individual action must appear as a separate "• " prefixed line in the instruction. Do NOT merge them into a single paragraph. Do NOT drop any bullets.`;
 
     const schemaDefinition = `OUTPUT SCHEMA — return ONLY this JSON structure, no markdown, no explanation:
 {
@@ -746,10 +758,14 @@ ${extractedText.substring(0, 12000)}`;
         const measureParams = Array.isArray(s.measurement_parameters)
           ? s.measurement_parameters.map(p => ({ name: p.name || '', unit: p.unit || '', min_value: p.min_value ?? null, max_value: p.max_value ?? null, required: p.required ?? true })).filter(p => p.name.length > 0)
           : [];
+        // Normalise instruction — convert escaped \n to real newlines
+        let instruction = (s.instruction || s.title || 'Step instruction').trim();
+        instruction = instruction.replace(/\\n/g, '\n');
+
         return {
           step_order: i + 1,
           title: s.title ? String(s.title).substring(0, 200) : null,
-          instruction: (s.instruction || s.title || 'Step instruction').trim(),
+          instruction,
           is_critical: s.is_critical === true,
           timing_mode: timingMode,
           expected_duration_seconds: duration,
@@ -1221,6 +1237,13 @@ ${extractedText.substring(0, 12000)}`;
               {parsed._ai_stats.warnings?.length > 0 && (
                 <div style={{ marginTop: 8, padding: '6px 10px', background: '#fffbeb', borderRadius: 6, fontSize: 11, color: '#92400e' }}>⚠ {parsed._ai_stats.warnings.join(' · ')}</div>
               )}
+              {/* Mode indicator */}
+              <div style={{ marginTop: 8, fontSize: 11, color: '#4338ca' }}>
+                {parsed._ai_stats?.granularity === 'grouped'
+                  ? `📦 Grouped mode — ${parsed._ai_stats.total_steps} section groups, each containing multiple actions`
+                  : `◉ Individual mode — ${parsed._ai_stats.total_steps} individual executable steps`
+                }
+              </div>
               {parsed._ai_fallback && (
                 <div style={{ marginTop: 6, fontSize: 11, color: '#d97706' }}>⚡ AI failed — smart parser used as fallback</div>
               )}
