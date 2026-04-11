@@ -148,6 +148,27 @@ export default function Dashboard() {
     );
   }
 
+  const weekData = getWeeklyRunData(runs);
+  const maxCount = Math.max(...weekData.map(w => w.count), 1);
+
+  const statCards = [
+    { label: 'Active Runs', value: activeRuns, color: '#3b82f6', bg: '#eff6ff', border: '#bfdbfe' },
+    { label: 'Protocols', value: protocols.length, color: '#6366f1', bg: '#eef2ff', border: '#c7d2fe' },
+    { label: 'Open Deviations', value: openDeviations, color: openDeviations > 0 ? '#dc2626' : '#16a34a', bg: openDeviations > 0 ? '#fef2f2' : '#f0fdf4', border: openDeviations > 0 ? '#fecaca' : '#bbf7d0' },
+    { label: 'Pass Rate', value: passRate !== null ? `${passRate}%` : '\u2014', color: '#16a34a', bg: '#f0fdf4', border: '#bbf7d0' },
+    { label: 'Total Runs', value: runs.length, color: '#0891b2', bg: '#ecfeff', border: '#a5f3fc' },
+    { label: 'Signed Runs', value: signedRuns, color: '#6366f1', bg: '#eef2ff', border: '#c7d2fe' },
+  ];
+
+  const quickLinks = [
+    { label: 'Protocols', sub: `${protocols.length} total`, color: '#6366f1', path: '/protocols' },
+    { label: 'Start Run', sub: 'Begin execution', color: '#16a34a', path: '/protocols' },
+    { label: 'Deviations', sub: `${openDeviations} open`, color: openDeviations > 0 ? '#dc2626' : '#64748b', path: '/deviations' },
+    { label: 'Audit', sub: 'Readiness check', color: '#8b5cf6', path: '/audit-readiness' },
+    { label: 'Traceability', sub: 'Lot tracking', color: '#0891b2', path: '/traceability' },
+    { label: 'Team', sub: 'Members', color: '#f59e0b', path: '/team' },
+  ];
+
   return (
     <div style={{ paddingBottom: window.innerWidth < 768 ? 80 : 0 }}>
       {/* Welcome */}
