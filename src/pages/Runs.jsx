@@ -1,6 +1,16 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Activity, Clock, User } from "lucide-react";
+
+function useDeviceType() {
+  const [device, setDevice] = useState(() => { const w = window.innerWidth; return { isMobile: w < 768, isTablet: w >= 768 && w < 1200 }; });
+  useEffect(() => {
+    const update = () => { const w = window.innerWidth; setDevice({ isMobile: w < 768, isTablet: w >= 768 && w < 1200 }); };
+    window.addEventListener('resize', update);
+    return () => window.removeEventListener('resize', update);
+  }, []);
+  return device;
+}
 import { Button } from "@/components/ui/button";
 import { base44 } from "@/api/base44Client";
 
@@ -51,6 +61,7 @@ function fmtDuration(startIso, endIso) {
 
 export default function Runs() {
   const navigate = useNavigate();
+  const device = useDeviceType();
   const orgId = localStorage.getItem("bt_org_id");
   const [runs, setRuns] = useState([]);
   const [protocols, setProtocols] = useState({});
@@ -159,7 +170,43 @@ export default function Runs() {
             </div>
           )}
           <style>{`@keyframes bt-pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }`}</style>
-          <div className="bg-card border border-border rounded-lg overflow-hidden">
+          {device.isMobile ? (
+            <div>
+              {filtered.filter(r => r.run_state !== 'in_progress').map(run => (
+                <div key={run.id}
+                  onClick={() => navigate(run.run_state === 'in_progress' ? `/run-execution?id=${run.id}` : `/run-detail?id=${run.id}`)}
+                  style={{
+                    background: 'white', borderRadius: 10,
+                    border: `1px solid ${run.run_state === 'in_progress' ? '#bfdbfe' : '#e2e8f0'}`,
+                    borderLeft: `3px solid ${run.run_state === 'in_progress' ? '#3b82f6' : run.run_state === 'signed' ? '#6366f1' : run.run_state === 'abandoned' ? '#94a3b8' : '#e2e8f0'}`,
+                    padding: '14px 16px', marginBottom: 8, cursor: 'pointer', minHeight: 72,
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 14, fontWeight: 700, color: '#1e293b', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginBottom: 4 }}>
+                        {protocols[run.protocol_id]?.name || 'Protocol'}
+                      </div>
+                      <div style={{ fontSize: 11, color: '#94a3b8' }}>
+                        {new Date(run.run_started_at).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' })}
+                      </div>
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4, flexShrink: 0 }}>
+                      <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 99, background: run.run_state === 'in_progress' ? '#eff6ff' : run.run_state === 'signed' ? '#eef2ff' : run.run_state === 'abandoned' ? '#f8fafc' : '#f8fafc', color: run.run_state === 'in_progress' ? '#3b82f6' : run.run_state === 'signed' ? '#6366f1' : '#94a3b8', border: `1px solid ${run.run_state === 'in_progress' ? '#bfdbfe' : run.run_state === 'signed' ? '#c7d2fe' : '#e2e8f0'}` }}>
+                        {run.run_state === 'in_progress' ? 'LIVE' : run.run_state === 'signed' ? 'SIGNED' : run.run_state === 'abandoned' ? 'ABD' : run.run_state === 'completed' ? 'DONE' : run.run_state.toUpperCase()}
+                      </span>
+                      {['signed', 'completed', 'abandoned'].includes(run.run_state) && run.result_status && run.result_status !== 'pending' && (
+                        <span style={{ fontSize: 10, fontWeight: 700, padding: '1px 7px', borderRadius: 99, background: run.result_status === 'pass' ? '#f0fdf4' : run.result_status === 'fail' ? '#fef2f2' : '#f8fafc', color: run.result_status === 'pass' ? '#16a34a' : run.result_status === 'fail' ? '#dc2626' : '#94a3b8', border: `1px solid ${run.result_status === 'pass' ? '#bbf7d0' : run.result_status === 'fail' ? '#fecaca' : '#e2e8f0'}` }}>
+                          {run.result_status === 'pass' ? 'PASS' : run.result_status === 'fail' ? 'FAIL' : run.result_status === 'abandoned' ? 'ABD' : '—'}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="bg-card border border-border rounded-lg overflow-hidden">
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-border bg-muted/40">
@@ -206,6 +253,7 @@ export default function Runs() {
               </tbody>
             </table>
           </div>
+          )}
         </div>
       )}
     </div>

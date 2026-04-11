@@ -596,9 +596,20 @@ function ConfidenceGateScreen({ parsed, classification, onContinue, onDownloadTe
 }
 
 // ── Main page ─────────────────────────────────────────────────────────────────
+function useDeviceType() {
+  const [device, setDevice] = useState(() => { const w = window.innerWidth; return { isMobile: w < 768 }; });
+  useEffect(() => {
+    const update = () => { const w = window.innerWidth; setDevice({ isMobile: w < 768 }); };
+    window.addEventListener('resize', update);
+    return () => window.removeEventListener('resize', update);
+  }, []);
+  return device;
+}
+
 export default function Import() {
   const navigate = useNavigate();
   const fileRef = useRef(null);
+  const device = useDeviceType();
   const orgId = localStorage.getItem("bt_org_id");
 
   const [step, setStep] = useState(1);
@@ -958,6 +969,16 @@ ${extractedText.substring(0, 12000)}`;
         <span className="text-muted-foreground">/</span>
         <span className="text-sm font-medium text-foreground">Import SOP</span>
       </div>
+
+      {device.isMobile && (
+        <div style={{ padding: '12px 16px', background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 8, marginBottom: 4, display: 'flex', gap: 10, alignItems: 'flex-start' }}>
+          <span style={{ fontSize: 18, flexShrink: 0 }}>💻</span>
+          <div>
+            <div style={{ fontSize: 13, fontWeight: 700, color: '#92400e', marginBottom: 2 }}>Best on desktop</div>
+            <div style={{ fontSize: 12, color: '#78350f', lineHeight: 1.5 }}>Protocol import works best on a desktop where you can easily access your DOCX files. You can still continue on mobile.</div>
+          </div>
+        </div>
+      )}
 
       {/* Step indicator */}
       <div className="flex items-center gap-2">

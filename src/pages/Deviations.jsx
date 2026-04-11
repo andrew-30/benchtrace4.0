@@ -2,6 +2,16 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { base44 } from "@/api/base44Client";
 
+function useDeviceType() {
+  const [device, setDevice] = useState(() => { const w = window.innerWidth; return { isMobile: w < 768 }; });
+  useEffect(() => {
+    const update = () => { const w = window.innerWidth; setDevice({ isMobile: w < 768 }); };
+    window.addEventListener('resize', update);
+    return () => window.removeEventListener('resize', update);
+  }, []);
+  return device;
+}
+
 function tzFmt(dateStr) {
   if (!dateStr) return "—";
   const tz = localStorage.getItem("bt_tz") || "UTC";
@@ -75,6 +85,7 @@ function ResolveForm({ deviationId, onResolve, onCancel }) {
 
 export default function Deviations() {
   const navigate = useNavigate();
+  const device = useDeviceType();
   const orgId = localStorage.getItem("bt_org_id");
 
   const [deviations, setDeviations] = useState([]);
@@ -205,7 +216,7 @@ export default function Deviations() {
             const ctx = getRunContext(dev);
             const isOpen = dev.status === "open";
             return (
-              <div key={dev.id} style={{ background: "white", border: "1px solid #e2e8f0", borderRadius: 10, padding: "14px 16px", borderLeft: `4px solid ${dev.severity === "high" ? "#dc2626" : dev.severity === "medium" ? "#d97706" : "#94a3b8"}` }}>
+              <div key={dev.id} style={{ background: "white", border: "1px solid #e2e8f0", borderRadius: 10, padding: device.isMobile ? "14px 16px" : "14px 16px", minHeight: device.isMobile ? 72 : 'auto', borderLeft: `4px solid ${dev.severity === "high" ? "#dc2626" : dev.severity === "medium" ? "#d97706" : "#94a3b8"}` }}>
                 <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12 }}>
                   <div style={{ flex: 1 }}>
                     <div style={{ display: "flex", gap: 6, marginBottom: 8, flexWrap: "wrap" }}>
@@ -215,7 +226,7 @@ export default function Deviations() {
                         {isOpen ? "OPEN" : "RESOLVED"}
                       </span>
                     </div>
-                    <div style={{ fontSize: 13, color: "#1e293b", fontWeight: 600, marginBottom: 6 }}>{dev.description}</div>
+                    <div style={{ fontSize: device.isMobile ? 13 : 13, color: "#1e293b", fontWeight: 600, marginBottom: 6 }}>{dev.description}</div>
                     {dev.step_order && (
                       <div style={{ fontSize: 11, color: "#64748b", marginBottom: 4 }}>
                         Step {dev.step_order}{dev.step_instruction ? ` — ${dev.step_instruction.substring(0, 60)}${dev.step_instruction.length > 60 ? "…" : ""}` : ""}
@@ -237,7 +248,7 @@ export default function Deviations() {
                     <div style={{ fontSize: 11, color: "#94a3b8", marginBottom: 6 }}>{tzFmt(dev.created_at || dev.created_date)}</div>
                     {isOpen && resolvingId !== dev.id && (
                       <button onClick={() => setResolvingId(dev.id)}
-                        style={{ padding: "5px 14px", background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: 6, fontSize: 11, fontWeight: 700, cursor: "pointer", color: "#16a34a" }}>
+                        style={{ padding: device.isMobile ? '8px 14px' : '5px 14px', minHeight: device.isMobile ? 36 : 28, background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: 6, fontSize: 11, fontWeight: 700, cursor: "pointer", color: "#16a34a" }}>
                         Resolve
                       </button>
                     )}

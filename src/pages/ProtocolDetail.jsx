@@ -11,6 +11,19 @@ import { Textarea } from "@/components/ui/textarea";
 
 import { base44 } from "@/api/base44Client";
 
+function useDeviceType() {
+  const [device, setDevice] = useState(() => {
+    const w = window.innerWidth;
+    return { isMobile: w < 768, isTablet: w >= 768 && w < 1200 };
+  });
+  useEffect(() => {
+    const update = () => { const w = window.innerWidth; setDevice({ isMobile: w < 768, isTablet: w >= 768 && w < 1200 }); };
+    window.addEventListener('resize', update);
+    return () => window.removeEventListener('resize', update);
+  }, []);
+  return device;
+}
+
 // ─── StepSettingsPanel ───────────────────────────────────────────────────────
 function StepSettingsPanel({ step, onSave, onClose, saving }) {
   const toHMS = (totalSec) => {
@@ -622,6 +635,7 @@ export default function ProtocolDetail() {
     if (_toastTimeout) { clearTimeout(_toastTimeout); _toastTimeout = null; }
     setProtoToast(null);
   };
+  const device = useDeviceType();
   const orgId = localStorage.getItem("bt_org_id");
   const role = localStorage.getItem("bt_role");
   const isAdmin = role === "admin";
@@ -1180,11 +1194,28 @@ export default function ProtocolDetail() {
             {protocol.description && <p className="text-sm text-muted-foreground leading-relaxed">{protocol.description}</p>}
           </div>
 
-          <div className="flex items-center gap-1 bg-muted rounded-lg p-1 w-fit">
-            {["overview", "steps", "checklist"].map(tab => (
-              <button key={tab} onClick={() => setActiveTab(tab)}
-                className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors capitalize ${activeTab === tab ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}>
-                {tab === "overview" ? "Overview" : tab === "steps" ? `Steps (${steps.length})` : `Checklist (${checklistItems.length})`}
+          <div style={{
+            display: 'flex', gap: 4,
+            background: '#f1f5f9', borderRadius: 10, padding: 4, marginBottom: 4,
+            overflowX: 'auto', WebkitOverflowScrolling: 'touch', scrollbarWidth: 'none',
+          }}>
+            {['Overview', 'Steps', 'Checklist'].map(tab => (
+              <button
+                key={tab}
+                onClick={() => setActiveTab(tab.toLowerCase())}
+                style={{
+                  flex: 1, minWidth: device.isMobile ? 80 : 'auto',
+                  padding: device.isMobile ? '10px 12px' : '8px 20px',
+                  borderRadius: 7, border: 'none', cursor: 'pointer',
+                  fontSize: 13,
+                  fontWeight: activeTab === tab.toLowerCase() ? 700 : 500,
+                  background: activeTab === tab.toLowerCase() ? 'white' : 'transparent',
+                  color: activeTab === tab.toLowerCase() ? '#1e293b' : '#64748b',
+                  boxShadow: activeTab === tab.toLowerCase() ? '0 1px 4px rgba(0,0,0,0.1)' : 'none',
+                  whiteSpace: 'nowrap', minHeight: 40, transition: 'all 0.15s',
+                }}
+              >
+                {tab === 'Steps' ? `Steps (${steps.length})` : tab === 'Checklist' ? `Checklist (${checklistItems.length})` : tab}
               </button>
             ))}
           </div>
@@ -1397,7 +1428,7 @@ export default function ProtocolDetail() {
                     rendered.push(
                       <div key={step.id} style={{ background: step.is_critical ? '#fff8f8' : 'white', border: `1px solid ${step.is_critical ? '#fecaca' : '#e2e8f0'}`, borderRadius: 8, marginBottom: 6, overflow: 'hidden' }}>
                         {/* Header row */}
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 12px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: device.isMobile || device.isTablet ? '14px 16px' : '10px 12px' }}>
                           <div style={{ width: 22, height: 22, borderRadius: '50%', flexShrink: 0, background: step.is_critical ? '#ef4444' : '#6366f1', color: 'white', fontSize: 10, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                             {step.step_order}
                           </div>
@@ -1495,6 +1526,21 @@ export default function ProtocolDetail() {
                   </button>
                 </div>
               )}
+              {/* FAB — mobile only */}
+              {isAdmin && device.isMobile && (
+                <button
+                  onClick={() => handleAddStep()}
+                  style={{
+                    position: 'fixed', bottom: 88, right: 20,
+                    width: 56, height: 56, borderRadius: '50%',
+                    background: '#6366f1', color: 'white',
+                    border: 'none', cursor: 'pointer',
+                    fontSize: 28, boxShadow: '0 4px 16px rgba(99,102,241,0.5)',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    zIndex: 100,
+                  }}
+                >+</button>
+              )}
             </>
           )}
 
@@ -1550,13 +1596,13 @@ export default function ProtocolDetail() {
                     {categoryItems.map(item => (
                       <div key={item.id} style={{ background: 'white', border: `1px solid ${cfg.border}`, borderLeft: `3px solid ${cfg.color}`, borderRadius: 7, marginBottom: 6, overflow: 'hidden' }}>
                         {editingChecklistId !== item.id && confirmDeleteChecklistId !== item.id && (
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '9px 12px' }}>
-                            <span style={{ fontSize: 14, flexShrink: 0 }}>{cfg.icon}</span>
-                            <span style={{ flex: 1, fontSize: 13, color: '#1e293b' }}>{item.item_text}</span>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: device.isMobile ? '14px 16px' : '9px 12px', minHeight: device.isMobile ? 52 : 40 }}>
+                            <span style={{ fontSize: 16, flexShrink: 0 }}>{cfg.icon}</span>
+                            <span style={{ flex: 1, fontSize: device.isMobile ? 14 : 13, color: '#1e293b' }}>{item.item_text}</span>
                             {isAdmin && (
                               <div style={{ display: 'flex', gap: 4, flexShrink: 0 }}>
-                                <button onClick={() => { setEditingChecklistId(item.id); setEditingChecklistText(item.item_text); setEditingChecklistCategory(item.category); }} title="Edit item" style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#6366f1', fontSize: 12, padding: '2px 6px', borderRadius: 4, opacity: 0.6 }} onMouseEnter={e => e.currentTarget.style.opacity = 1} onMouseLeave={e => e.currentTarget.style.opacity = 0.6}>✏</button>
-                                <button onClick={() => handleDeleteChecklistItem(item.id)} title="Delete item" style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#ef4444', fontSize: 15, padding: '2px 6px', borderRadius: 4, opacity: 0.6 }} onMouseEnter={e => e.currentTarget.style.opacity = 1} onMouseLeave={e => e.currentTarget.style.opacity = 0.6}>×</button>
+                                <button onClick={() => { setEditingChecklistId(item.id); setEditingChecklistText(item.item_text); setEditingChecklistCategory(item.category); }} title="Edit item" style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#6366f1', fontSize: 12, padding: device.isMobile ? '6px 8px' : '2px 6px', borderRadius: 4, minWidth: device.isMobile ? 36 : 24, minHeight: device.isMobile ? 36 : 24, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>✏</button>
+                                <button onClick={() => handleDeleteChecklistItem(item.id)} title="Delete item" style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#ef4444', fontSize: device.isMobile ? 18 : 15, padding: device.isMobile ? '6px 8px' : '2px 6px', borderRadius: 4, minWidth: device.isMobile ? 36 : 24, minHeight: device.isMobile ? 36 : 24, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>×</button>
                               </div>
                             )}
                           </div>

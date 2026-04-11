@@ -2,6 +2,16 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { base44 } from "@/api/base44Client";
 
+function useDeviceType() {
+  const [device, setDevice] = useState(() => { const w = window.innerWidth; return { isMobile: w < 768, isTablet: w >= 768 && w < 1200 }; });
+  useEffect(() => {
+    const update = () => { const w = window.innerWidth; setDevice({ isMobile: w < 768, isTablet: w >= 768 && w < 1200 }); };
+    window.addEventListener('resize', update);
+    return () => window.removeEventListener('resize', update);
+  }, []);
+  return device;
+}
+
 function getWeeklyRunData(runs) {
   const now = new Date();
   const weeks = [];
@@ -22,6 +32,7 @@ function getWeeklyRunData(runs) {
 
 export default function Dashboard() {
   const navigate = useNavigate();
+  const device = useDeviceType();
   const orgId = localStorage.getItem('bt_org_id');
   const isAdmin = localStorage.getItem('bt_role') === 'admin';
 
@@ -59,29 +70,81 @@ export default function Dashboard() {
   const openDeviations = deviations.filter(d => d.status === 'open' && !d.archived).length;
   const resolvedDeviations = deviations.filter(d => d.status === 'resolved').length;
   const passRate = (passRuns + failRuns) > 0 ? Math.round((passRuns / (passRuns + failRuns)) * 100) : null;
+  const signedRuns = runs.filter(r => r.run_state === 'signed').length;
 
   const pendingProtocols = protocols.filter(p => p.has_unpublished_changes && p.status === 'active');
 
-  const weekData = getWeeklyRunData(runs);
-  const maxCount = Math.max(...weekData.map(w => w.count), 1);
-
-  const statCards = [
-    { label: 'Active Runs', value: activeRuns, color: '#3b82f6', bg: '#eff6ff', border: '#bfdbfe' },
-    { label: 'Protocols', value: protocols.length, color: '#6366f1', bg: '#eef2ff', border: '#c7d2fe' },
-    { label: 'Open Deviations', value: openDeviations, color: openDeviations > 0 ? '#dc2626' : '#16a34a', bg: openDeviations > 0 ? '#fef2f2' : '#f0fdf4', border: openDeviations > 0 ? '#fecaca' : '#bbf7d0' },
-    { label: 'Runs This Month', value: runsThisMonth, color: '#8b5cf6', bg: '#faf5ff', border: '#e9d5ff' },
-    { label: 'Total Runs', value: runs.length, color: '#0891b2', bg: '#ecfeff', border: '#a5f3fc' },
-    { label: 'Pass Rate', value: passRate !== null ? `${passRate}%` : '—', color: passRate !== null && passRate >= 80 ? '#16a34a' : passRate !== null && passRate >= 60 ? '#d97706' : passRate !== null ? '#dc2626' : '#64748b', bg: '#f8fafc', border: '#e2e8f0' },
-  ];
-
-  const quickLinks = [
-    { label: 'Protocols', sub: `${protocols.length} total`, color: '#6366f1', path: '/protocols' },
-    { label: 'Runs', sub: `${runs.length} total`, color: '#3b82f6', path: '/runs' },
-    { label: 'Deviations', sub: `${openDeviations} open`, color: '#dc2626', path: '/deviations' },
-    { label: 'Audit Readiness', sub: '5-point check', color: '#8b5cf6', path: '/audit-readiness' },
-    { label: 'Traceability', sub: 'Search lots', color: '#1e293b', path: '/traceability' },
-    isAdmin ? { label: 'Team', sub: 'Members', color: '#10b981', path: '/team' } : null,
-  ].filter(Boolean);
+  if (device.isMobile) {
+    return (
+      <div>
+        <div style={{ marginBottom: 20 }}>
+          <h1 style={{ fontSize: 20, fontWeight: 800, color: '#1e293b', margin: '0 0 4px' }}>{org?.name || 'Dashboard'}</h1>
+          <p style={{ fontSize: 12, color: '#64748b', margin: 0 }}>{now.toLocaleDateString('en-GB', { weekday: 'long', day: '2-digit', month: 'long' })}</p>
+        </div>
+        {!loading && pendingProtocols.length > 0 && (
+          <div onClick={() => navigate('/protocols?filter=Pending')} style={{ cursor: 'pointer', padding: '12px 14px', background: '#fffbeb', borderRadius: 8, border: '1px solid #fde68a', borderTop: '3px solid #f59e0b', marginBottom: 16, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+            <div style={{ fontSize: 12, color: '#78350f', fontWeight: 600 }}>⚠️ {pendingProtocols.length} protocol{pendingProtocols.length !== 1 ? 's have' : ' has'} unpublished edits</div>
+            <span style={{ fontSize: 18, fontWeight: 900, color: '#f59e0b' }}>{pendingProtocols.length}</span>
+          </div>
+        )}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 20 }}>
+          {[
+            { label: 'Active Runs', value: activeRuns, color: '#3b82f6', bg: '#eff6ff' },
+            { label: 'Protocols', value: protocols.length, color: '#6366f1', bg: '#eef2ff' },
+            { label: 'Open Deviations', value: openDeviations, color: openDeviations > 0 ? '#dc2626' : '#16a34a', bg: openDeviations > 0 ? '#fef2f2' : '#f0fdf4' },
+            { label: 'Pass Rate', value: passRate !== null ? `${passRate}%` : '—', color: '#16a34a', bg: '#f0fdf4' },
+            { label: 'Total Runs', value: runs.length, color: '#0891b2', bg: '#ecfeff' },
+            { label: 'Signed Runs', value: signedRuns, color: '#6366f1', bg: '#eef2ff' },
+          ].map((stat, i) => (
+            <div key={i} style={{ background: stat.bg, borderRadius: 10, padding: '14px', border: '1px solid transparent', boxShadow: '0 1px 4px rgba(0,0,0,0.05)' }}>
+              <div style={{ fontSize: 10, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6 }}>{stat.label}</div>
+              <div style={{ fontSize: 28, fontWeight: 900, color: stat.color }}>{loading ? '...' : stat.value}</div>
+            </div>
+          ))}
+        </div>
+        <div style={{ marginBottom: 16 }}>
+          <div style={{ fontSize: 13, fontWeight: 700, color: '#1e293b', marginBottom: 10 }}>Recent Runs</div>
+          {runs.length === 0 ? (
+            <div style={{ fontSize: 12, color: '#94a3b8', textAlign: 'center', padding: '20px 0' }}>No runs yet.</div>
+          ) : runs.slice(0, 5).map(run => {
+            const proto = protocols.find(p => p.id === run.protocol_id);
+            return (
+              <div key={run.id}
+                onClick={() => navigate(run.run_state === 'in_progress' ? `/run-execution?id=${run.id}` : `/run-detail?id=${run.id}`)}
+                style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 14px', background: 'white', borderRadius: 8, border: '1px solid #e2e8f0', marginBottom: 6, cursor: 'pointer', minHeight: 52 }}
+              >
+                <div style={{ width: 8, height: 8, borderRadius: '50%', flexShrink: 0, background: run.run_state === 'in_progress' ? '#3b82f6' : run.run_state === 'signed' ? '#6366f1' : run.run_state === 'abandoned' ? '#94a3b8' : '#16a34a' }} />
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: '#1e293b', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{proto?.name || 'Protocol'}</div>
+                  <div style={{ fontSize: 11, color: '#94a3b8' }}>{new Date(run.run_started_at).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' })} · {run.operator_name}</div>
+                </div>
+                {run.run_state === 'in_progress' ? (
+                  <span style={{ fontSize: 11, fontWeight: 700, color: '#3b82f6', background: '#eff6ff', padding: '3px 8px', borderRadius: 99, flexShrink: 0 }}>Resume →</span>
+                ) : (
+                  <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 99, flexShrink: 0, background: run.result_status === 'pass' ? '#f0fdf4' : run.result_status === 'fail' ? '#fef2f2' : '#f8fafc', color: run.result_status === 'pass' ? '#16a34a' : run.result_status === 'fail' ? '#dc2626' : '#94a3b8', border: `1px solid ${run.result_status === 'pass' ? '#bbf7d0' : run.result_status === 'fail' ? '#fecaca' : '#e2e8f0'}` }}>
+                    {run.result_status === 'pass' ? 'PASS' : run.result_status === 'fail' ? 'FAIL' : run.result_status === 'abandoned' ? 'ABD' : 'PEND'}
+                  </span>
+                )}
+              </div>
+            );
+          })}
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+          {[
+            { label: 'Protocols', path: '/protocols', color: '#6366f1' },
+            { label: 'New Run', path: '/protocols', color: '#16a34a' },
+            { label: 'Deviations', path: '/deviations', color: '#dc2626' },
+            { label: 'Audit', path: '/audit-readiness', color: '#8b5cf6' },
+          ].map(action => (
+            <button key={action.path + action.label} onClick={() => navigate(action.path)}
+              style={{ padding: '16px', background: 'white', borderRadius: 10, border: '1px solid #e2e8f0', borderTop: `3px solid ${action.color}`, cursor: 'pointer', textAlign: 'left', minHeight: 60, fontSize: 13, fontWeight: 700, color: '#1e293b' }}>
+              {action.label}
+            </button>
+          ))}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div>
