@@ -609,7 +609,7 @@ export default function Import() {
   const [showConfidenceGate, setShowConfidenceGate] = useState(false);
   const [gateChoice, setGateChoice] = useState(null);
   const [useAI, setUseAI] = useState(false);
-  const [stepGranularity, setStepGranularity] = useState('individual');
+  // stepGranularity removed — always individual (one bullet = one step)
   const [aiParsing, setAiParsing] = useState(false);
   const [aiError, setAiError] = useState('');
   const [showParserGuide, setShowParserGuide] = useState(false);
@@ -680,21 +680,33 @@ export default function Import() {
 
     const sectorPrompt = SECTOR_AI_PROMPTS[classification] || SECTOR_AI_PROMPTS['General'];
 
-    const granularityInstruction = stepGranularity === 'individual'
-      ? `STEP GRANULARITY — INDIVIDUAL MODE:
-Extract each bullet point or individual action as a SEPARATE step.
-If subsection "6.1 Intake Inspection" has 6 bullet points → create 6 separate steps.
-Each bullet = its own step with its own step_order.
-Step title = the subsection name (e.g. "Intake Inspection") — max 60 chars.
-Step instruction = the single bullet text ONLY — never repeat the title in the instruction.
-Total steps = total number of individual bullet points and numbered actions across the entire procedure.`
-      : `STEP GRANULARITY — GROUPED MODE:
-Each subsection becomes exactly ONE step.
-Step title = the subsection name (e.g. "Intake Inspection") — max 60 chars.
-Step instruction = ALL bullet points from that subsection joined together, with EACH bullet on its own line starting with "• " (bullet character then space).
-EXAMPLE of correct grouped instruction format:
-"• Verify supplier documentation and traceability\n• Check product temperature on arrival\n• Inspect for visible defects (damage, mould, contamination)\n• Assess size, colour, ripeness against specification"
-IMPORTANT: every individual action must appear as a separate "• " prefixed line in the instruction. Do NOT merge them into a single paragraph. Do NOT drop any bullets.`;
+    const granularityInstruction = `STEP EXTRACTION RULES — READ CAREFULLY:
+
+Every individual bullet point or numbered action MUST become its own separate step.
+The subsection name becomes the TITLE of each step in that subsection.
+
+EXAMPLE — if the document has:
+  6.1 Intake Inspection
+    • Verify supplier documentation and traceability
+    • Check product temperature on arrival
+    • Inspect for visible defects
+
+You MUST create 3 separate steps:
+  Step 1: title="Intake Inspection", instruction="Verify supplier documentation and traceability"
+  Step 2: title="Intake Inspection", instruction="Check product temperature on arrival"
+  Step 3: title="Intake Inspection", instruction="Inspect for visible defects"
+
+NEVER create a step like this (WRONG):
+  Step 1: title="Intake Inspection", instruction="• Verify supplier... • Check product... • Inspect..."
+
+RULES:
+1. ONE bullet = ONE step. Never combine bullets into one instruction.
+2. instruction = the single action text only — no bullet characters, no title repetition.
+3. title = the subsection name shared by all steps in that group (max 60 chars).
+4. If a subsection has 7 bullets → create 7 steps all with the same title.
+5. If a section has no subsections but has numbered steps → each numbered item = one step, title = section name.
+6. Total step count = total number of individual bullets and numbered actions in the procedure.
+7. Strip all bullet characters (•, -, *) from the instruction text.`;
 
     const schemaDefinition = `OUTPUT SCHEMA — return ONLY this JSON structure, no markdown, no explanation:
 {
@@ -759,9 +771,20 @@ ${extractedText.substring(0, 12000)}`;
         const measureParams = Array.isArray(s.measurement_parameters)
           ? s.measurement_parameters.map(p => ({ name: p.name || '', unit: p.unit || '', min_value: p.min_value ?? null, max_value: p.max_value ?? null, required: p.required ?? true })).filter(p => p.name.length > 0)
           : [];
-        // Normalise instruction — convert escaped \n to real newlines
+        // Clean instruction — strip bullet chars, unescape newlines
         let instruction = (s.instruction || s.title || 'Step instruction').trim();
-        instruction = instruction.replace(/\\n/g, '\n');
+        instruction = instruction
+          .replace(/^[•\-\*◦▪▸►]\s*/u, '')   // remove leading bullet
+          .replace(/\\n/g, '\n')               // unescape newlines
+          .trim();
+        // If AI still combined multiple bullets, take only the first action
+        if (instruction.includes('\n•') || instruction.includes('\n-')) {
+          instruction = instruction.split(/\n[•\-]/)[0].trim();
+        }
+        // Final safety — if empty, fall back to title
+        if (!instruction || instruction.length < 2) {
+          instruction = (s.title || `Step ${i + 1}`).trim();
+        }
 
         return {
           step_order: i + 1,
@@ -799,7 +822,7 @@ ${extractedText.substring(0, 12000)}`;
         sections_json: [],
         _confidence: 'high',
         _parser_mode: 'ai_normalise',
-        _detected_section: `AI Normalised (${stepGranularity === 'individual' ? 'individual steps' : 'grouped steps'})`,
+        _detected_section: 'AI Normalised — individual steps',
         _ai_stats: {
           total_steps: normalisedSteps.length,
           timed_steps: timedSteps,
@@ -807,7 +830,7 @@ ${extractedText.substring(0, 12000)}`;
           measurement_steps: measurementSteps,
           checklist_items: checklistItems.length,
           sector: classification,
-          granularity: stepGranularity,
+          granularity: 'individual',
           warnings,
         },
       };
@@ -893,7 +916,7 @@ ${extractedText.substring(0, 12000)}`;
       event_type: "protocol_created",
       actor_user_id: user.id,
       actor_email: user.email,
-      metadata: { source: 'import', step_count: editSteps.length, confidence: parsed._confidence, detected_section: parsed._detected_section, parser_mode: parsed._parser_mode || 'smart', step_granularity: parsed._parser_mode === 'ai' ? stepGranularity : null },
+      metadata: { source: 'import', step_count: parsed.steps?.length || 0, confidence: parsed._confidence, detected_section: parsed._detected_section, parser_mode: parsed._parser_mode || 'smart' },
       created_at: new Date().toISOString(),
     });
 
@@ -993,7 +1016,7 @@ ${extractedText.substring(0, 12000)}`;
           <div style={{ textAlign: 'center', marginBottom: 32 }}>
             <div style={{ fontSize: 13, fontWeight: 700, color: '#6366f1', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 8 }}>Step 2 of 3</div>
             <h2 style={{ fontSize: 22, fontWeight: 800, color: '#1e293b', margin: '0 0 8px' }}>Upload Your Protocol</h2>
-            <p style={{ fontSize: 14, color: '#64748b', margin: 0 }}>✨ AI will automatically convert it to BenchTrace format</p>
+            <p style={{ fontSize: 14, color: '#64748b', margin: 0 }}>✨ AI extracts every action as an individual executable step</p>
           </div>
 
           <div
@@ -1090,23 +1113,13 @@ ${extractedText.substring(0, 12000)}`;
                     <span style={{ fontSize: 20 }}>✨</span>
                     <span style={{ fontSize: 15, fontWeight: 800, color: '#1e293b' }}>AI Protocol Normaliser</span>
                   </div>
-                  <div style={{ fontSize: 12, color: '#475569', lineHeight: 1.6, marginBottom: selectedParserMode === 'ai' ? 12 : 0 }}>
-                    AI reads your document and converts it to BenchTrace format — automatically detecting timers, critical steps, measurements, and materials. Works with any formatting.
+                  <div style={{ fontSize: 12, color: '#475569', lineHeight: 1.6, marginBottom: 12 }}>
+                    AI reads your document and converts every action into an individual executable step — automatically detecting timers, critical steps, measurements, and materials. Subsection names become section headers. Works with any formatting.
                   </div>
                   {selectedParserMode === 'ai' && (
                     <div>
-                      <div style={{ fontSize: 11, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6 }}>Step Granularity</div>
-                      <div style={{ display: 'flex', gap: 8, marginBottom: 10 }}>
-                        {[
-                          { value: 'individual', icon: '◉', label: 'Individual Steps', desc: 'Each bullet = one step' },
-                          { value: 'grouped', icon: '⊞', label: 'Grouped Steps', desc: 'Each subsection = one step' },
-                        ].map(opt => (
-                          <button key={opt.value} onClick={e => { e.stopPropagation(); setStepGranularity(opt.value); }}
-                            style={{ flex: 1, padding: '8px 10px', borderRadius: 7, cursor: 'pointer', fontSize: 11, textAlign: 'left', border: `1px solid ${stepGranularity === opt.value ? '#6366f1' : '#e2e8f0'}`, background: stepGranularity === opt.value ? '#eef2ff' : 'white', color: stepGranularity === opt.value ? '#4338ca' : '#64748b' }}>
-                            <div style={{ fontWeight: 700, marginBottom: 2 }}>{opt.icon} {opt.label}</div>
-                            <div style={{ fontSize: 10, opacity: 0.8 }}>{opt.desc}</div>
-                          </button>
-                        ))}
+                      <div style={{ padding: '10px 12px', background: 'rgba(99,102,241,0.08)', border: '1px solid rgba(99,102,241,0.2)', borderRadius: 8, fontSize: 12, color: '#4338ca', lineHeight: 1.6, marginBottom: 10 }}>
+                        <strong>How AI extracts steps:</strong> Every individual action becomes its own executable step. Subsection names (e.g. "Intake Inspection") become section headers that group related steps — so operators can tick off each action individually during a run.
                       </div>
                       <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                         {['⏱ Timers', '🔴 Critical steps', '📏 Measurements', '🧪 Materials'].map(tag => (
@@ -1232,10 +1245,7 @@ ${extractedText.substring(0, 12000)}`;
                 ))}
               </div>
               <div style={{ marginTop: 8, fontSize: 11, color: '#4338ca' }}>
-                {(parsed._ai_stats.granularity || stepGranularity) === 'grouped'
-                  ? `📦 Grouped mode — ${parsed._ai_stats.total_steps} section groups`
-                  : `◉ Individual mode — ${parsed._ai_stats.total_steps} individual steps`
-                }
+                ◉ Individual steps — {parsed._ai_stats?.total_steps || 0} executable steps extracted
               </div>
               {parsed._ai_fallback && (
                 <div style={{ marginTop: 6, fontSize: 11, color: '#d97706' }}>⚡ AI failed — smart parser used as fallback</div>
