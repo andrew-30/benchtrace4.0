@@ -601,6 +601,8 @@ export default function ProtocolDetail() {
   const [showPublishVersionModal, setShowPublishVersionModal] = useState(false);
   const [versionHistory, setVersionHistory] = useState([]);
   const [showVersionHistory, setShowVersionHistory] = useState(false);
+  const [showRevertConfirm, setShowRevertConfirm] = useState(false);
+  const [reverting, setReverting] = useState(false);
 
   const [editingStepId, setEditingStepId] = useState(null);
   const [editingStepTitle, setEditingStepTitle] = useState("");
@@ -950,6 +952,61 @@ export default function ProtocolDetail() {
     }
   }
 
+  async function handleRevert() {
+    setReverting(true);
+    try {
+      const lastVersion = versionHistory[0];
+      if (!lastVersion || !lastVersion.snapshot_json) {
+        toast({ title: 'No published version found to revert to.', variant: 'destructive' });
+        setReverting(false);
+        return;
+      }
+      const snapshot = lastVersion.snapshot_json;
+      const snapshotSteps = snapshot.steps || [];
+      const snapshotChecklist = snapshot.checklist || [];
+      const currentSteps = await base44.entities.ProtocolStep.filter({ protocol_id: protocol.id, organization_id: orgId });
+      await Promise.all(currentSteps.map(s => base44.entities.ProtocolStep.delete(s.id)));
+      const createdSteps = await Promise.all(
+        snapshotSteps.map(s => base44.entities.ProtocolStep.create({
+          organization_id: orgId, protocol_id: protocol.id,
+          step_order: s.step_order, title: s.title || null, instruction: s.instruction || '',
+          is_critical: s.is_critical || false, timing_mode: s.timing_mode || 'none',
+          expected_duration_seconds: s.expected_duration_seconds || null,
+          tolerance_lower_seconds: s.tolerance_lower_seconds || 0,
+          tolerance_upper_seconds: s.tolerance_upper_seconds || 0,
+          requires_measurement: s.requires_measurement || false,
+          measurement_parameters: s.measurement_parameters || [],
+        }))
+      );
+      const currentChecklist = await base44.entities.ProtocolChecklistItem.filter({ protocol_id: protocol.id, organization_id: orgId });
+      await Promise.all(currentChecklist.map(i => base44.entities.ProtocolChecklistItem.delete(i.id)));
+      if (snapshotChecklist.length > 0) {
+        await Promise.all(snapshotChecklist.map((item, idx) => base44.entities.ProtocolChecklistItem.create({
+          organization_id: orgId, protocol_id: protocol.id,
+          item_order: item.item_order || idx + 1, item_text: item.item_text || '', category: item.category || 'other',
+        })));
+      }
+      const user = await base44.auth.me();
+      await base44.entities.AuditLog.create({
+        organization_id: orgId, entity_type: 'Protocol', entity_id: protocol.id, event_type: 'protocol_updated',
+        actor_user_id: user.id, actor_email: user.email,
+        metadata: { action: 'reverted', reverted_to_version: lastVersion.version_number, steps_restored: snapshotSteps.length },
+        created_at: new Date().toISOString(),
+      });
+      setSteps(createdSteps.sort((a, b) => a.step_order - b.step_order));
+      const reloadedChecklist = await base44.entities.ProtocolChecklistItem.filter({ protocol_id: protocol.id, organization_id: orgId });
+      setChecklistItems(reloadedChecklist.sort((a, b) => (a.item_order || 0) - (b.item_order || 0)));
+      setHasUnpublishedChanges(false);
+      setShowRevertConfirm(false);
+      toast({ title: `Reverted to v${lastVersion.version_number}`, description: `${snapshotSteps.length} steps restored.` });
+    } catch(e) {
+      console.error('Revert failed:', e);
+      toast({ title: 'Revert failed', description: e.message, variant: 'destructive' });
+    } finally {
+      setReverting(false);
+    }
+  }
+
   if (loading) {
     return (
       <div className="flex justify-center py-16">
@@ -970,19 +1027,61 @@ export default function ProtocolDetail() {
   return (
     <div className="space-y-4">
       {protocol?.status === 'active' && hasUnpublishedChanges && (
-        <div style={{ padding: '10px 16px', background: 'linear-gradient(135deg, #fffbeb, #fef3c7)', border: '1px solid #fde68a', borderLeft: '4px solid #f59e0b', borderRadius: 8, marginBottom: 4, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <span style={{ fontSize: 16 }}>⚠️</span>
-            <div>
-              <div style={{ fontSize: 13, fontWeight: 700, color: '#92400e' }}>Unpublished changes — currently on v{protocol.version}</div>
-              <div style={{ fontSize: 11, color: '#78350f' }}>Edits are saved but not yet versioned. Publish to create v{(protocol.version || 1) + 1} and notify your team.</div>
+        <div style={{ background: 'linear-gradient(135deg, #fffbeb, #fef3c7)', border: '1px solid #fde68a', borderLeft: '4px solid #f59e0b', borderRadius: 8, marginBottom: 4, overflow: 'hidden', fontFamily: 'system-ui, sans-serif' }}>
+          {!showRevertConfirm && (
+            <div style={{ padding: '10px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span style={{ fontSize: 16 }}>⚠️</span>
+                <div>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: '#92400e' }}>Unpublished changes — currently on v{protocol.version}</div>
+                  <div style={{ fontSize: 11, color: '#78350f' }}>Edits are saved but not yet versioned. Publish to create a permanent record.</div>
+                </div>
+              </div>
+              <div style={{ display: 'flex', gap: 8, flexShrink: 0, flexWrap: 'wrap' }}>
+                <button onClick={(e) => { e.stopPropagation(); setHasUnpublishedChanges(false); setShowRevertConfirm(false); }}
+                  style={{ padding: '6px 14px', background: 'white', border: '1px solid #fde68a', borderRadius: 7, fontSize: 12, cursor: 'pointer', color: '#92400e', fontWeight: 600 }}>
+                  Later
+                </button>
+                {versionHistory.length > 0 && isAdmin && (
+                  <button onClick={(e) => { e.stopPropagation(); setShowRevertConfirm(true); }}
+                    style={{ padding: '6px 14px', background: 'white', border: '1px solid #fecaca', borderRadius: 7, fontSize: 12, cursor: 'pointer', color: '#dc2626', fontWeight: 600 }}>
+                    ↩ Revert to v{versionHistory[0]?.version_number || 1}
+                  </button>
+                )}
+                {isAdmin && (
+                  <button onClick={(e) => { e.stopPropagation(); setShowPublishVersionModal(true); }}
+                    style={{ padding: '6px 16px', background: '#f59e0b', color: 'white', border: 'none', borderRadius: 7, fontSize: 12, fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap' }}>
+                    Publish v{(protocol.version || 1) + 1} →
+                  </button>
+                )}
+              </div>
             </div>
-          </div>
-          {isAdmin && (
-            <button onClick={(e) => { e.stopPropagation(); setShowPublishVersionModal(true); }}
-              style={{ padding: '7px 16px', background: '#f59e0b', color: 'white', border: 'none', borderRadius: 7, fontSize: 12, fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0 }}>
-              Publish v{(protocol.version || 1) + 1} →
-            </button>
+          )}
+          {showRevertConfirm && (
+            <div style={{ padding: '14px 16px' }}>
+              <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10, marginBottom: 12 }}>
+                <span style={{ fontSize: 18, flexShrink: 0 }}>⚠️</span>
+                <div>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: '#dc2626', marginBottom: 4 }}>Revert to v{versionHistory[0]?.version_number || 1}?</div>
+                  <div style={{ fontSize: 12, color: '#7f1d1d', lineHeight: 1.6 }}>
+                    This will permanently restore all <strong>{versionHistory[0]?.snapshot_json?.steps?.length || 0} steps</strong> and checklist items from the last published version. <strong>All current unsaved changes will be lost.</strong> This cannot be undone.
+                  </div>
+                </div>
+              </div>
+              <div style={{ padding: '8px 12px', background: 'rgba(220,38,38,0.08)', border: '1px solid #fecaca', borderRadius: 6, marginBottom: 12, fontSize: 11, color: '#dc2626' }}>
+                Last published: v{versionHistory[0]?.version_number} · "{versionHistory[0]?.change_summary}" · {versionHistory[0]?.created_date ? new Date(versionHistory[0].created_date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'}
+              </div>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button onClick={(e) => { e.stopPropagation(); setShowRevertConfirm(false); }} disabled={reverting}
+                  style={{ flex: 1, padding: '8px', background: 'white', border: '1px solid #e2e8f0', borderRadius: 7, fontSize: 12, cursor: 'pointer', color: '#475569', fontWeight: 600 }}>
+                  Cancel
+                </button>
+                <button onClick={(e) => { e.stopPropagation(); handleRevert(); }} disabled={reverting}
+                  style={{ flex: 2, padding: '8px', background: reverting ? '#94a3b8' : '#ef4444', color: 'white', border: 'none', borderRadius: 7, fontSize: 12, fontWeight: 700, cursor: reverting ? 'not-allowed' : 'pointer' }}>
+                  {reverting ? 'Reverting...' : `Yes, Revert to v${versionHistory[0]?.version_number || 1}`}
+                </button>
+              </div>
+            </div>
           )}
         </div>
       )}
