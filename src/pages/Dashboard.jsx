@@ -231,6 +231,8 @@ export default function Dashboard() {
                 </div>
                 {run.run_state === 'in_progress' ? (
                   <button onClick={() => navigate(`/run-execution?id=${run.id}`)} style={{ padding: '3px 10px', background: '#3b82f6', color: 'white', border: 'none', borderRadius: 6, fontSize: 10, fontWeight: 700, cursor: 'pointer', flexShrink: 0 }}>▶ Resume</button>
+                ) : run.run_state === 'abandoned' ? (
+                  <span style={{ fontSize: 10, fontWeight: 700, padding: '1px 7px', borderRadius: 99, background: '#f8fafc', color: '#94a3b8', border: '1px solid #e2e8f0', flexShrink: 0 }}>ABANDONED</span>
                 ) : (
                   run.result_status && run.result_status !== 'pending' && (
                     <span style={{ fontSize: 10, fontWeight: 700, padding: '1px 7px', borderRadius: 99, background: run.result_status === 'pass' ? '#f0fdf4' : '#fef2f2', color: run.result_status === 'pass' ? '#16a34a' : '#dc2626', border: `1px solid ${run.result_status === 'pass' ? '#bbf7d0' : '#fecaca'}`, flexShrink: 0 }}>

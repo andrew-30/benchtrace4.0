@@ -23,9 +23,11 @@ const STATE_LABELS = {
 };
 
 const RESULT_STYLES = {
-  pass: "bg-emerald-50 text-emerald-700",
-  fail: "bg-red-50 text-red-700",
-  pending: "bg-gray-100 text-gray-500",
+  pass:      { className: 'bg-emerald-50 text-emerald-700', label: 'PASS' },
+  fail:      { className: 'bg-red-50 text-red-700',         label: 'FAIL' },
+  pending:   { className: 'bg-gray-100 text-gray-500',      label: 'PENDING' },
+  abandoned: { className: 'bg-slate-100 text-slate-400',    label: 'ABANDONED' },
+  void:      { className: 'bg-gray-100 text-gray-400',      label: 'VOID' },
 };
 
 function fmtTs(iso) {
@@ -183,9 +185,14 @@ export default function Runs() {
                     <td className="px-4 py-3 text-muted-foreground hidden lg:table-cell text-xs">{fmtTs(run.run_started_at)}</td>
                     <td className="px-4 py-3 text-muted-foreground hidden lg:table-cell text-xs">{fmtDuration(run.run_started_at, run.run_ended_at) || "—"}</td>
                     <td className="px-4 py-3">
-                      <span className={`text-xs px-2 py-0.5 rounded font-medium capitalize ${RESULT_STYLES[run.result_status] || RESULT_STYLES.pending}`}>
-                        {run.result_status || "pending"}
-                      </span>
+                      {(() => {
+                        const statusKey = run.run_state === 'abandoned' ? 'abandoned' : (run.result_status || 'pending');
+                        const cfg = RESULT_STYLES[statusKey] || RESULT_STYLES.pending;
+                        if (['completed', 'signed', 'abandoned'].includes(run.run_state)) {
+                          return <span className={`text-xs px-2 py-0.5 rounded font-medium ${cfg.className}`}>{cfg.label}</span>;
+                        }
+                        return null;
+                      })()}
                     </td>
                     <td className="px-4 py-3 text-right">
                       {run.run_state === "in_progress" ? (

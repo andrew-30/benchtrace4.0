@@ -3,6 +3,19 @@ import { Outlet, useNavigate, useLocation } from "react-router-dom";
 import { base44 } from "@/api/base44Client";
 import TopNav from "./TopNav";
 
+async function fixAbandonedRuns(orgId) {
+  try {
+    const abandonedRuns = await base44.entities.Run.filter({ organization_id: orgId, run_state: 'abandoned' });
+    const broken = (abandonedRuns || []).filter(r => r.result_status === 'pending' || !r.result_status);
+    if (broken.length > 0) {
+      await Promise.all(broken.map(r => base44.entities.Run.update(r.id, { result_status: 'abandoned' })));
+      console.log(`Fixed ${broken.length} abandoned runs`);
+    }
+  } catch(e) {
+    console.error('fixAbandonedRuns failed:', e);
+  }
+}
+
 async function migrateOrg(orgId) {
   try {
     const orgData = await base44.entities.Organization.filter({ id: orgId });
@@ -84,6 +97,7 @@ export default function AppLayout() {
         setRole(localStorage.getItem("bt_role"));
         if (org?.timezone) localStorage.setItem("bt_tz", org.timezone);
         if (org?.plan) localStorage.setItem("bt_plan", org.plan);
+        fixAbandonedRuns(cachedOrgId);
         setLoading(false);
         if (location.pathname === "/") navigate("/dashboard", { replace: true });
         return;

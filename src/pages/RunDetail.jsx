@@ -623,10 +623,11 @@ export default function RunDetail() {
             </div>
           )}
 
-          {run.run_state === "abandoned" && (
-            <div style={{ background: "#f8fafc", borderRadius: 10, border: "1px solid #e2e8f0", padding: "14px 20px", fontSize: 13, color: "#64748b", fontWeight: 600 }}>
-              ✗ Run was abandoned
-              {run.context_notes && <div style={{ fontWeight: 400, fontSize: 12, marginTop: 4 }}>Reason: {run.context_notes}</div>}
+          {run.run_state === 'abandoned' && (
+            <div style={{ padding: '12px 16px', background: '#f8fafc', border: '1px solid #e2e8f0', borderLeft: '4px solid #94a3b8', borderRadius: 8 }}>
+              <div style={{ fontSize: 11, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>Run Abandoned</div>
+              <div style={{ fontSize: 13, color: '#475569' }}>{run.context_notes || 'No reason recorded'}</div>
+              <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 4 }}>Ended: {run.run_ended_at ? new Date(run.run_ended_at).toLocaleString('en-GB') : '—'}</div>
             </div>
           )}
         </div>

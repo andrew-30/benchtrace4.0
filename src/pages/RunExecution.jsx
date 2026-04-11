@@ -22,22 +22,62 @@ function fmtElapsed(sec) {
 }
 
 // ─── AbandonModal ─────────────────────────────────────────────────────────────
-function AbandonModal({ onConfirm, onCancel, loading }) {
+function AbandonRunModal({ onConfirm, onCancel, abandoning }) {
   const [reason, setReason] = useState('');
+  const [notes, setNotes] = useState('');
+  const [reasonError, setReasonError] = useState('');
+
+  const ABANDON_REASONS = [
+    'Equipment failure',
+    'Operator error',
+    'Sample contamination detected',
+    'Protocol deviation — cannot continue',
+    'Reagent issue (expired, wrong lot)',
+    'External event (power failure, emergency)',
+    'Other',
+  ];
+
+  const handleConfirm = () => {
+    if (!reason) { setReasonError('Please select a reason for abandoning this run.'); return; }
+    onConfirm(reason, notes.trim());
+  };
+
   return (
-    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.85)', zIndex: 100, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
-      <div style={{ background: '#1e293b', borderRadius: 12, padding: 28, maxWidth: 420, width: '100%', border: '1px solid #334155' }}>
-        <h3 style={{ color: '#ef4444', fontWeight: 700, fontSize: 18, marginBottom: 8 }}>Abandon Run</h3>
-        <p style={{ color: '#94a3b8', fontSize: 14, marginBottom: 16 }}>This run will be marked as abandoned. This action cannot be undone.</p>
-        <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#64748b', marginBottom: 6 }}>REASON FOR ABANDONMENT *</label>
-        <textarea value={reason} onChange={e => setReason(e.target.value)} placeholder="Describe why this run is being abandoned..."
-          style={{ width: '100%', minHeight: 90, background: '#0f172a', border: '1px solid #334155', borderRadius: 8, padding: '10px 12px', color: 'white', fontSize: 14, resize: 'vertical', outline: 'none', boxSizing: 'border-box' }} />
-        <div style={{ display: 'flex', gap: 10, marginTop: 16 }}>
-          <button onClick={onCancel} style={{ flex: 1, padding: '10px', background: 'transparent', border: '1px solid #334155', borderRadius: 8, color: '#94a3b8', cursor: 'pointer', fontSize: 14 }}>Cancel</button>
-          <button onClick={() => reason.trim() && onConfirm(reason)} disabled={!reason.trim() || loading}
-            style={{ flex: 2, padding: '10px', background: reason.trim() && !loading ? '#ef4444' : '#7f1d1d', border: 'none', borderRadius: 8, color: 'white', cursor: reason.trim() && !loading ? 'pointer' : 'not-allowed', fontSize: 14, fontWeight: 700, opacity: loading ? 0.7 : 1 }}>
-            {loading ? 'Abandoning...' : 'Confirm Abandon'}
-          </button>
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.8)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 500, padding: 24, fontFamily: 'system-ui, sans-serif' }}>
+      <div style={{ background: '#1e293b', borderRadius: 14, width: '100%', maxWidth: 440, border: '1px solid rgba(255,255,255,0.1)', boxShadow: '0 20px 60px rgba(0,0,0,0.5)', overflow: 'hidden' }}>
+        <div style={{ background: '#0f172a', padding: '16px 20px', borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
+          <div style={{ fontSize: 15, fontWeight: 800, color: 'white', marginBottom: 2 }}>Abandon this run?</div>
+          <div style={{ fontSize: 12, color: '#94a3b8' }}>This action cannot be undone. The run will be marked as abandoned.</div>
+        </div>
+        <div style={{ padding: '20px' }}>
+          <div style={{ marginBottom: 16 }}>
+            <div style={{ fontSize: 11, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 10 }}>Reason for abandoning *</div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              {ABANDON_REASONS.map(r => (
+                <button key={r} onClick={() => { setReason(r); setReasonError(''); }}
+                  style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 12px', borderRadius: 8, cursor: 'pointer', textAlign: 'left', fontSize: 13, border: `1px solid ${reason === r ? '#ef4444' : 'rgba(255,255,255,0.1)'}`, background: reason === r ? 'rgba(239,68,68,0.15)' : 'rgba(255,255,255,0.04)', color: reason === r ? '#fca5a5' : '#94a3b8', fontWeight: reason === r ? 700 : 400 }}>
+                  <div style={{ width: 16, height: 16, borderRadius: '50%', flexShrink: 0, border: `2px solid ${reason === r ? '#ef4444' : 'rgba(255,255,255,0.2)'}`, background: reason === r ? '#ef4444' : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    {reason === r && <div style={{ width: 6, height: 6, borderRadius: '50%', background: 'white' }} />}
+                  </div>
+                  {r}
+                </button>
+              ))}
+            </div>
+            {reasonError && <div style={{ fontSize: 11, color: '#ef4444', marginTop: 6 }}>{reasonError}</div>}
+          </div>
+          <div style={{ marginBottom: 20 }}>
+            <div style={{ fontSize: 11, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>Additional notes (optional)</div>
+            <textarea value={notes} onChange={e => setNotes(e.target.value)} placeholder="Describe what happened..." rows={3}
+              style={{ width: '100%', padding: '10px 12px', background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8, color: 'white', fontSize: 13, resize: 'none', boxSizing: 'border-box', fontFamily: 'inherit' }} />
+          </div>
+          <div style={{ display: 'flex', gap: 10 }}>
+            <button onClick={onCancel} disabled={abandoning}
+              style={{ flex: 1, padding: '10px', background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.15)', borderRadius: 8, fontSize: 13, cursor: 'pointer', color: '#94a3b8', fontWeight: 600 }}>Cancel</button>
+            <button onClick={handleConfirm} disabled={abandoning}
+              style={{ flex: 2, padding: '10px', background: abandoning ? '#475569' : '#ef4444', color: 'white', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: abandoning ? 'not-allowed' : 'pointer' }}>
+              {abandoning ? 'Abandoning...' : 'Abandon Run'}
+            </button>
+          </div>
         </div>
       </div>
     </div>
@@ -468,11 +508,16 @@ export default function RunExecution() {
     setMeasurementValues({});
   }
 
-  async function handleAbandon(reason) {
+  async function handleAbandon(reason, notes) {
     setAbandoning(true);
     const user = await base44.auth.me();
     const now = new Date().toISOString();
-    await base44.entities.Run.update(runId, { run_state: 'abandoned', run_ended_at: now, context_notes: reason });
+    await base44.entities.Run.update(runId, {
+      run_state: 'abandoned',
+      result_status: 'abandoned',
+      run_ended_at: now,
+      context_notes: notes ? `Abandoned: ${reason}. ${notes}` : `Abandoned: ${reason}`,
+    });
     await base44.entities.AuditLog.create({
       organization_id: orgId,
       entity_type: 'Run',
@@ -480,10 +525,10 @@ export default function RunExecution() {
       event_type: 'run_abandoned',
       actor_user_id: user.id,
       actor_email: user.email,
-      metadata: { reason },
+      metadata: { abandon_reason: reason, abandon_notes: notes || '', abandoned_at_step: currentStepIndex + 1, total_steps: mergedSteps?.length || 0 },
       created_at: now,
     });
-    navigate(`/run-detail?id=${runId}`);
+    navigate('/runs');
   }
 
   if (loading) {
@@ -563,8 +608,8 @@ export default function RunExecution() {
           </div>
         </div>
         <button onClick={() => setShowAbandon(true)}
-          style={{ padding: '6px 14px', background: 'transparent', border: '1px solid #7f1d1d', borderRadius: 7, color: '#f87171', cursor: 'pointer', fontSize: 12, fontWeight: 600 }}>
-          ⚠ Abandon
+          style={{ padding: '8px 16px', background: 'rgba(239,68,68,0.15)', color: '#fca5a5', border: '1px solid rgba(239,68,68,0.3)', borderRadius: 7, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
+          Abandon Run
         </button>
       </div>
 
@@ -725,7 +770,7 @@ export default function RunExecution() {
       </div>
 
       {showAbandon && (
-        <AbandonModal onConfirm={handleAbandon} onCancel={() => setShowAbandon(false)} loading={abandoning} />
+        <AbandonRunModal onConfirm={handleAbandon} onCancel={() => setShowAbandon(false)} abandoning={abandoning} />
       )}
     </div>
     </>  

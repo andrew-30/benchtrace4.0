@@ -18,7 +18,7 @@ function calculateReadinessScore(protocols, runs, deviations, protocolVersions) 
     action: 'Publish protocols via Protocol Detail → Publish Version',
   });
 
-  const doneRuns = runs.filter(r => ['completed', 'signed'].includes(r.run_state));
+  const doneRuns = runs.filter(r => ['completed', 'signed'].includes(r.run_state)); // abandoned excluded
   const signedRuns = runs.filter(r => r.run_state === 'signed');
   checks.push({
     label: 'Runs signed off',

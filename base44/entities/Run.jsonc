@@ -107,7 +107,9 @@
       "enum": [
         "pass",
         "fail",
-        "pending"
+        "pending",
+        "abandoned",
+        "void"
       ],
       "default": "pending"
     },
