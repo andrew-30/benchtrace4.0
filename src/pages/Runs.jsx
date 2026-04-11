@@ -103,7 +103,7 @@ export default function Runs() {
   const activeRuns = filtered.filter(r => r.run_state === 'in_progress');
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6" style={{ paddingBottom: window.innerWidth < 768 ? 80 : 0 }}>
       <div className="flex items-center justify-between gap-4">
         <h1 className="text-xl font-semibold tracking-tight text-foreground">Runs</h1>
         <Button size="sm" onClick={() => navigate("/protocols")}>
@@ -170,90 +170,36 @@ export default function Runs() {
             </div>
           )}
           <style>{`@keyframes bt-pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }`}</style>
-          {device.isMobile ? (
-            <div>
-              {filtered.filter(r => r.run_state !== 'in_progress').map(run => (
-                <div key={run.id}
-                  onClick={() => navigate(run.run_state === 'in_progress' ? `/run-execution?id=${run.id}` : `/run-detail?id=${run.id}`)}
-                  style={{
-                    background: 'white', borderRadius: 10,
-                    border: `1px solid ${run.run_state === 'in_progress' ? '#bfdbfe' : '#e2e8f0'}`,
-                    borderLeft: `3px solid ${run.run_state === 'in_progress' ? '#3b82f6' : run.run_state === 'signed' ? '#6366f1' : run.run_state === 'abandoned' ? '#94a3b8' : '#e2e8f0'}`,
-                    padding: '14px 16px', marginBottom: 8, cursor: 'pointer', minHeight: 72,
-                  }}
-                >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontSize: 14, fontWeight: 700, color: '#1e293b', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginBottom: 4 }}>
-                        {protocols[run.protocol_id]?.name || 'Protocol'}
-                      </div>
-                      <div style={{ fontSize: 11, color: '#94a3b8' }}>
-                        {new Date(run.run_started_at).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' })}
-                      </div>
+          {/* Single card layout — all devices */}
+          <div>
+            {filtered.filter(r => r.run_state !== 'in_progress').map(run => (
+              <div key={run.id}
+                onClick={() => navigate(`/run-detail?id=${run.id}`)}
+                style={{ background: 'white', borderRadius: 10, border: `1px solid ${run.run_state === 'signed' ? '#c7d2fe' : '#e2e8f0'}`, borderLeft: `3px solid ${run.run_state === 'signed' ? '#6366f1' : run.run_state === 'abandoned' ? '#94a3b8' : '#e2e8f0'}`, padding: '14px 16px', marginBottom: 8, cursor: 'pointer' }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 14, fontWeight: 700, color: '#1e293b', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginBottom: 4 }}>
+                      {protocols[run.protocol_id]?.name || 'Protocol Run'}
                     </div>
-                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4, flexShrink: 0 }}>
-                      <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 99, background: run.run_state === 'in_progress' ? '#eff6ff' : run.run_state === 'signed' ? '#eef2ff' : run.run_state === 'abandoned' ? '#f8fafc' : '#f8fafc', color: run.run_state === 'in_progress' ? '#3b82f6' : run.run_state === 'signed' ? '#6366f1' : '#94a3b8', border: `1px solid ${run.run_state === 'in_progress' ? '#bfdbfe' : run.run_state === 'signed' ? '#c7d2fe' : '#e2e8f0'}` }}>
-                        {run.run_state === 'in_progress' ? 'LIVE' : run.run_state === 'signed' ? 'SIGNED' : run.run_state === 'abandoned' ? 'ABD' : run.run_state === 'completed' ? 'DONE' : run.run_state.toUpperCase()}
-                      </span>
-                      {['signed', 'completed', 'abandoned'].includes(run.run_state) && run.result_status && run.result_status !== 'pending' && (
-                        <span style={{ fontSize: 10, fontWeight: 700, padding: '1px 7px', borderRadius: 99, background: run.result_status === 'pass' ? '#f0fdf4' : run.result_status === 'fail' ? '#fef2f2' : '#f8fafc', color: run.result_status === 'pass' ? '#16a34a' : run.result_status === 'fail' ? '#dc2626' : '#94a3b8', border: `1px solid ${run.result_status === 'pass' ? '#bbf7d0' : run.result_status === 'fail' ? '#fecaca' : '#e2e8f0'}` }}>
-                          {run.result_status === 'pass' ? 'PASS' : run.result_status === 'fail' ? 'FAIL' : run.result_status === 'abandoned' ? 'ABD' : '—'}
-                        </span>
-                      )}
+                    <div style={{ fontSize: 11, color: '#94a3b8' }}>
+                      {run.operator_name} · {new Date(run.run_started_at).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}
                     </div>
                   </div>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <div className="bg-card border border-border rounded-lg overflow-hidden">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-border bg-muted/40">
-                  <th className="text-left px-4 py-3 font-medium text-muted-foreground text-xs uppercase tracking-wide">Protocol</th>
-                  <th className="text-left px-4 py-3 font-medium text-muted-foreground text-xs uppercase tracking-wide">State</th>
-                  <th className="text-left px-4 py-3 font-medium text-muted-foreground text-xs uppercase tracking-wide hidden md:table-cell">Operator</th>
-                  <th className="text-left px-4 py-3 font-medium text-muted-foreground text-xs uppercase tracking-wide hidden lg:table-cell">Started</th>
-                  <th className="text-left px-4 py-3 font-medium text-muted-foreground text-xs uppercase tracking-wide hidden lg:table-cell">Duration</th>
-                  <th className="text-left px-4 py-3 font-medium text-muted-foreground text-xs uppercase tracking-wide">Result</th>
-                  <th className="px-4 py-3"></th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border">
-                {filtered.map(run => (
-                  <tr key={run.id} className="hover:bg-muted/30 transition-colors">
-                    <td className="px-4 py-3 font-medium text-foreground">{protocols[run.protocol_id]?.name || "Unknown Protocol"}</td>
-                    <td className="px-4 py-3">
-                      <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${STATE_STYLES[run.run_state] || STATE_STYLES.not_started}`}>
-                        {STATE_LABELS[run.run_state] || run.run_state}
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4, flexShrink: 0 }}>
+                    <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 99, background: run.run_state === 'signed' ? '#eef2ff' : run.run_state === 'abandoned' ? '#f8fafc' : '#f8fafc', color: run.run_state === 'signed' ? '#6366f1' : '#94a3b8', border: `1px solid ${run.run_state === 'signed' ? '#c7d2fe' : '#e2e8f0'}` }}>
+                      {run.run_state === 'signed' ? 'SIGNED' : run.run_state === 'completed' ? 'DONE' : run.run_state === 'abandoned' ? 'ABANDONED' : run.run_state.toUpperCase()}
+                    </span>
+                    {run.result_status && run.result_status !== 'pending' && (
+                      <span style={{ fontSize: 10, fontWeight: 700, padding: '1px 7px', borderRadius: 99, background: run.result_status === 'pass' ? '#f0fdf4' : run.result_status === 'fail' ? '#fef2f2' : '#f8fafc', color: run.result_status === 'pass' ? '#16a34a' : run.result_status === 'fail' ? '#dc2626' : '#94a3b8', border: `1px solid ${run.result_status === 'pass' ? '#bbf7d0' : run.result_status === 'fail' ? '#fecaca' : '#e2e8f0'}` }}>
+                        {run.result_status === 'pass' ? 'PASS' : run.result_status === 'fail' ? 'FAIL' : run.result_status === 'abandoned' ? 'ABD' : ''}
                       </span>
-                    </td>
-                    <td className="px-4 py-3 text-muted-foreground hidden md:table-cell">{run.operator_name || "—"}</td>
-                    <td className="px-4 py-3 text-muted-foreground hidden lg:table-cell text-xs">{fmtTs(run.run_started_at)}</td>
-                    <td className="px-4 py-3 text-muted-foreground hidden lg:table-cell text-xs">{fmtDuration(run.run_started_at, run.run_ended_at) || "—"}</td>
-                    <td className="px-4 py-3">
-                      {(() => {
-                        const statusKey = run.run_state === 'abandoned' ? 'abandoned' : (run.result_status || 'pending');
-                        const cfg = RESULT_STYLES[statusKey] || RESULT_STYLES.pending;
-                        if (['completed', 'signed', 'abandoned'].includes(run.run_state)) {
-                          return <span className={`text-xs px-2 py-0.5 rounded font-medium ${cfg.className}`}>{cfg.label}</span>;
-                        }
-                        return null;
-                      })()}
-                    </td>
-                    <td className="px-4 py-3 text-right">
-                      {run.run_state === "in_progress" ? (
-                        <Button size="sm" onClick={() => navigate(`/run-execution?id=${run.id}`)}>Resume</Button>
-                      ) : (
-                        <Button size="sm" variant="outline" onClick={() => navigate(`/run-detail?id=${run.id}`)}>View</Button>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+                    )}
+                  </div>
+                </div>
+              </div>
+            ))}
           </div>
-          )}
         </div>
       )}
     </div>

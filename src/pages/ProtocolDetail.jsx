@@ -1109,7 +1109,7 @@ export default function ProtocolDetail() {
   const sortedSteps = [...steps].sort((a, b) => a.step_order - b.step_order);
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4" style={{ paddingBottom: window.innerWidth < 768 ? 80 : 0 }}>
       <ProtocolToast toast={protoToast} onClear={clearToast} />
       {protocol?.status === 'active' && hasUnpublishedChanges && (
         <div style={{ background: 'linear-gradient(135deg, #fffbeb, #fef3c7)', border: '1px solid #fde68a', borderLeft: '4px solid #f59e0b', borderRadius: 8, marginBottom: 4, overflow: 'hidden', fontFamily: 'system-ui, sans-serif' }}>

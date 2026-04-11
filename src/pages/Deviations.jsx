@@ -155,7 +155,7 @@ export default function Deviations() {
   }
 
   return (
-    <div className="space-y-4 max-w-4xl">
+    <div className="space-y-4 max-w-4xl" style={{ paddingBottom: window.innerWidth < 768 ? 80 : 0 }}>
       {/* Header */}
       <div>
         <h1 className="text-xl font-bold text-foreground mb-1">Deviations</h1>

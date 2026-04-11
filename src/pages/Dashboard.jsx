@@ -76,7 +76,7 @@ export default function Dashboard() {
 
   if (device.isMobile) {
     return (
-      <div>
+      <div style={{ paddingBottom: 80 }}>
         <div style={{ marginBottom: 20 }}>
           <h1 style={{ fontSize: 20, fontWeight: 800, color: '#1e293b', margin: '0 0 4px' }}>{org?.name || 'Dashboard'}</h1>
           <p style={{ fontSize: 12, color: '#64748b', margin: 0 }}>{now.toLocaleDateString('en-GB', { weekday: 'long', day: '2-digit', month: 'long' })}</p>
@@ -96,7 +96,7 @@ export default function Dashboard() {
             { label: 'Total Runs', value: runs.length, color: '#0891b2', bg: '#ecfeff' },
             { label: 'Signed Runs', value: signedRuns, color: '#6366f1', bg: '#eef2ff' },
           ].map((stat, i) => (
-            <div key={i} style={{ background: stat.bg, borderRadius: 10, padding: '14px', border: '1px solid transparent', boxShadow: '0 1px 4px rgba(0,0,0,0.05)' }}>
+            <div key={i} style={{ background: stat.bg, borderRadius: 10, padding: '14px', boxShadow: '0 1px 4px rgba(0,0,0,0.05)' }}>
               <div style={{ fontSize: 10, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6 }}>{stat.label}</div>
               <div style={{ fontSize: 28, fontWeight: 900, color: stat.color }}>{loading ? '...' : stat.value}</div>
             </div>
@@ -129,17 +129,19 @@ export default function Dashboard() {
             );
           })}
         </div>
+        {/* Quick actions — 2x2 grid, full-width tappable cards */}
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
           {[
-            { label: 'Protocols', path: '/protocols', color: '#6366f1' },
-            { label: 'New Run', path: '/protocols', color: '#16a34a' },
-            { label: 'Deviations', path: '/deviations', color: '#dc2626' },
-            { label: 'Audit', path: '/audit-readiness', color: '#8b5cf6' },
-          ].map(action => (
-            <button key={action.path + action.label} onClick={() => navigate(action.path)}
-              style={{ padding: '16px', background: 'white', borderRadius: 10, border: '1px solid #e2e8f0', borderTop: `3px solid ${action.color}`, cursor: 'pointer', textAlign: 'left', minHeight: 60, fontSize: 13, fontWeight: 700, color: '#1e293b' }}>
-              {action.label}
-            </button>
+            { label: 'Protocols', sub: `${protocols.length} total`, color: '#6366f1', path: '/protocols' },
+            { label: 'Start Run', sub: 'Begin execution', color: '#16a34a', path: '/protocols' },
+            { label: 'Deviations', sub: `${openDeviations} open`, color: openDeviations > 0 ? '#dc2626' : '#64748b', path: '/deviations' },
+            { label: 'Audit', sub: 'Readiness check', color: '#8b5cf6', path: '/audit-readiness' },
+          ].map((action, i) => (
+            <div key={i} onClick={() => navigate(action.path)}
+              style={{ padding: '16px', background: 'white', borderRadius: 10, border: '1px solid #e2e8f0', borderTop: `3px solid ${action.color}`, cursor: 'pointer', minHeight: 72, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+              <div style={{ fontSize: 13, fontWeight: 700, color: '#1e293b' }}>{action.label}</div>
+              <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 2 }}>{action.sub}</div>
+            </div>
           ))}
         </div>
       </div>
@@ -147,7 +149,7 @@ export default function Dashboard() {
   }
 
   return (
-    <div>
+    <div style={{ paddingBottom: window.innerWidth < 768 ? 80 : 0 }}>
       {/* Welcome */}
       <div style={{ marginBottom: 24 }}>
         <h1 style={{ fontSize: 22, fontWeight: 800, color: '#1e293b', margin: '0 0 4px' }}>
