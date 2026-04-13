@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { base44 } from "@/api/base44Client";
 import {
@@ -401,6 +401,29 @@ const SECTION_BORDER = {
   data_analysis: "border-l-4 border-l-amber-400",
   general: "border-l-4 border-l-gray-300",
 };
+
+function renderStepInstruction(instruction) {
+  const text = instruction || '';
+  const lines = text.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+  const hasBullets = lines.length > 1 && lines.some(l => l.startsWith('•') || l.startsWith('-'));
+  if (hasBullets) {
+    return (
+      <ul style={{ margin: '4px 0 0', padding: 0, listStyle: 'none' }}>
+        {lines.map((line, i) => {
+          const clean = line.replace(/^[•\-\*]\s*/, '').trim();
+          if (!clean) return null;
+          return (
+            <li key={i} style={{ display: 'flex', gap: 8, marginBottom: 3 }}>
+              <span style={{ color: '#6366f1', flexShrink: 0, fontSize: 14, lineHeight: '1.4' }}>•</span>
+              <span style={{ fontSize: 12, color: '#374151', lineHeight: 1.6 }}>{clean}</span>
+            </li>
+          );
+        })}
+      </ul>
+    );
+  }
+  return <div style={{ fontSize: 12, color: '#374151', lineHeight: 1.6 }}>{text}</div>;
+}
 
 // ── Step row in review ────────────────────────────────────────────────────────
 function StepRow({ step, onDelete }) {

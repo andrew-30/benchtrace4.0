@@ -1039,7 +1039,7 @@ export default function ProtocolDetail() {
     try {
       const lastVersion = versionHistory[0];
       if (!lastVersion || !lastVersion.snapshot_json) {
-        toast({ title: 'No published version found to revert to.', variant: 'destructive' });
+        showToast('No published version found to revert to.', 'error');
         setReverting(false);
         return;
       }

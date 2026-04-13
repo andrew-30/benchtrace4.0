@@ -65,17 +65,16 @@ export default function Settings() {
   }, []);
 
   async function handleSaveOrg() {
-    if (!orgName.trim()) { setSaveError('Lab name is required.'); return; }
-    setSaving(true); setSaveError(''); setSaveSuccess('');
+    if (!orgName.trim()) { showNotification('Lab name is required.', 'error'); return; }
+    setSaving(true);
     try {
       await base44.entities.Organization.update(org.id, {
         name: orgName.trim(),
         sector,
         timezone,
-        plan,
       });
       localStorage.setItem('bt_tz', timezone);
-      setOrg(prev => ({ ...prev, name: orgName.trim(), sector, timezone, plan }));
+      setOrg(prev => ({ ...prev, name: orgName.trim(), sector, timezone }));
       showNotification('Lab settings saved successfully.', 'success');
     } catch(e) {
       showNotification('Failed to save. Please try again.', 'error');
