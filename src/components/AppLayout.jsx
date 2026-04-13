@@ -97,6 +97,11 @@ export default function AppLayout() {
         setRole(localStorage.getItem("bt_role"));
         if (org?.timezone) localStorage.setItem("bt_tz", org.timezone);
         if (org?.plan) localStorage.setItem("bt_plan", org.plan);
+        localStorage.setItem('bt_beta', org?.beta_user ? 'true' : 'false');
+        if (!org?.beta_user) localStorage.removeItem('bt_preview_plan');
+        if (org?.beta_user && !localStorage.getItem('bt_preview_plan')) {
+          localStorage.setItem('bt_preview_plan', org?.plan || 'starter');
+        }
         fixAbandonedRuns(cachedOrgId);
         setLoading(false);
         if (location.pathname === "/") navigate("/dashboard", { replace: true });
@@ -124,6 +129,11 @@ export default function AppLayout() {
       const migratedOrg = await migrateOrg(membership.organization_id);
       if (migratedOrg?.timezone) localStorage.setItem("bt_tz", migratedOrg.timezone);
       if (migratedOrg?.plan) localStorage.setItem("bt_plan", migratedOrg.plan);
+      localStorage.setItem('bt_beta', migratedOrg?.beta_user ? 'true' : 'false');
+      if (!migratedOrg?.beta_user) localStorage.removeItem('bt_preview_plan');
+      if (migratedOrg?.beta_user && !localStorage.getItem('bt_preview_plan')) {
+        localStorage.setItem('bt_preview_plan', migratedOrg?.plan || 'starter');
+      }
 
       setOrg(migratedOrg);
       setRole(membership.role);

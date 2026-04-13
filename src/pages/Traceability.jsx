@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { base44 } from "@/api/base44Client";
+import FeatureGate from "@/components/FeatureGate";
 
 function tzFmt(dateStr) {
   if (!dateStr) return '—';
@@ -93,6 +94,7 @@ export default function Traceability() {
   }
 
   return (
+    <FeatureGate feature="traceability">
     <div style={{ maxWidth: 860, margin: '0 auto', padding: '32px 24px' }}>
 
       <div style={{ marginBottom: 28 }}>
@@ -310,5 +312,6 @@ export default function Traceability() {
         </div>
       )}
     </div>
+    </FeatureGate>
   );
 }

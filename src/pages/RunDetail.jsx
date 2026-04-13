@@ -2,6 +2,8 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { ArrowLeft } from "lucide-react";
 import { base44 } from "@/api/base44Client";
+import FeatureGate from "@/components/FeatureGate";
+import { canAccess, setPreviewPlan } from "@/lib/planGate";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 function tzFmt(dateStr, timeOnly = false) {

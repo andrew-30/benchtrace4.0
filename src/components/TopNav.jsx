@@ -2,6 +2,7 @@ import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useState, useEffect } from "react";
 import { FlaskConical, LogOut } from "lucide-react";
 import { getPlanStatus } from "@/lib/planStatus";
+import { getEffectivePlan, GATE_PLAN_CONFIG } from "@/lib/planGate";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -119,6 +120,30 @@ export default function TopNav({ user }) {
         </div>
 
           <div className="flex items-center gap-2">
+            {/* Plan badge */}
+            {(() => {
+              const isBeta = localStorage.getItem('bt_beta') === 'true';
+              const effectivePlan = getEffectivePlan();
+              const config = GATE_PLAN_CONFIG[effectivePlan] || GATE_PLAN_CONFIG.starter;
+              return (
+                <div
+                  style={{
+                    padding: '3px 10px', borderRadius: 99,
+                    background: `${config.color}15`,
+                    border: `1px solid ${config.color}40`,
+                    display: 'flex', alignItems: 'center', gap: 5,
+                    cursor: isBeta ? 'pointer' : 'default',
+                  }}
+                  onClick={() => isBeta && navigate('/settings')}
+                  title={isBeta ? 'Click to switch plan preview' : ''}
+                >
+                  {isBeta && <span style={{ fontSize: 8, color: config.color }}>🧪</span>}
+                  <span style={{ fontSize: 10, fontWeight: 800, color: config.color, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                    {config.name}
+                  </span>
+                </div>
+              );
+            })()}
             <button onClick={() => setMobileNavOpen(prev => !prev)} className="md:hidden"
               style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '4px 8px', color: '#475569', fontSize: 20, display: 'flex', alignItems: 'center' }}>
               {mobileNavOpen ? '✕' : '☰'}

@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { base44 } from "@/api/base44Client";
 import DismissibleNotification from "@/components/DismissibleNotification";
+import FeatureGate from "@/components/FeatureGate";
 
 export default function Team() {
   const orgId = localStorage.getItem('bt_org_id');
@@ -109,6 +110,7 @@ export default function Team() {
   const pendingInvites = invites.filter(i => i.status === 'pending');
 
   return (
+    <FeatureGate feature="team_management">
     <div style={{ maxWidth: 800, margin: '0 auto', padding: '8px 0' }}>
 
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 28 }}>
@@ -248,5 +250,6 @@ export default function Team() {
         </div>
       </div>
     </div>
+    </FeatureGate>
   );
 }

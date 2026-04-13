@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { base44 } from "@/api/base44Client";
+import FeatureGate from "@/components/FeatureGate";
 
 function calculateReadinessScore(protocols, runs, deviations, protocolVersions) {
   const checks = [];
@@ -114,6 +115,7 @@ export default function AuditReadiness() {
   const passedCount = checks.filter(c => c.passed).length;
 
   return (
+    <FeatureGate feature="audit_readiness">
     <div style={{ maxWidth: 800, margin: '0 auto', padding: '0 0 40px', fontFamily: 'system-ui,sans-serif' }}>
 
       {protocols.length === 0 && runs.length === 0 && (
@@ -205,5 +207,6 @@ export default function AuditReadiness() {
       </div>
 
     </div>
+    </FeatureGate>
   );
 }
