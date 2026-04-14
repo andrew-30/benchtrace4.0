@@ -4,7 +4,7 @@ import { base44 } from "@/api/base44Client";
 import DismissibleNotification from "@/components/DismissibleNotification";
 import { getPlanStatus } from "@/lib/planStatus";
 import { PLAN_CONFIG } from "@/lib/planConfig";
-import { GATE_PLAN_CONFIG } from "@/lib/planGate";
+import { GATE_PLAN_CONFIG, getCurrentOrg, getActivePlan, PLAN_TIER } from "@/lib/planGate";
 
 const SECTORS = ['Academic Research', 'Clinical Diagnostic', 'GMP Manufacturing', 'ISO Accredited', 'CRO Study', 'Biotech Startup', 'General'];
 const TIMEZONES = ['UTC', 'Europe/London', 'Europe/Paris', 'Europe/Berlin', 'Europe/Rome', 'Europe/Madrid', 'Europe/Amsterdam', 'Europe/Stockholm', 'Europe/Warsaw', 'Europe/Zurich', 'Africa/Nairobi', 'Africa/Lagos', 'Africa/Cairo', 'Africa/Johannesburg', 'America/New_York', 'America/Chicago', 'America/Los_Angeles', 'America/Toronto', 'America/Sao_Paulo', 'Asia/Dubai', 'Asia/Kolkata', 'Asia/Singapore', 'Asia/Tokyo', 'Asia/Shanghai', 'Australia/Sydney', 'Pacific/Auckland'];
@@ -37,12 +37,7 @@ export default function Settings() {
   const [orgName, setOrgName] = useState('');
   const [sector, setSector] = useState('Academic Research');
   const [timezone, setTimezone] = useState('UTC');
-  const [previewPlan, setPreviewPlanState] = useState(() => {
-    const stored = localStorage.getItem('bt_preview_plan');
-    const actualPlan = localStorage.getItem('bt_plan') || 'starter';
-    const validPlans = ['free', 'starter', 'lab', 'lab_pro'];
-    return (stored && validPlans.includes(stored)) ? stored : actualPlan;
-  });
+  const [switching, setSwitching] = useState(false);
 
   useEffect(() => {
     const load = async () => {
@@ -177,92 +172,84 @@ export default function Settings() {
         )}
       </div>
 
-      {/* Beta Tester Plan Switcher */}
-      {localStorage.getItem('bt_beta') === 'true' && (
-        <div style={{
-          padding: '20px', background: 'linear-gradient(135deg, #1e293b, #0f172a)',
-          borderRadius: 12, marginBottom: 20, border: '1px solid rgba(99,102,241,0.3)',
-          fontFamily: 'system-ui, sans-serif',
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
-            <div style={{ padding: '6px 12px', background: 'rgba(99,102,241,0.2)', border: '1px solid rgba(99,102,241,0.4)', borderRadius: 99, display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-              <div style={{ width: 6, height: 6, borderRadius: '50%', background: '#a5b4fc' }} />
-              <span style={{ fontSize: 10, fontWeight: 800, color: '#a5b4fc', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Beta Tester Mode</span>
-            </div>
-          </div>
-          <div style={{ fontSize: 14, fontWeight: 700, color: 'white', marginBottom: 4 }}>Preview Any Plan</div>
-          <div style={{ fontSize: 12, color: '#94a3b8', marginBottom: 16, lineHeight: 1.5 }}>
-            Switch between plans to experience all BenchTrace features. No payment required during beta — real billing starts when beta ends.
-          </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            {[
-              { value: 'starter', name: 'Starter', price: '€19/mo', color: '#3b82f6', features: ['5 protocols', 'Basic runs', 'Deviation logging'] },
-              { value: 'lab', name: 'Lab', price: '€79/mo', color: '#6366f1', features: ['20 protocols', 'AI Normaliser', 'Audit View', 'E-signature', 'Protocol versioning', 'Team (5 members)'] },
-              { value: 'lab_pro', name: 'Lab Pro', price: '€249/mo', color: '#dc2626', features: ['Unlimited protocols', 'Audit Readiness', 'Traceability', 'Deviation Center', 'Unlimited team'] },
-            ].map(plan => {
-              const isSelected = previewPlan === plan.value;
-              return (
-                <button
-                  key={plan.value}
-                  onClick={() => {
-                    localStorage.setItem('bt_preview_plan', plan.value);
-                    setPreviewPlanState(plan.value);
-                    setTimeout(() => window.location.reload(), 100);
-                  }}
-                  style={{
-                    padding: '12px 16px', borderRadius: 10, cursor: 'pointer',
-                    textAlign: 'left', width: '100%',
-                    border: `2px solid ${isSelected ? plan.color : 'rgba(255,255,255,0.1)'}`,
-                    background: isSelected ? `${plan.color}20` : 'rgba(255,255,255,0.04)',
-                    transition: 'all 0.15s',
-                  }}
-                >
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: isSelected ? 8 : 0 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                      <div style={{ width: 10, height: 10, borderRadius: '50%', background: isSelected ? plan.color : 'rgba(255,255,255,0.2)', border: `2px solid ${isSelected ? plan.color : 'rgba(255,255,255,0.3)'}` }} />
-                      <span style={{ fontSize: 14, fontWeight: 700, color: 'white' }}>{plan.name}</span>
-                    </div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                      <span style={{ fontSize: 12, color: '#94a3b8' }}>{plan.price}</span>
-                      {isSelected && (
-                        <span style={{ fontSize: 9, fontWeight: 800, padding: '2px 8px', borderRadius: 99, background: plan.color, color: 'white' }}>ACTIVE</span>
+      {/* Beta Tester Plan Switcher — DB-backed */}
+      {org?.beta_user === true && (() => {
+        const currentOrg = getCurrentOrg() || org;
+        const actualPlan = currentOrg.plan || 'starter';
+        const selected = currentOrg.preview_plan || actualPlan;
+
+        const plans = [
+          { value: 'starter', name: 'Starter', price: '€19/mo', color: '#3b82f6', features: ['Protocol Library (5)', 'Run execution', 'Pre-run checklist', 'Basic deviations', 'Run history'] },
+          { value: 'lab',     name: 'Lab',     price: '€79/mo', color: '#6366f1', features: ['Everything in Starter', 'AI Normaliser', 'Audit View + PDF', 'E-signature (21 CFR)', 'Protocol versioning', 'Team (5 members)'] },
+          { value: 'lab_pro', name: 'Lab Pro', price: '€249/mo', color: '#dc2626', features: ['Everything in Lab', 'Audit Readiness', 'Traceability Navigator', 'Deviation Center', 'Unlimited protocols', 'Unlimited team'] },
+        ];
+
+        const handleSwitch = async (planValue) => {
+          if (switching) return;
+          setSwitching(true);
+          await base44.entities.Organization.update(org.id, { preview_plan: planValue });
+          setTimeout(() => window.location.reload(), 150);
+        };
+
+        return (
+          <div style={{ background: 'linear-gradient(135deg, #1e293b, #0f172a)', borderRadius: 12, marginBottom: 20, border: '1px solid rgba(99,102,241,0.3)', fontFamily: 'system-ui, sans-serif', overflow: 'hidden' }}>
+            <div style={{ padding: '20px 20px 0' }}>
+              <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '4px 10px', background: 'rgba(99,102,241,0.25)', border: '1px solid rgba(99,102,241,0.5)', borderRadius: 99, marginBottom: 14 }}>
+                <span style={{ fontSize: 10, fontWeight: 800, color: '#a5b4fc', textTransform: 'uppercase', letterSpacing: '0.08em' }}>🧪 Beta Tester Mode</span>
+              </div>
+              <div style={{ fontSize: 15, fontWeight: 800, color: 'white', marginBottom: 4 }}>Preview Any Plan</div>
+              <div style={{ fontSize: 12, color: '#94a3b8', marginBottom: 18, lineHeight: 1.5 }}>
+                Switch between plans to experience all BenchTrace features. No payment required during beta.
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 14 }}>
+                {plans.map(plan => {
+                  const isActive = selected === plan.value;
+                  return (
+                    <button
+                      key={plan.value}
+                      onClick={() => handleSwitch(plan.value)}
+                      disabled={switching}
+                      style={{ padding: '12px 16px', borderRadius: 10, cursor: switching ? 'wait' : 'pointer', textAlign: 'left', width: '100%', border: `2px solid ${isActive ? plan.color : 'rgba(255,255,255,0.08)'}`, background: isActive ? `${plan.color}22` : 'rgba(255,255,255,0.03)', transition: 'all 0.15s' }}
+                    >
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: isActive ? 10 : 0 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                          <div style={{ width: 18, height: 18, borderRadius: '50%', flexShrink: 0, border: `2px solid ${isActive ? plan.color : 'rgba(255,255,255,0.2)'}`, background: isActive ? plan.color : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                            {isActive && <div style={{ width: 6, height: 6, borderRadius: '50%', background: 'white' }} />}
+                          </div>
+                          <span style={{ fontSize: 14, fontWeight: 700, color: 'white' }}>{plan.name}</span>
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                          <span style={{ fontSize: 12, color: '#64748b' }}>{plan.price}</span>
+                          {isActive && <span style={{ fontSize: 9, fontWeight: 800, padding: '2px 8px', borderRadius: 99, background: plan.color, color: 'white' }}>{switching ? 'SWITCHING…' : 'ACTIVE'}</span>}
+                        </div>
+                      </div>
+                      {isActive && (
+                        <div style={{ paddingLeft: 28, display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                          {plan.features.map((f, i) => <span key={i} style={{ fontSize: 10, color: '#94a3b8', padding: '2px 7px', background: 'rgba(255,255,255,0.05)', borderRadius: 4 }}>✓ {f}</span>)}
+                        </div>
                       )}
-                    </div>
-                  </div>
-                  {isSelected && (
-                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, paddingLeft: 20 }}>
-                      {plan.features.map((f, i) => (
-                        <span key={i} style={{ fontSize: 10, color: '#94a3b8', padding: '2px 6px', background: 'rgba(255,255,255,0.06)', borderRadius: 4 }}>✓ {f}</span>
-                      ))}
-                    </div>
-                  )}
-                </button>
-              );
-            })}
-          </div>
-          <div style={{ marginTop: 14, padding: '10px 12px', background: 'rgba(245,158,11,0.1)', border: '1px solid rgba(245,158,11,0.2)', borderRadius: 8 }}>
-            <div style={{ fontSize: 11, color: '#fbbf24', lineHeight: 1.5 }}>
-              ⚠ You are previewing <strong>{GATE_PLAN_CONFIG[previewPlan]?.name || previewPlan}</strong> features.
-              Your actual plan is <strong>{GATE_PLAN_CONFIG[localStorage.getItem('bt_plan')]?.name || 'Starter'}</strong>.
-              Switching reloads the page to apply changes.
+                    </button>
+                  );
+                })}
+              </div>
+              <div style={{ padding: '10px 12px', background: 'rgba(245,158,11,0.1)', border: '1px solid rgba(245,158,11,0.2)', borderRadius: 8, marginBottom: 10 }}>
+                <div style={{ fontSize: 11, color: '#fbbf24', lineHeight: 1.5 }}>
+                  ⚠ Previewing <strong>{GATE_PLAN_CONFIG[selected]?.name || selected}</strong>.
+                  Actual plan: <strong>{GATE_PLAN_CONFIG[actualPlan]?.name || actualPlan}</strong>.
+                  {actualPlan !== selected && ' Features shown reflect preview plan only.'}
+                </div>
+              </div>
             </div>
+            <button
+              onClick={() => handleSwitch('starter')}
+              disabled={switching}
+              style={{ width: '100%', padding: '12px', background: 'transparent', border: 'none', borderTop: '1px solid rgba(255,255,255,0.06)', color: '#475569', fontSize: 12, cursor: 'pointer', fontWeight: 600 }}
+            >
+              ↩ Reset to Starter (baseline view)
+            </button>
           </div>
-          <button
-            onClick={() => {
-              localStorage.setItem('bt_preview_plan', 'starter');
-              window.location.reload();
-            }}
-            style={{
-              width: '100%', marginTop: 10, padding: '8px',
-              background: 'transparent', border: '1px solid rgba(255,255,255,0.1)',
-              borderRadius: 7, color: '#64748b', fontSize: 11,
-              cursor: 'pointer', fontWeight: 600,
-            }}
-          >
-            ↩ Reset to Starter (baseline view)
-          </button>
-        </div>
-      )}
+        );
+      })()}
 
       {/* Plan */}
       {(() => {

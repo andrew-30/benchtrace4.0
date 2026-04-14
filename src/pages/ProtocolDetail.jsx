@@ -8,7 +8,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { canAccess } from "@/lib/planGate";
+import { canAccess, getCurrentOrg } from "@/lib/planGate";
 
 import { base44 } from "@/api/base44Client";
 
@@ -1143,8 +1143,8 @@ export default function ProtocolDetail() {
                 {isAdmin && !canAccess('protocol_versioning') && (
                   <div style={{ padding: '4px 12px', background: '#f8fafc', border: '1px dashed #e2e8f0', borderRadius: 7, display: 'inline-flex', alignItems: 'center', gap: 8 }}>
                     <span style={{ fontSize: 11, color: '#94a3b8' }}>🔒 Versioning — Lab plan</span>
-                    {localStorage.getItem('bt_beta') === 'true' && (
-                      <button onClick={() => { localStorage.setItem('bt_preview_plan', 'lab'); window.location.reload(); }}
+                    {getCurrentOrg()?.beta_user === true && (
+                      <button onClick={async () => { await base44.entities.Organization.update(orgId, { preview_plan: 'lab' }); window.location.reload(); }}
                         style={{ fontSize: 11, color: '#6366f1', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 700 }}>
                         Preview →
                       </button>
@@ -1688,8 +1688,8 @@ export default function ProtocolDetail() {
           {isAdmin && !canAccess('protocol_versioning') && (
             <div style={{ padding: '8px 12px', background: '#f8fafc', border: '1px dashed #e2e8f0', borderRadius: 8, textAlign: 'center' }}>
               <div style={{ fontSize: 11, color: '#94a3b8', marginBottom: 4 }}>🔒 Protocol versioning requires Lab plan</div>
-              {localStorage.getItem('bt_beta') === 'true' && (
-                <button onClick={() => { localStorage.setItem('bt_preview_plan', 'lab'); window.location.reload(); }}
+              {getCurrentOrg()?.beta_user === true && (
+                <button onClick={async () => { await base44.entities.Organization.update(orgId, { preview_plan: 'lab' }); window.location.reload(); }}
                   style={{ fontSize: 11, color: '#6366f1', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 700 }}>
                   Preview as Lab →
                 </button>

@@ -2,7 +2,7 @@ import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useState, useEffect } from "react";
 import { FlaskConical, LogOut } from "lucide-react";
 import { getPlanStatus } from "@/lib/planStatus";
-import { getEffectivePlan, GATE_PLAN_CONFIG } from "@/lib/planGate";
+import { getActivePlan, getCurrentOrg, GATE_PLAN_CONFIG } from "@/lib/planGate";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -122,11 +122,12 @@ export default function TopNav({ user }) {
           <div className="flex items-center gap-2">
             {/* Plan badge */}
             {(() => {
-              const isBeta = localStorage.getItem('bt_beta') === 'true';
-              const effectivePlan = getEffectivePlan();
-              const actualPlan = localStorage.getItem('bt_plan') || 'free';
-              const config = GATE_PLAN_CONFIG[effectivePlan] || GATE_PLAN_CONFIG.starter;
-              const isPreviewing = isBeta && effectivePlan !== actualPlan;
+              const org = getCurrentOrg();
+              if (!org) return null;
+              const activePlan = getActivePlan();
+              const config = GATE_PLAN_CONFIG[activePlan] || GATE_PLAN_CONFIG.starter;
+              const isBeta = org.beta_user === true;
+              const isPreviewing = isBeta && org.preview_plan && org.preview_plan !== org.plan;
               return (
                 <div
                   style={{
@@ -137,13 +138,13 @@ export default function TopNav({ user }) {
                     cursor: isBeta ? 'pointer' : 'default',
                   }}
                   onClick={() => isBeta && navigate('/settings')}
-                  title={isBeta ? `Previewing ${config.name} — click to switch` : `Current plan: ${config.name}`}
+                  title={isBeta ? 'Click to switch plan preview in Settings' : `Plan: ${config.name}`}
                 >
                   {isBeta && <span style={{ fontSize: 9 }}>🧪</span>}
                   <span style={{ fontSize: 10, fontWeight: 800, color: config.color, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                     {config.name}
                   </span>
-                  {isPreviewing && <span style={{ fontSize: 8, color: config.color, opacity: 0.7 }}>preview</span>}
+                  {isPreviewing && <span style={{ fontSize: 8, color: config.color, opacity: 0.6 }}>preview</span>}
                 </div>
               );
             })()}

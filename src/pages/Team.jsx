@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { base44 } from "@/api/base44Client";
 import DismissibleNotification from "@/components/DismissibleNotification";
 import FeatureGate from "@/components/FeatureGate";
-import { canAccess } from "@/lib/planGate";
+import { canAccess, getCurrentOrg } from "@/lib/planGate";
 
 export default function Team() {
   const orgId = localStorage.getItem('bt_org_id');

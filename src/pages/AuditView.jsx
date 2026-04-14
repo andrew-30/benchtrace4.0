@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { base44 } from "@/api/base44Client";
 import FeatureGate from "@/components/FeatureGate";
-import { canAccess } from "@/lib/planGate";
+import { canAccess, getCurrentOrg } from "@/lib/planGate";
 
 const tzFmt = (dateStr) => {
   if (!dateStr) return '—';

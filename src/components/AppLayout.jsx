@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Outlet, useNavigate, useLocation } from "react-router-dom";
 import { base44 } from "@/api/base44Client";
 import TopNav from "./TopNav";
+import { setCurrentOrg } from "@/lib/planGate";
 
 async function fixAbandonedRuns(orgId) {
   try {
@@ -94,21 +95,11 @@ export default function AppLayout() {
       if (cachedOrgId) {
         const org = await migrateOrg(cachedOrgId);
         setOrg(org);
+        setCurrentOrg(org);
         setRole(localStorage.getItem("bt_role"));
         if (org?.timezone) localStorage.setItem("bt_tz", org.timezone);
-        const orgPlan = org?.plan || 'free';
-        const isBeta = org?.beta_user === true;
-        localStorage.setItem("bt_plan", orgPlan);
-        localStorage.setItem('bt_beta', isBeta ? 'true' : 'false');
-        if (!isBeta) {
-          localStorage.removeItem('bt_preview_plan');
-        } else {
-          const existingPreview = localStorage.getItem('bt_preview_plan');
-          const validPlans = ['free', 'starter', 'lab', 'lab_pro'];
-          if (!existingPreview || !validPlans.includes(existingPreview)) {
-            localStorage.setItem('bt_preview_plan', 'starter');
-          }
-        }
+        localStorage.setItem("bt_plan", org?.plan || 'free');
+        localStorage.setItem('bt_beta', org?.beta_user === true ? 'true' : 'false');
         fixAbandonedRuns(cachedOrgId);
         setLoading(false);
         if (location.pathname === "/") navigate("/dashboard", { replace: true });
@@ -135,20 +126,9 @@ export default function AppLayout() {
 
       const migratedOrg = await migrateOrg(membership.organization_id);
       if (migratedOrg?.timezone) localStorage.setItem("bt_tz", migratedOrg.timezone);
-      const orgPlan2 = migratedOrg?.plan || 'free';
-      const isBeta2 = migratedOrg?.beta_user === true;
-      localStorage.setItem("bt_plan", orgPlan2);
-      localStorage.setItem('bt_beta', isBeta2 ? 'true' : 'false');
-      if (!isBeta2) {
-        localStorage.removeItem('bt_preview_plan');
-      } else {
-        const existingPreview2 = localStorage.getItem('bt_preview_plan');
-        const validPlans2 = ['free', 'starter', 'lab', 'lab_pro'];
-        if (!existingPreview2 || !validPlans2.includes(existingPreview2)) {
-          localStorage.setItem('bt_preview_plan', 'starter');
-        }
-      }
-
+      localStorage.setItem("bt_plan", migratedOrg?.plan || 'free');
+      localStorage.setItem('bt_beta', migratedOrg?.beta_user === true ? 'true' : 'false');
+      setCurrentOrg(migratedOrg);
       setOrg(migratedOrg);
       setRole(membership.role);
       setLoading(false);

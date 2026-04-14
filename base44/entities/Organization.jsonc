@@ -31,6 +31,16 @@
       ],
       "default": "starter"
     },
+    "preview_plan": {
+      "type": "string",
+      "title": "Preview Plan (Beta Testers)",
+      "enum": [
+        "free",
+        "starter",
+        "lab",
+        "lab_pro"
+      ]
+    },
     "timezone": {
       "type": "string",
       "title": "Timezone",
