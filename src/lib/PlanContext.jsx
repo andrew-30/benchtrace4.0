@@ -148,8 +148,9 @@ export function usePlanProvider() {
 
   const isBeta = org?.beta_user === true;
   const actualPlan = org?.plan || 'starter';
-  const previewPlan = org?.preview_plan;
-  const activePlan = isBeta && previewPlan && PLAN_TIER[previewPlan] !== undefined
+  const previewPlan = org?.preview_plan; // may be null/undefined
+  // If beta and preview_plan explicitly set → use preview; otherwise use actual plan
+  const activePlan = (isBeta && previewPlan && PLAN_TIER[previewPlan] !== undefined)
     ? previewPlan
     : actualPlan;
 
