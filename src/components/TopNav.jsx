@@ -124,7 +124,9 @@ export default function TopNav({ user }) {
             {(() => {
               const isBeta = localStorage.getItem('bt_beta') === 'true';
               const effectivePlan = getEffectivePlan();
+              const actualPlan = localStorage.getItem('bt_plan') || 'free';
               const config = GATE_PLAN_CONFIG[effectivePlan] || GATE_PLAN_CONFIG.starter;
+              const isPreviewing = isBeta && effectivePlan !== actualPlan;
               return (
                 <div
                   style={{
@@ -135,12 +137,13 @@ export default function TopNav({ user }) {
                     cursor: isBeta ? 'pointer' : 'default',
                   }}
                   onClick={() => isBeta && navigate('/settings')}
-                  title={isBeta ? 'Click to switch plan preview' : ''}
+                  title={isBeta ? `Previewing ${config.name} — click to switch` : `Current plan: ${config.name}`}
                 >
-                  {isBeta && <span style={{ fontSize: 8, color: config.color }}>🧪</span>}
+                  {isBeta && <span style={{ fontSize: 9 }}>🧪</span>}
                   <span style={{ fontSize: 10, fontWeight: 800, color: config.color, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                     {config.name}
                   </span>
+                  {isPreviewing && <span style={{ fontSize: 8, color: config.color, opacity: 0.7 }}>preview</span>}
                 </div>
               );
             })()}

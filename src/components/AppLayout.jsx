@@ -96,11 +96,18 @@ export default function AppLayout() {
         setOrg(org);
         setRole(localStorage.getItem("bt_role"));
         if (org?.timezone) localStorage.setItem("bt_tz", org.timezone);
-        if (org?.plan) localStorage.setItem("bt_plan", org.plan);
-        localStorage.setItem('bt_beta', org?.beta_user ? 'true' : 'false');
-        if (!org?.beta_user) localStorage.removeItem('bt_preview_plan');
-        if (org?.beta_user && !localStorage.getItem('bt_preview_plan')) {
-          localStorage.setItem('bt_preview_plan', org?.plan || 'starter');
+        const orgPlan = org?.plan || 'free';
+        const isBeta = org?.beta_user === true;
+        localStorage.setItem("bt_plan", orgPlan);
+        localStorage.setItem('bt_beta', isBeta ? 'true' : 'false');
+        if (!isBeta) {
+          localStorage.removeItem('bt_preview_plan');
+        } else {
+          const existingPreview = localStorage.getItem('bt_preview_plan');
+          const validPlans = ['free', 'starter', 'lab', 'lab_pro'];
+          if (!existingPreview || !validPlans.includes(existingPreview)) {
+            localStorage.setItem('bt_preview_plan', 'starter');
+          }
         }
         fixAbandonedRuns(cachedOrgId);
         setLoading(false);
@@ -128,11 +135,18 @@ export default function AppLayout() {
 
       const migratedOrg = await migrateOrg(membership.organization_id);
       if (migratedOrg?.timezone) localStorage.setItem("bt_tz", migratedOrg.timezone);
-      if (migratedOrg?.plan) localStorage.setItem("bt_plan", migratedOrg.plan);
-      localStorage.setItem('bt_beta', migratedOrg?.beta_user ? 'true' : 'false');
-      if (!migratedOrg?.beta_user) localStorage.removeItem('bt_preview_plan');
-      if (migratedOrg?.beta_user && !localStorage.getItem('bt_preview_plan')) {
-        localStorage.setItem('bt_preview_plan', migratedOrg?.plan || 'starter');
+      const orgPlan2 = migratedOrg?.plan || 'free';
+      const isBeta2 = migratedOrg?.beta_user === true;
+      localStorage.setItem("bt_plan", orgPlan2);
+      localStorage.setItem('bt_beta', isBeta2 ? 'true' : 'false');
+      if (!isBeta2) {
+        localStorage.removeItem('bt_preview_plan');
+      } else {
+        const existingPreview2 = localStorage.getItem('bt_preview_plan');
+        const validPlans2 = ['free', 'starter', 'lab', 'lab_pro'];
+        if (!existingPreview2 || !validPlans2.includes(existingPreview2)) {
+          localStorage.setItem('bt_preview_plan', 'starter');
+        }
       }
 
       setOrg(migratedOrg);

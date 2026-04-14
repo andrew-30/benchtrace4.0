@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { base44 } from "@/api/base44Client";
 import FeatureGate from "@/components/FeatureGate";
+import { canAccess } from "@/lib/planGate";
 
 function useDeviceType() {
   const [device, setDevice] = useState(() => { const w = window.innerWidth; return { isMobile: w < 768 }; });
@@ -155,8 +156,15 @@ export default function Deviations() {
     );
   }
 
+  if (!canAccess('deviation_center')) {
+    return (
+      <div style={{ minHeight: '60vh', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
+        <FeatureGate feature="deviation_center" />
+      </div>
+    );
+  }
+
   return (
-    <FeatureGate feature="deviation_center">
     <div className="space-y-4 max-w-4xl" style={{ paddingBottom: window.innerWidth < 768 ? 80 : 0 }}>
       {/* Header */}
       <div>
@@ -265,6 +273,5 @@ export default function Deviations() {
         </div>
       )}
     </div>
-    </FeatureGate>
   );
 }

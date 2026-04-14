@@ -2,8 +2,7 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { ArrowLeft } from "lucide-react";
 import { base44 } from "@/api/base44Client";
-import FeatureGate from "@/components/FeatureGate";
-import { canAccess, setPreviewPlan } from "@/lib/planGate";
+import { canAccess } from "@/lib/planGate";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 function tzFmt(dateStr, timeOnly = false) {
@@ -576,12 +575,26 @@ export default function RunDetail() {
             <div style={{ background: 'white', borderRadius: 10, border: '1px solid #c7d2fe', padding: '20px' }}>
               <div style={{ fontSize: 13, fontWeight: 700, color: '#1e293b', marginBottom: 6 }}>Ready to Sign Off</div>
               <div style={{ fontSize: 13, color: '#64748b', marginBottom: 16 }}>Review the run and apply your 21 CFR Part 11 electronic signature.</div>
-              <button
-                onClick={() => setShowESignModal(true)}
-                style={{ padding: '10px 22px', background: '#1e293b', color: 'white', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8 }}
-              >
-                🔏 Sign Off Run
-              </button>
+              {canAccess('esignature') ? (
+                <button
+                  onClick={() => setShowESignModal(true)}
+                  style={{ padding: '10px 22px', background: '#1e293b', color: 'white', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8 }}
+                >
+                  🔏 Sign Off Run
+                </button>
+              ) : (
+                <div style={{ padding: '12px 16px', background: '#f8fafc', border: '1px dashed #e2e8f0', borderRadius: 8, display: 'inline-flex', alignItems: 'center', gap: 10 }}>
+                  <span style={{ fontSize: 13, color: '#94a3b8' }}>🔒 E-signature requires Lab plan</span>
+                  {localStorage.getItem('bt_beta') === 'true' && (
+                    <button
+                      onClick={() => { localStorage.setItem('bt_preview_plan', 'lab'); window.location.reload(); }}
+                      style={{ fontSize: 12, color: '#6366f1', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 700, padding: 0 }}
+                    >
+                      Preview as Lab →
+                    </button>
+                  )}
+                </div>
+              )}
             </div>
           )}
 

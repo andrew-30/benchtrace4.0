@@ -37,9 +37,12 @@ export default function Settings() {
   const [orgName, setOrgName] = useState('');
   const [sector, setSector] = useState('Academic Research');
   const [timezone, setTimezone] = useState('UTC');
-  const [previewPlan, setPreviewPlanState] = useState(
-    localStorage.getItem('bt_preview_plan') || localStorage.getItem('bt_plan') || 'starter'
-  );
+  const [previewPlan, setPreviewPlanState] = useState(() => {
+    const stored = localStorage.getItem('bt_preview_plan');
+    const actualPlan = localStorage.getItem('bt_plan') || 'starter';
+    const validPlans = ['free', 'starter', 'lab', 'lab_pro'];
+    return (stored && validPlans.includes(stored)) ? stored : actualPlan;
+  });
 
   useEffect(() => {
     const load = async () => {

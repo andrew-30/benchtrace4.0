@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { base44 } from "@/api/base44Client";
 import FeatureGate from "@/components/FeatureGate";
+import { canAccess } from "@/lib/planGate";
 
 const tzFmt = (dateStr) => {
   if (!dateStr) return '—';
@@ -411,8 +412,15 @@ export default function AuditView() {
     abandoned:   { label: 'ABANDONED',   bg: '#f8fafc', color: '#64748b', border: '#e2e8f0' },
   }[run.run_state] || { label: run.run_state, bg: '#f8fafc', color: '#64748b', border: '#e2e8f0' };
 
+  if (!canAccess('audit_view')) {
+    return (
+      <div style={{ minHeight: '60vh', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
+        <FeatureGate feature="audit_view" />
+      </div>
+    );
+  }
+
   return (
-    <FeatureGate feature="audit_view">
     <div style={{ minHeight: '100vh', background: '#f8fafc', fontFamily: 'system-ui,sans-serif' }}>
       <style>{`
         @media print {
@@ -629,6 +637,5 @@ export default function AuditView() {
 
       </div>
     </div>
-    </FeatureGate>
   );
 }

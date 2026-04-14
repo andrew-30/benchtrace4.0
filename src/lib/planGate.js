@@ -1,22 +1,32 @@
 // Plan tier hierarchy
-export const PLAN_TIER = { free: 0, starter: 1, lab: 2, lab_pro: 3 };
+export const PLAN_TIER = {
+  free:     0,
+  starter:  1,
+  lab:      2,
+  lab_pro:  3,
+};
 
-// Feature → minimum required plan
+// Every feature MUST be in here with the correct minimum plan
 export const FEATURE_TIERS = {
-  basic_runs:          'starter',
-  basic_protocols:     'starter',
-  deviation_logging:   'starter',
-  run_history:         'starter',
-  ai_normaliser:       'lab',
-  audit_view:          'lab',
-  esignature:          'lab',
-  protocol_versioning: 'lab',
-  team_management:     'lab',
-  pdf_reports:         'lab',
-  audit_readiness:     'lab_pro',
-  traceability:        'lab_pro',
-  deviation_center:    'lab_pro',
-  unlimited_protocols: 'lab_pro',
+  // STARTER — basic functionality only
+  basic_runs:           'starter',
+  basic_protocols:      'starter',
+  deviation_logging:    'starter',
+  run_history:          'starter',
+
+  // LAB — professional compliance features
+  ai_normaliser:        'lab',
+  audit_view:           'lab',
+  esignature:           'lab',
+  protocol_versioning:  'lab',
+  team_management:      'lab',
+  pdf_reports:          'lab',
+
+  // LAB PRO — advanced compliance suite
+  audit_readiness:      'lab_pro',
+  traceability:         'lab_pro',
+  deviation_center:     'lab_pro',
+  unlimited_protocols:  'lab_pro',
 };
 
 export const GATE_PLAN_CONFIG = {
@@ -29,18 +39,31 @@ export const GATE_PLAN_CONFIG = {
 // Get the effective plan — beta users use preview plan
 export function getEffectivePlan() {
   const isBeta = localStorage.getItem('bt_beta') === 'true';
-  const plan = localStorage.getItem('bt_plan') || 'free';
+  const actualPlan = localStorage.getItem('bt_plan') || 'free';
+
   if (isBeta) {
-    return localStorage.getItem('bt_preview_plan') || plan;
+    const previewPlan = localStorage.getItem('bt_preview_plan');
+    if (previewPlan && PLAN_TIER[previewPlan] !== undefined) {
+      return previewPlan;
+    }
+    return actualPlan;
   }
-  return plan;
+
+  return actualPlan;
 }
 
 // Check if current plan can access a feature
 export function canAccess(feature) {
   const effectivePlan = getEffectivePlan();
-  const required = FEATURE_TIERS[feature] || 'starter';
-  return (PLAN_TIER[effectivePlan] || 0) >= (PLAN_TIER[required] || 0);
+  const required = FEATURE_TIERS[feature];
+
+  // Feature not in FEATURE_TIERS = free for everyone
+  if (!required) return true;
+
+  const effectiveTier = PLAN_TIER[effectivePlan] ?? 0;
+  const requiredTier  = PLAN_TIER[required]      ?? 0;
+
+  return effectiveTier >= requiredTier;
 }
 
 // Set preview plan for beta testers

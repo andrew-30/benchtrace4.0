@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { base44 } from "@/api/base44Client";
 import FeatureGate from "@/components/FeatureGate";
+import { canAccess } from "@/lib/planGate";
 
 function calculateReadinessScore(protocols, runs, deviations, protocolVersions) {
   const checks = [];
@@ -114,8 +115,15 @@ export default function AuditReadiness() {
   const sl = overallScore >= 90 ? '✓ Audit ready' : overallScore >= 70 ? '⚠ Minor items to address' : overallScore >= 50 ? '⚠ Several items need attention' : '✗ Not audit ready';
   const passedCount = checks.filter(c => c.passed).length;
 
+  if (!canAccess('audit_readiness')) {
+    return (
+      <div style={{ minHeight: '60vh', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
+        <FeatureGate feature="audit_readiness" />
+      </div>
+    );
+  }
+
   return (
-    <FeatureGate feature="audit_readiness">
     <div style={{ maxWidth: 800, margin: '0 auto', padding: '0 0 40px', fontFamily: 'system-ui,sans-serif' }}>
 
       {protocols.length === 0 && runs.length === 0 && (
@@ -207,6 +215,5 @@ export default function AuditReadiness() {
       </div>
 
     </div>
-    </FeatureGate>
   );
 }
