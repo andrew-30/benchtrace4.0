@@ -181,9 +181,21 @@ export default function Settings() {
         const selected = activePlan;
 
         const plans = [
-          { value: 'starter', name: 'Starter', price: '€19/mo', color: '#3b82f6', features: ['Protocol Library (5)', 'Run execution', 'Pre-run checklist', 'Basic deviations', 'Run history'] },
-          { value: 'lab',     name: 'Lab',     price: '€79/mo', color: '#6366f1', features: ['Everything in Starter', 'AI Normaliser', 'Audit View + PDF', 'E-signature (21 CFR)', 'Protocol versioning', 'Team (5 members)'] },
-          { value: 'lab_pro', name: 'Lab Pro', price: '€249/mo', color: '#dc2626', features: ['Everything in Lab', 'Audit Readiness', 'Traceability Navigator', 'Deviation Center', 'Unlimited protocols', 'Unlimited team'] },
+          {
+            value: 'starter', name: 'Starter', price: '€19/mo', color: '#3b82f6',
+            features: ['Up to 5 protocols', '30 runs per month', 'Protocol import (DOCX)', 'Step timer control', 'Deviation logging', 'Basic PDF reports', 'Lot number tracking'],
+            locked: ['Team members', 'Traceability navigator', '21 CFR Part 11 e-signature', 'Audit View'],
+          },
+          {
+            value: 'lab', name: 'Lab', price: '€79/mo', color: '#6366f1',
+            features: ['Unlimited protocols', 'Unlimited runs', 'Up to 15 team members', 'Team management + invites', 'Traceability navigator', 'Audit readiness score', 'Protocol version control', 'Advanced dashboard + charts'],
+            locked: ['21 CFR Part 11 e-signature', 'Audit View mode'],
+          },
+          {
+            value: 'lab_pro', name: 'Lab Pro', price: '€249/mo', color: '#dc2626',
+            features: ['Everything in Lab', '21 CFR Part 11 e-signature', 'SHA-256 cryptographic hash', 'Inspector-ready Audit View', 'Advanced PDF audit reports', 'Deviation severity management', 'Materials lot traceability', 'Unlimited audit log retention'],
+            locked: [],
+          },
         ];
 
         const handleSwitch = async (planValue) => {
@@ -225,9 +237,10 @@ export default function Settings() {
                         </div>
                       </div>
                       {isActive && (
-                        <div style={{ paddingLeft: 28, display: 'flex', flexWrap: 'wrap', gap: 4 }}>
-                          {plan.features.map((f, i) => <span key={i} style={{ fontSize: 10, color: '#94a3b8', padding: '2px 7px', background: 'rgba(255,255,255,0.05)', borderRadius: 4 }}>✓ {f}</span>)}
-                        </div>
+                      <div style={{ paddingLeft: 28, display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                        {plan.features.map((f, i) => <span key={i} style={{ fontSize: 10, color: '#94a3b8', padding: '2px 7px', background: 'rgba(255,255,255,0.05)', borderRadius: 4 }}>✓ {f}</span>)}
+                        {(plan.locked || []).map((f, i) => <span key={`l${i}`} style={{ fontSize: 10, color: '#475569', padding: '2px 7px', background: 'rgba(255,255,255,0.02)', borderRadius: 4, opacity: 0.5 }}>✗ {f}</span>)}
+                      </div>
                       )}
                     </button>
                   );

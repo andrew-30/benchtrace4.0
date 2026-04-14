@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { ArrowLeft } from "lucide-react";
 import { base44 } from "@/api/base44Client";
-import { canAccess } from "@/lib/planGate";
+import { usePlan } from "@/lib/PlanContext";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 function tzFmt(dateStr, timeOnly = false) {
@@ -238,6 +238,7 @@ function ESignatureModal({ run, onSign, onCancel, signing }) {
 // ─── Main Page ────────────────────────────────────────────────────────────────
 export default function RunDetail() {
   const navigate = useNavigate();
+  const { canAccess, isBeta, switchPreviewPlan } = usePlan();
   const orgId = localStorage.getItem("bt_org_id");
   const runId = new URLSearchParams(window.location.search).get("id");
 
@@ -583,14 +584,15 @@ export default function RunDetail() {
                   🔏 Sign Off Run
                 </button>
               ) : (
-                <div style={{ padding: '12px 16px', background: '#f8fafc', border: '1px dashed #e2e8f0', borderRadius: 8, display: 'inline-flex', alignItems: 'center', gap: 10 }}>
-                  <span style={{ fontSize: 13, color: '#94a3b8' }}>🔒 E-signature requires Lab plan</span>
-                  {localStorage.getItem('bt_beta') === 'true' && (
+                <div style={{ padding: '12px 16px', background: '#f8fafc', border: '1px dashed #e2e8f0', borderRadius: 8, textAlign: 'center' }}>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: '#94a3b8', marginBottom: 4 }}>🔒 21 CFR Part 11 E-Signature</div>
+                  <div style={{ fontSize: 12, color: '#94a3b8', marginBottom: isBeta ? 8 : 0 }}>Available on Lab Pro (€249/month)</div>
+                  {isBeta && (
                     <button
-                      onClick={() => { localStorage.setItem('bt_preview_plan', 'lab'); window.location.reload(); }}
-                      style={{ fontSize: 12, color: '#6366f1', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 700, padding: 0 }}
+                      onClick={() => switchPreviewPlan('lab_pro')}
+                      style={{ padding: '6px 16px', background: '#dc2626', color: 'white', border: 'none', borderRadius: 6, fontSize: 12, fontWeight: 700, cursor: 'pointer' }}
                     >
-                      Preview as Lab →
+                      Preview as Lab Pro →
                     </button>
                   )}
                 </div>

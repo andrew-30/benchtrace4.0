@@ -6,16 +6,19 @@ import { useNavigate } from 'react-router-dom';
 export const PLAN_TIER = { free: 0, starter: 1, lab: 2, lab_pro: 3 };
 
 export const FEATURE_TIERS = {
-  ai_normaliser:       'lab',
-  audit_view:          'lab',
-  esignature:          'lab',
-  protocol_versioning: 'lab',
-  team_management:     'lab',
-  pdf_reports:         'lab',
-  audit_readiness:     'lab_pro',
-  traceability:        'lab_pro',
-  deviation_center:    'lab_pro',
-  unlimited_protocols: 'lab_pro',
+  // LAB features (require lab plan or higher)
+  team_management:     'lab',   // Team members, invites, role-based access
+  traceability:        'lab',   // Traceability navigator
+  audit_readiness:     'lab',   // Audit readiness score
+  protocol_versioning: 'lab',   // Protocol version control
+  advanced_dashboard:  'lab',   // Advanced dashboard + charts
+
+  // LAB PRO features (require lab_pro plan)
+  esignature:          'lab_pro',  // 21 CFR Part 11 e-signature + SHA-256
+  audit_view:          'lab_pro',  // Inspector-ready Audit View
+  pdf_reports:         'lab_pro',  // Advanced PDF audit reports
+  deviation_severity:  'lab_pro',  // Deviation severity management
+  lot_traceability:    'lab_pro',  // Materials lot traceability
 };
 
 export const PLAN_META = {
@@ -26,16 +29,16 @@ export const PLAN_META = {
 };
 
 const FEATURE_NAMES = {
-  ai_normaliser:       'AI Protocol Normaliser',
-  audit_view:          'Audit View & PDF Reports',
-  esignature:          'E-Signature (21 CFR Part 11)',
-  protocol_versioning: 'Protocol Version Control',
-  team_management:     'Team Management',
-  pdf_reports:         'PDF Reports',
-  audit_readiness:     'Audit Readiness Score',
+  team_management:     'Team Management & Invites',
   traceability:        'Traceability Navigator',
-  deviation_center:    'Deviation Center',
-  unlimited_protocols: 'Unlimited Protocols',
+  audit_readiness:     'Audit Readiness Score',
+  protocol_versioning: 'Protocol Version Control',
+  advanced_dashboard:  'Advanced Dashboard & Charts',
+  esignature:          '21 CFR Part 11 E-Signature',
+  audit_view:          'Inspector-Ready Audit View',
+  pdf_reports:         'Advanced PDF Audit Reports',
+  deviation_severity:  'Deviation Severity Management',
+  lot_traceability:    'Materials Lot Traceability',
 };
 
 // ── Context ──────────────────────────────────────────────────────────────────

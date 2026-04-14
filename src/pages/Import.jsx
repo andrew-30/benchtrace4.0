@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { base44 } from "@/api/base44Client";
-import { usePlan } from "@/lib/PlanContext";
+
 import {
   ArrowLeft, Upload, FileText, ChevronRight, AlertCircle,
   Beaker, Wrench, Shield, Tag, GripVertical, X, Plus, ArrowRight
@@ -679,13 +679,13 @@ export default function Import() {
   const fileRef = useRef(null);
   const device = useDeviceType();
   const orgId = localStorage.getItem("bt_org_id");
-  const { canAccess, isBeta, switchPreviewPlan } = usePlan();
+
 
   const [step, setStep] = useState(1);
   const [classification, setClassification] = useState("");
   const [uploadSubState, setUploadSubState] = useState('idle'); // 'idle' | 'selected' | 'processing'
   const [selectedFile, setSelectedFile] = useState(null);
-  const [selectedParserMode, setSelectedParserMode] = useState('smart'); // 'ai' | 'smart' — updated after org loads
+  const [selectedParserMode, setSelectedParserMode] = useState('ai'); // 'ai' | 'smart'
   const [showConfidenceGate, setShowConfidenceGate] = useState(false);
   const [gateChoice, setGateChoice] = useState(null);
   const [useAI, setUseAI] = useState(false);
@@ -711,12 +711,6 @@ export default function Import() {
   const [editSections, setEditSections] = useState([]);
   const [editSteps, setEditSteps] = useState([]);
   const [editChecklist, setEditChecklist] = useState([]);
-
-  // Set default parser mode once we know the plan
-  useEffect(() => {
-    if (canAccess('ai_normaliser')) setSelectedParserMode('ai');
-    else setSelectedParserMode('smart');
-  }, [canAccess]);
 
   // Pre-load JSZip on mount for mobile reliability
   useEffect(() => {
@@ -1320,38 +1314,22 @@ ${extractedText.substring(0, 12000)}`;
 
               <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 20 }}>
                 <div
-                  onClick={() => {
-                    if (!canAccess('ai_normaliser')) {
-                      if (isBeta) switchPreviewPlan('lab');
-                      return;
-                    }
-                    setSelectedParserMode('ai');
-                  }}
-                  style={{ padding: '20px', borderRadius: 12, cursor: canAccess('ai_normaliser') ? 'pointer' : (isBeta ? 'pointer' : 'not-allowed'), border: `2px solid ${selectedParserMode === 'ai' && canAccess('ai_normaliser') ? '#6366f1' : '#e2e8f0'}`, background: selectedParserMode === 'ai' && canAccess('ai_normaliser') ? 'linear-gradient(135deg, #eef2ff, #f0f9ff)' : 'white', transition: 'all 0.15s', position: 'relative', opacity: !canAccess('ai_normaliser') ? 0.8 : 1 }}>
-                  <div style={{ position: 'absolute', top: -12, left: 20, background: canAccess('ai_normaliser') ? '#6366f1' : '#94a3b8', color: 'white', fontSize: 10, fontWeight: 800, padding: '3px 12px', borderRadius: 99, letterSpacing: '0.05em' }}>
-                    {canAccess('ai_normaliser') ? '★ RECOMMENDED' : '🔒 LAB PLAN'}
-                  </div>
+                  onClick={() => setSelectedParserMode('ai')}
+                  style={{ padding: '20px', borderRadius: 12, cursor: 'pointer', border: `2px solid ${selectedParserMode === 'ai' ? '#6366f1' : '#e2e8f0'}`, background: selectedParserMode === 'ai' ? 'linear-gradient(135deg, #eef2ff, #f0f9ff)' : 'white', transition: 'all 0.15s', position: 'relative' }}>
+                  <div style={{ position: 'absolute', top: -12, left: 20, background: '#6366f1', color: 'white', fontSize: 10, fontWeight: 800, padding: '3px 12px', borderRadius: 99, letterSpacing: '0.05em' }}>★ RECOMMENDED</div>
                   <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
-                    <div style={{ width: 20, height: 20, borderRadius: '50%', border: `2px solid ${selectedParserMode === 'ai' && canAccess('ai_normaliser') ? '#6366f1' : '#cbd5e1'}`, background: selectedParserMode === 'ai' && canAccess('ai_normaliser') ? '#6366f1' : 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginTop: 2 }}>
-                      {selectedParserMode === 'ai' && canAccess('ai_normaliser') && <div style={{ width: 8, height: 8, borderRadius: '50%', background: 'white' }} />}
+                    <div style={{ width: 20, height: 20, borderRadius: '50%', border: `2px solid ${selectedParserMode === 'ai' ? '#6366f1' : '#cbd5e1'}`, background: selectedParserMode === 'ai' ? '#6366f1' : 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginTop: 2 }}>
+                      {selectedParserMode === 'ai' && <div style={{ width: 8, height: 8, borderRadius: '50%', background: 'white' }} />}
                     </div>
                     <div style={{ flex: 1 }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
                         <span style={{ fontSize: 20 }}>✨</span>
                         <span style={{ fontSize: 15, fontWeight: 800, color: '#1e293b' }}>AI Protocol Normaliser</span>
-                        {!canAccess('ai_normaliser') && (
-                          <span style={{ fontSize: 10, fontWeight: 800, padding: '2px 7px', borderRadius: 99, background: '#6366f1', color: 'white' }}>LAB</span>
-                        )}
                       </div>
-                      <div style={{ fontSize: 12, color: '#475569', lineHeight: 1.6, marginBottom: selectedParserMode === 'ai' && canAccess('ai_normaliser') ? 12 : 0 }}>
-                        {!canAccess('ai_normaliser')
-                          ? isBeta
-                            ? 'Click to preview as Lab plan and unlock AI Normaliser →'
-                            : 'Requires Lab plan — AI reads your document and converts every action into executable steps.'
-                          : 'AI reads your document and converts every action into an individual executable step — automatically detecting timers, critical steps, measurements, and materials.'
-                        }
+                      <div style={{ fontSize: 12, color: '#475569', lineHeight: 1.6, marginBottom: selectedParserMode === 'ai' ? 12 : 0 }}>
+                        AI reads your document and converts every action into an individual executable step — automatically detecting timers, critical steps, measurements, and materials.
                       </div>
-                      {selectedParserMode === 'ai' && canAccess('ai_normaliser') && (
+                      {selectedParserMode === 'ai' && (
                         <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                           {['⏱ Timers', '🔴 Critical steps', '📏 Measurements', '🧪 Materials'].map(tag => (
                             <span key={tag} style={{ fontSize: 10, padding: '2px 8px', borderRadius: 99, background: 'rgba(99,102,241,0.12)', color: '#4338ca', fontWeight: 600 }}>{tag}</span>

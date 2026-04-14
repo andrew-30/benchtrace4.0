@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { base44 } from "@/api/base44Client";
-import { usePlan, PlanGate } from "@/lib/PlanContext";
+import { usePlan } from "@/lib/PlanContext";
 
 function useDeviceType() {
   const [device, setDevice] = useState(() => { const w = window.innerWidth; return { isMobile: w < 768 }; });
@@ -85,7 +85,7 @@ function ResolveForm({ deviationId, onResolve, onCancel }) {
 }
 
 export default function Deviations() {
-  const { canAccess, org } = usePlan();
+  const { org } = usePlan();
   const navigate = useNavigate();
   const device = useDeviceType();
   const orgId = localStorage.getItem("bt_org_id");
@@ -153,8 +153,6 @@ export default function Deviations() {
       <div style={{ color: '#6366f1', fontSize: 13 }}>Loading...</div>
     </div>
   );
-
-  if (!canAccess('deviation_center')) return <PlanGate feature="deviation_center" />;
 
   if (loading) {
     return (
