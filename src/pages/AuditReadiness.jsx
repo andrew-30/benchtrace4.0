@@ -1,8 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { base44 } from "@/api/base44Client";
-import FeatureGate from "@/components/FeatureGate";
-import { canAccess, getCurrentOrg } from "@/lib/planGate";
+import { usePlan, PlanGate } from "@/lib/PlanContext";
 
 function calculateReadinessScore(protocols, runs, deviations, protocolVersions) {
   const checks = [];
@@ -80,6 +79,7 @@ function calculateReadinessScore(protocols, runs, deviations, protocolVersions) 
 }
 
 export default function AuditReadiness() {
+  const { canAccess } = usePlan();
   const navigate = useNavigate();
   const orgId = localStorage.getItem('bt_org_id');
   const [protocols, setProtocols] = useState([]);
@@ -116,11 +116,7 @@ export default function AuditReadiness() {
   const passedCount = checks.filter(c => c.passed).length;
 
   if (!canAccess('audit_readiness')) {
-    return (
-      <div style={{ minHeight: '60vh', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
-        <FeatureGate feature="audit_readiness" />
-      </div>
-    );
+    return <PlanGate feature="audit_readiness" />;
   }
 
   return (

@@ -1,10 +1,10 @@
 import { useEffect, useState } from "react";
 import { base44 } from "@/api/base44Client";
 import DismissibleNotification from "@/components/DismissibleNotification";
-import FeatureGate from "@/components/FeatureGate";
-import { canAccess, getCurrentOrg } from "@/lib/planGate";
+import { usePlan, PlanGate } from "@/lib/PlanContext";
 
 export default function Team() {
+  const { canAccess } = usePlan();
   const orgId = localStorage.getItem('bt_org_id');
   const isAdmin = localStorage.getItem('bt_role') === 'admin';
 
@@ -111,11 +111,7 @@ export default function Team() {
   const pendingInvites = invites.filter(i => i.status === 'pending');
 
   if (!canAccess('team_management')) {
-    return (
-      <div style={{ minHeight: '60vh', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
-        <FeatureGate feature="team_management" />
-      </div>
-    );
+    return <PlanGate feature="team_management" />;
   }
 
   return (

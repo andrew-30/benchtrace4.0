@@ -3,6 +3,7 @@ import { useState, useEffect } from "react";
 import { FlaskConical, LogOut } from "lucide-react";
 import { getPlanStatus } from "@/lib/planStatus";
 import { getActivePlan, getCurrentOrg, GATE_PLAN_CONFIG } from "@/lib/planGate";
+import { usePlan, PLAN_META } from "@/lib/PlanContext";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -50,6 +51,7 @@ function NavLink({ to, label }) {
 export default function TopNav({ user }) {
   const navigate = useNavigate();
   const device = useDeviceType();
+  const { org: planOrg, activePlan, isBeta } = usePlan();
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [planStatus, setPlanStatus] = useState(null);
   const [activeRunCount, setActiveRunCount] = useState(0);

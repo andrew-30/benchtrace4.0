@@ -1,8 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { base44 } from "@/api/base44Client";
-import FeatureGate from "@/components/FeatureGate";
-import { canAccess, getCurrentOrg } from "@/lib/planGate";
+import { usePlan, PlanGate } from "@/lib/PlanContext";
 
 function useDeviceType() {
   const [device, setDevice] = useState(() => { const w = window.innerWidth; return { isMobile: w < 768 }; });
@@ -86,6 +85,7 @@ function ResolveForm({ deviationId, onResolve, onCancel }) {
 }
 
 export default function Deviations() {
+  const { canAccess } = usePlan();
   const navigate = useNavigate();
   const device = useDeviceType();
   const orgId = localStorage.getItem("bt_org_id");
@@ -157,11 +157,7 @@ export default function Deviations() {
   }
 
   if (!canAccess('deviation_center')) {
-    return (
-      <div style={{ minHeight: '60vh', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
-        <FeatureGate feature="deviation_center" />
-      </div>
-    );
+    return <PlanGate feature="deviation_center" />;
   }
 
   return (

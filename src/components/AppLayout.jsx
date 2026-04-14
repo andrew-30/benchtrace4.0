@@ -3,6 +3,7 @@ import { Outlet, useNavigate, useLocation } from "react-router-dom";
 import { base44 } from "@/api/base44Client";
 import TopNav from "./TopNav";
 import { setCurrentOrg } from "@/lib/planGate";
+import { PlanContext, usePlanProvider } from "@/lib/PlanContext";
 
 async function fixAbandonedRuns(orgId) {
   try {
@@ -76,11 +77,12 @@ async function migrateOrg(orgId) {
 
 export default function AppLayout() {
   const [user, setUser] = useState(null);
-  const [org, setOrg] = useState(null);
   const [role, setRole] = useState(null);
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
   const location = useLocation();
+  const planProvider = usePlanProvider();
+  const { org, setOrg, loadOrg } = planProvider;
 
   useEffect(() => {
     const currentPath = window.location.pathname;
@@ -96,6 +98,7 @@ export default function AppLayout() {
         const org = await migrateOrg(cachedOrgId);
         setOrg(org);
         setCurrentOrg(org);
+        await loadOrg();
         setRole(localStorage.getItem("bt_role"));
         if (org?.timezone) localStorage.setItem("bt_tz", org.timezone);
         localStorage.setItem("bt_plan", org?.plan || 'free');
@@ -130,6 +133,7 @@ export default function AppLayout() {
       localStorage.setItem('bt_beta', migratedOrg?.beta_user === true ? 'true' : 'false');
       setCurrentOrg(migratedOrg);
       setOrg(migratedOrg);
+      await loadOrg();
       setRole(membership.role);
       setLoading(false);
 
@@ -153,6 +157,7 @@ export default function AppLayout() {
   }
 
   return (
+    <PlanContext.Provider value={planProvider}>
     <div className="min-h-screen bg-background">
       <style>{`
         * { -webkit-tap-highlight-color: transparent; box-sizing: border-box; }
@@ -198,5 +203,6 @@ export default function AppLayout() {
         <Outlet context={{ user, org, role, setOrg, setRole }} />
       </main>
     </div>
+    </PlanContext.Provider>
   );
 }

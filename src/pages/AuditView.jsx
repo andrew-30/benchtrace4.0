@@ -1,8 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { base44 } from "@/api/base44Client";
-import FeatureGate from "@/components/FeatureGate";
-import { canAccess, getCurrentOrg } from "@/lib/planGate";
+import { usePlan, PlanGate } from "@/lib/PlanContext";
 
 const tzFmt = (dateStr) => {
   if (!dateStr) return '—';
@@ -34,6 +33,7 @@ const fmtElapsed = (sec) => {
 };
 
 export default function AuditView() {
+  const { canAccess } = usePlan();
   const navigate = useNavigate();
   const runId = new URLSearchParams(window.location.search).get('run_id');
   const orgId = localStorage.getItem('bt_org_id');
@@ -413,11 +413,7 @@ export default function AuditView() {
   }[run.run_state] || { label: run.run_state, bg: '#f8fafc', color: '#64748b', border: '#e2e8f0' };
 
   if (!canAccess('audit_view')) {
-    return (
-      <div style={{ minHeight: '60vh', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
-        <FeatureGate feature="audit_view" />
-      </div>
-    );
+    return <PlanGate feature="audit_view" />;
   }
 
   return (

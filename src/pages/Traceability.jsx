@@ -1,8 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { base44 } from "@/api/base44Client";
-import FeatureGate from "@/components/FeatureGate";
-import { canAccess, getCurrentOrg } from "@/lib/planGate";
+import { usePlan, PlanGate } from "@/lib/PlanContext";
 
 function tzFmt(dateStr) {
   if (!dateStr) return '—';
@@ -23,6 +22,7 @@ const STATE_CONFIG = {
 };
 
 export default function Traceability() {
+  const { canAccess } = usePlan();
   const navigate = useNavigate();
   const orgId = localStorage.getItem('bt_org_id');
 
@@ -95,11 +95,7 @@ export default function Traceability() {
   }
 
   if (!canAccess('traceability')) {
-    return (
-      <div style={{ minHeight: '60vh', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
-        <FeatureGate feature="traceability" />
-      </div>
-    );
+    return <PlanGate feature="traceability" />;
   }
 
   return (

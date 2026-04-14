@@ -5,6 +5,7 @@ import DismissibleNotification from "@/components/DismissibleNotification";
 import { getPlanStatus } from "@/lib/planStatus";
 import { PLAN_CONFIG } from "@/lib/planConfig";
 import { GATE_PLAN_CONFIG, getCurrentOrg, getActivePlan, PLAN_TIER } from "@/lib/planGate";
+import { usePlan, PLAN_META } from "@/lib/PlanContext";
 
 const SECTORS = ['Academic Research', 'Clinical Diagnostic', 'GMP Manufacturing', 'ISO Accredited', 'CRO Study', 'Biotech Startup', 'General'];
 const TIMEZONES = ['UTC', 'Europe/London', 'Europe/Paris', 'Europe/Berlin', 'Europe/Rome', 'Europe/Madrid', 'Europe/Amsterdam', 'Europe/Stockholm', 'Europe/Warsaw', 'Europe/Zurich', 'Africa/Nairobi', 'Africa/Lagos', 'Africa/Cairo', 'Africa/Johannesburg', 'America/New_York', 'America/Chicago', 'America/Los_Angeles', 'America/Toronto', 'America/Sao_Paulo', 'Asia/Dubai', 'Asia/Kolkata', 'Asia/Singapore', 'Asia/Tokyo', 'Asia/Shanghai', 'Australia/Sydney', 'Pacific/Auckland'];
@@ -17,6 +18,7 @@ const PLANS = [
 
 export default function Settings() {
   const navigate = useNavigate();
+  const { org: planOrg, activePlan, isBeta: planIsBeta, switchPreviewPlan } = usePlan();
   const orgId = localStorage.getItem('bt_org_id');
   const role = localStorage.getItem('bt_role');
   const isAdmin = role === 'admin';
@@ -173,10 +175,10 @@ export default function Settings() {
       </div>
 
       {/* Beta Tester Plan Switcher — DB-backed */}
-      {org?.beta_user === true && (() => {
-        const currentOrg = getCurrentOrg() || org;
-        const actualPlan = currentOrg.plan || 'starter';
-        const selected = currentOrg.preview_plan || actualPlan;
+      {(planOrg || org)?.beta_user === true && (() => {
+        const currentOrg = planOrg || org;
+        const actualPlan = currentOrg?.plan || 'starter';
+        const selected = activePlan;
 
         const plans = [
           { value: 'starter', name: 'Starter', price: '€19/mo', color: '#3b82f6', features: ['Protocol Library (5)', 'Run execution', 'Pre-run checklist', 'Basic deviations', 'Run history'] },
@@ -187,8 +189,7 @@ export default function Settings() {
         const handleSwitch = async (planValue) => {
           if (switching) return;
           setSwitching(true);
-          await base44.entities.Organization.update(org.id, { preview_plan: planValue });
-          setTimeout(() => window.location.reload(), 150);
+          await switchPreviewPlan(planValue);
         };
 
         return (
@@ -234,8 +235,8 @@ export default function Settings() {
               </div>
               <div style={{ padding: '10px 12px', background: 'rgba(245,158,11,0.1)', border: '1px solid rgba(245,158,11,0.2)', borderRadius: 8, marginBottom: 10 }}>
                 <div style={{ fontSize: 11, color: '#fbbf24', lineHeight: 1.5 }}>
-                  ⚠ Previewing <strong>{GATE_PLAN_CONFIG[selected]?.name || selected}</strong>.
-                  Actual plan: <strong>{GATE_PLAN_CONFIG[actualPlan]?.name || actualPlan}</strong>.
+                  ⚠ Previewing <strong>{PLAN_META[selected]?.name || selected}</strong>.
+                  Actual plan: <strong>{PLAN_META[actualPlan]?.name || actualPlan}</strong>.
                   {actualPlan !== selected && ' Features shown reflect preview plan only.'}
                 </div>
               </div>
