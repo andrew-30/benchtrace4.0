@@ -39,31 +39,19 @@ export const GATE_PLAN_CONFIG = {
 // Get the effective plan — beta users use preview plan
 export function getEffectivePlan() {
   const isBeta = localStorage.getItem('bt_beta') === 'true';
-  const actualPlan = localStorage.getItem('bt_plan') || 'free';
-
   if (isBeta) {
-    const previewPlan = localStorage.getItem('bt_preview_plan');
-    if (previewPlan && PLAN_TIER[previewPlan] !== undefined) {
-      return previewPlan;
-    }
-    return actualPlan;
+    const preview = localStorage.getItem('bt_preview_plan');
+    if (preview) return preview;
   }
-
-  return actualPlan;
+  return localStorage.getItem('bt_plan') || 'free';
 }
 
 // Check if current plan can access a feature
 export function canAccess(feature) {
-  const effectivePlan = getEffectivePlan();
   const required = FEATURE_TIERS[feature];
-
-  // Feature not in FEATURE_TIERS = free for everyone
   if (!required) return true;
-
-  const effectiveTier = PLAN_TIER[effectivePlan] ?? 0;
-  const requiredTier  = PLAN_TIER[required]      ?? 0;
-
-  return effectiveTier >= requiredTier;
+  const effectivePlan = getEffectivePlan();
+  return (PLAN_TIER[effectivePlan] ?? 0) >= (PLAN_TIER[required] ?? 0);
 }
 
 // Set preview plan for beta testers

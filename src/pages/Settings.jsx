@@ -207,7 +207,7 @@ export default function Settings() {
                   onClick={() => {
                     localStorage.setItem('bt_preview_plan', plan.value);
                     setPreviewPlanState(plan.value);
-                    setTimeout(() => window.location.reload(), 300);
+                    setTimeout(() => window.location.reload(), 100);
                   }}
                   style={{
                     padding: '12px 16px', borderRadius: 10, cursor: 'pointer',
@@ -247,6 +247,20 @@ export default function Settings() {
               Switching reloads the page to apply changes.
             </div>
           </div>
+          <button
+            onClick={() => {
+              localStorage.setItem('bt_preview_plan', 'starter');
+              window.location.reload();
+            }}
+            style={{
+              width: '100%', marginTop: 10, padding: '8px',
+              background: 'transparent', border: '1px solid rgba(255,255,255,0.1)',
+              borderRadius: 7, color: '#64748b', fontSize: 11,
+              cursor: 'pointer', fontWeight: 600,
+            }}
+          >
+            ↩ Reset to Starter (baseline view)
+          </button>
         </div>
       )}
 
