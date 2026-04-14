@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useCallback } from 'react';
+import { createContext, useContext, useState, useCallback, useEffect } from 'react';
 import { base44 } from '@/api/base44Client';
 import { useNavigate } from 'react-router-dom';
 
@@ -165,6 +165,13 @@ export function usePlanProvider() {
     await base44.entities.Organization.update(orgId, { preview_plan: plan });
     window.location.reload();
   }, []);
+
+  useEffect(() => {
+    const orgId = localStorage.getItem('bt_org_id');
+    if (orgId && !org) {
+      loadOrg();
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   return { org, setOrg, activePlan, isBeta, canAccess, switchPreviewPlan, refreshOrg: loadOrg, loadOrg };
 }

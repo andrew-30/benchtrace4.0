@@ -33,7 +33,7 @@ const fmtElapsed = (sec) => {
 };
 
 export default function AuditView() {
-  const { canAccess } = usePlan();
+  const { canAccess, org } = usePlan();
   const navigate = useNavigate();
   const runId = new URLSearchParams(window.location.search).get('run_id');
   const orgId = localStorage.getItem('bt_org_id');
@@ -46,6 +46,7 @@ export default function AuditView() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    if (!runId || !orgId || !org) return;
     const load = async () => {
       try {
         const runData = await base44.entities.Run.filter({ organization_id: orgId, id: runId });
@@ -67,8 +68,8 @@ export default function AuditView() {
       } catch(e) { console.error('Audit view load error:', e); }
       finally { setLoading(false); }
     };
-    if (runId && orgId) load();
-  }, [runId]);
+    load();
+  }, [runId, org]);
 
   const handleDownloadPDF = async () => {
     if (!window.jspdf) {
@@ -385,6 +386,14 @@ export default function AuditView() {
     doc.save(filename);
   };
 
+  if (!org) return (
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '80px 24px', fontFamily: 'system-ui,sans-serif' }}>
+      <div style={{ color: '#6366f1', fontSize: 13 }}>Loading...</div>
+    </div>
+  );
+
+  if (!canAccess('audit_view')) return <PlanGate feature="audit_view" />;
+
   if (loading) return (
     <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#f8fafc', fontFamily: 'system-ui,sans-serif' }}>
       <div style={{ color: '#6366f1', fontSize: 15 }}>Loading audit view...</div>
@@ -411,10 +420,6 @@ export default function AuditView() {
     in_progress: { label: 'IN PROGRESS', bg: '#eff6ff', color: '#1d4ed8', border: '#bfdbfe' },
     abandoned:   { label: 'ABANDONED',   bg: '#f8fafc', color: '#64748b', border: '#e2e8f0' },
   }[run.run_state] || { label: run.run_state, bg: '#f8fafc', color: '#64748b', border: '#e2e8f0' };
-
-  if (!canAccess('audit_view')) {
-    return <PlanGate feature="audit_view" />;
-  }
 
   return (
     <div style={{ minHeight: '100vh', background: '#f8fafc', fontFamily: 'system-ui,sans-serif' }}>

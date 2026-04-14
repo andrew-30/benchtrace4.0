@@ -22,7 +22,7 @@ const STATE_CONFIG = {
 };
 
 export default function Traceability() {
-  const { canAccess } = usePlan();
+  const { canAccess, org } = usePlan();
   const navigate = useNavigate();
   const orgId = localStorage.getItem('bt_org_id');
 
@@ -94,9 +94,13 @@ export default function Traceability() {
     setSelectedProtocolId('');
   }
 
-  if (!canAccess('traceability')) {
-    return <PlanGate feature="traceability" />;
-  }
+  if (!org) return (
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '80px 24px', fontFamily: 'system-ui,sans-serif' }}>
+      <div style={{ color: '#6366f1', fontSize: 13 }}>Loading...</div>
+    </div>
+  );
+
+  if (!canAccess('traceability')) return <PlanGate feature="traceability" />;
 
   return (
     <div style={{ maxWidth: 860, margin: '0 auto', padding: '32px 24px' }}>

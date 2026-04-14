@@ -4,7 +4,7 @@ import DismissibleNotification from "@/components/DismissibleNotification";
 import { usePlan, PlanGate } from "@/lib/PlanContext";
 
 export default function Team() {
-  const { canAccess } = usePlan();
+  const { canAccess, org } = usePlan();
   const orgId = localStorage.getItem('bt_org_id');
   const isAdmin = localStorage.getItem('bt_role') === 'admin';
 
@@ -102,6 +102,14 @@ export default function Team() {
     } catch(e) { console.error(e); }
   }
 
+  if (!org) return (
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '80px 24px' }}>
+      <div style={{ color: '#6366f1', fontSize: 13 }}>Loading...</div>
+    </div>
+  );
+
+  if (!canAccess('team_management')) return <PlanGate feature="team_management" />;
+
   if (loading) return (
     <div className="flex justify-center py-16">
       <div className="w-6 h-6 border-2 border-primary/20 border-t-primary rounded-full animate-spin" />
@@ -109,10 +117,6 @@ export default function Team() {
   );
 
   const pendingInvites = invites.filter(i => i.status === 'pending');
-
-  if (!canAccess('team_management')) {
-    return <PlanGate feature="team_management" />;
-  }
 
   return (
     <div style={{ maxWidth: 800, margin: '0 auto', padding: '8px 0' }}>

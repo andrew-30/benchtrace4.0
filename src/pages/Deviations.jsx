@@ -85,7 +85,7 @@ function ResolveForm({ deviationId, onResolve, onCancel }) {
 }
 
 export default function Deviations() {
-  const { canAccess } = usePlan();
+  const { canAccess, org } = usePlan();
   const navigate = useNavigate();
   const device = useDeviceType();
   const orgId = localStorage.getItem("bt_org_id");
@@ -148,16 +148,20 @@ export default function Deviations() {
   const highCount = deviations.filter(d => d.severity === "high").length;
   const resolvedCount = deviations.filter(d => d.status === "resolved").length;
 
+  if (!org) return (
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '80px 24px' }}>
+      <div style={{ color: '#6366f1', fontSize: 13 }}>Loading...</div>
+    </div>
+  );
+
+  if (!canAccess('deviation_center')) return <PlanGate feature="deviation_center" />;
+
   if (loading) {
     return (
       <div className="flex justify-center py-16">
         <div className="w-6 h-6 border-2 border-primary/20 border-t-primary rounded-full animate-spin" />
       </div>
     );
-  }
-
-  if (!canAccess('deviation_center')) {
-    return <PlanGate feature="deviation_center" />;
   }
 
   return (

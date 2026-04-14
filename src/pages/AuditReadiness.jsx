@@ -79,7 +79,7 @@ function calculateReadinessScore(protocols, runs, deviations, protocolVersions) 
 }
 
 export default function AuditReadiness() {
-  const { canAccess } = usePlan();
+  const { canAccess, org } = usePlan();
   const navigate = useNavigate();
   const orgId = localStorage.getItem('bt_org_id');
   const [protocols, setProtocols] = useState([]);
@@ -89,6 +89,7 @@ export default function AuditReadiness() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    if (!orgId || !org) return;
     const load = async () => {
       try {
         const [p, r, d, v] = await Promise.all([
@@ -101,8 +102,16 @@ export default function AuditReadiness() {
       } catch(e) { console.error(e); }
       finally { setLoading(false); }
     };
-    if (orgId) load();
-  }, [orgId]);
+    load();
+  }, [orgId, org]);
+
+  if (!org) return (
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '80px 24px', fontFamily: 'system-ui,sans-serif' }}>
+      <div style={{ color: '#6366f1' }}>Loading...</div>
+    </div>
+  );
+
+  if (!canAccess('audit_readiness')) return <PlanGate feature="audit_readiness" />;
 
   if (loading) return (
     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '80px 24px', fontFamily: 'system-ui,sans-serif' }}>
@@ -114,10 +123,6 @@ export default function AuditReadiness() {
   const sc = overallScore >= 90 ? '#16a34a' : overallScore >= 70 ? '#6366f1' : overallScore >= 50 ? '#d97706' : '#dc2626';
   const sl = overallScore >= 90 ? '✓ Audit ready' : overallScore >= 70 ? '⚠ Minor items to address' : overallScore >= 50 ? '⚠ Several items need attention' : '✗ Not audit ready';
   const passedCount = checks.filter(c => c.passed).length;
-
-  if (!canAccess('audit_readiness')) {
-    return <PlanGate feature="audit_readiness" />;
-  }
 
   return (
     <div style={{ maxWidth: 800, margin: '0 auto', padding: '0 0 40px', fontFamily: 'system-ui,sans-serif' }}>
