@@ -14,6 +14,14 @@ export default function AcceptInvite() {
   const [accepting, setAccepting] = useState(false);
 
   useEffect(() => {
+    // Check sessionStorage for pending invite (set before login redirect)
+    const pendingToken = sessionStorage.getItem('bt_pending_invite');
+    if (pendingToken && !token) {
+      sessionStorage.removeItem('bt_pending_invite');
+      navigate(`/accept-invite?token=${pendingToken}`);
+      return;
+    }
+
     const validateToken = async () => {
       if (!token) { setStatus('invalid'); return; }
       try {
@@ -53,7 +61,8 @@ export default function AcceptInvite() {
       try {
         currentUser = await base44.auth.me();
       } catch(e) {
-        const returnUrl = encodeURIComponent(window.location.href);
+        // Not logged in — store token and redirect to login
+        sessionStorage.setItem('bt_pending_invite', token);
         base44.auth.redirectToLogin(window.location.href);
         return;
       }
@@ -147,7 +156,7 @@ export default function AcceptInvite() {
           <div style={{ fontSize: 14, color: '#64748b', lineHeight: 1.6, marginBottom: 24 }}>
             This invite link is invalid or has already been used. Please ask your team admin to send a new invite.
           </div>
-          <button onClick={() => navigate('/')} style={{ padding: '11px 28px', background: '#6366f1', color: 'white', border: 'none', borderRadius: 8, fontSize: 14, fontWeight: 700, cursor: 'pointer' }}>
+          <button onClick={() => navigate('/dashboard')} style={{ padding: '11px 28px', background: '#6366f1', color: 'white', border: 'none', borderRadius: 8, fontSize: 14, fontWeight: 700, cursor: 'pointer' }}>
             Go to BenchTrace →
           </button>
         </div>
@@ -164,7 +173,7 @@ export default function AcceptInvite() {
           <div style={{ fontSize: 14, color: '#64748b', lineHeight: 1.6, marginBottom: 24 }}>
             This invite link expired after 7 days. Please ask your team admin to send a new invite.
           </div>
-          <button onClick={() => navigate('/')} style={{ padding: '11px 28px', background: '#6366f1', color: 'white', border: 'none', borderRadius: 8, fontSize: 14, fontWeight: 700, cursor: 'pointer' }}>
+          <button onClick={() => navigate('/dashboard')} style={{ padding: '11px 28px', background: '#6366f1', color: 'white', border: 'none', borderRadius: 8, fontSize: 14, fontWeight: 700, cursor: 'pointer' }}>
             Go to BenchTrace →
           </button>
         </div>
@@ -211,7 +220,7 @@ export default function AcceptInvite() {
           <div style={{ fontSize: 48, marginBottom: 16 }}>⚠️</div>
           <div style={{ fontSize: 20, fontWeight: 800, color: '#1e293b', marginBottom: 8 }}>Something went wrong</div>
           <div style={{ fontSize: 14, color: '#64748b', lineHeight: 1.6, marginBottom: 24 }}>{error}</div>
-          <button onClick={() => navigate('/')} style={{ padding: '11px 28px', background: '#6366f1', color: 'white', border: 'none', borderRadius: 8, fontSize: 14, fontWeight: 700, cursor: 'pointer' }}>
+          <button onClick={() => navigate('/dashboard')} style={{ padding: '11px 28px', background: '#6366f1', color: 'white', border: 'none', borderRadius: 8, fontSize: 14, fontWeight: 700, cursor: 'pointer' }}>
             Go to BenchTrace →
           </button>
         </div>
