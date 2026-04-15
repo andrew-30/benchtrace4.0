@@ -95,6 +95,16 @@ export default function AppLayout() {
     }
   }, []);
 
+  // Check for welcome message after invite acceptance (survives page reload)
+  useEffect(() => {
+    const welcomeMsg = localStorage.getItem('bt_welcome_message');
+    if (welcomeMsg) {
+      localStorage.removeItem('bt_welcome_message');
+      setInviteSuccess(welcomeMsg);
+      setTimeout(() => setInviteSuccess(''), 6000);
+    }
+  }, []);
+
   const handleInviteToken = async (currentUser) => {
     try {
       const urlParams = new URLSearchParams(window.location.search);
@@ -162,8 +172,16 @@ export default function AppLayout() {
 
       localStorage.setItem('bt_org_id', invite.organization_id);
       localStorage.setItem('bt_role', invite.invited_role || 'member');
-      setInviteSuccess(`Welcome! You've joined the team on BenchTrace.`);
-      setTimeout(() => window.location.reload(), 1500);
+
+      // Get org name for welcome message
+      let orgName = 'the team';
+      try {
+        const orgs = await base44.entities.Organization.filter({ id: invite.organization_id });
+        orgName = orgs?.[0]?.name || 'the team';
+      } catch(e) { /* use default */ }
+
+      localStorage.setItem('bt_welcome_message', `Welcome to ${orgName} on BenchTrace!`);
+      window.location.reload();
     } catch(e) {
       console.error('handleInviteToken failed:', e);
     }
@@ -288,11 +306,16 @@ export default function AppLayout() {
       `}</style>
       <TopNav user={user} />
       {inviteSuccess && (
-        <div style={{ position: 'fixed', top: 80, left: '50%', transform: 'translateX(-50%)', background: '#f0fdf4', border: '2px solid #16a34a', borderRadius: 10, padding: '14px 24px', zIndex: 500, fontFamily: 'system-ui, sans-serif', display: 'flex', alignItems: 'center', gap: 10, boxShadow: '0 4px 20px rgba(0,0,0,0.1)', whiteSpace: 'nowrap' }}>
-          <span style={{ fontSize: 20 }}>🎉</span>
-          <span style={{ fontSize: 14, fontWeight: 700, color: '#15803d' }}>{inviteSuccess}</span>
+        <div style={{ position: 'fixed', top: 80, left: '50%', transform: 'translateX(-50%)', background: 'white', border: '2px solid #16a34a', borderRadius: 12, padding: '16px 24px', zIndex: 9999, fontFamily: 'system-ui, sans-serif', display: 'flex', alignItems: 'center', gap: 12, boxShadow: '0 8px 32px rgba(0,0,0,0.15)', whiteSpace: 'nowrap', animation: 'slideDown 0.3s ease' }}>
+          <div style={{ width: 40, height: 40, borderRadius: '50%', background: '#f0fdf4', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22, flexShrink: 0 }}>🎉</div>
+          <div>
+            <div style={{ fontSize: 14, fontWeight: 800, color: '#15803d', marginBottom: 2 }}>{inviteSuccess}</div>
+            <div style={{ fontSize: 12, color: '#64748b' }}>You can now access all team protocols and runs.</div>
+          </div>
+          <button onMouseDown={() => setInviteSuccess('')} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#94a3b8', fontSize: 20, marginLeft: 8, display: 'flex', alignItems: 'center', padding: '0 4px' }}>×</button>
         </div>
       )}
+      <style>{`@keyframes slideDown { from { opacity: 0; transform: translateX(-50%) translateY(-16px); } to { opacity: 1; transform: translateX(-50%) translateY(0); } }`}</style>
       {inviteError && (
         <div style={{ position: 'fixed', top: 80, left: '50%', transform: 'translateX(-50%)', background: '#fef2f2', border: '2px solid #dc2626', borderRadius: 10, padding: '14px 24px', zIndex: 500, fontFamily: 'system-ui, sans-serif', display: 'flex', alignItems: 'center', gap: 10, boxShadow: '0 4px 20px rgba(0,0,0,0.1)', maxWidth: 480 }}>
           <span style={{ fontSize: 20 }}>⚠️</span>
