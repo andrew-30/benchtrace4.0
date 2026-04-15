@@ -22,6 +22,7 @@ import AuditReadiness from './pages/AuditReadiness';
 import Traceability from './pages/Traceability';
 import Team from './pages/Team';
 import Pricing from './pages/Pricing';
+import AcceptInvite from './pages/AcceptInvite';
 
 const AuthenticatedApp = () => {
   const { isLoadingAuth, isLoadingPublicSettings, authError, navigateToLogin } = useAuth();
@@ -32,6 +33,10 @@ const AuthenticatedApp = () => {
         <div className="w-8 h-8 border-4 border-slate-200 border-t-slate-800 rounded-full animate-spin"></div>
       </div>
     );
+  }
+
+  if (window.location.pathname === '/accept-invite') {
+    return <Routes><Route path="/accept-invite" element={<AcceptInvite />} /></Routes>;
   }
 
   if (authError) {
@@ -46,6 +51,7 @@ const AuthenticatedApp = () => {
   return (
     <Routes>
       <Route path="/onboarding" element={<Onboarding />} />
+      <Route path="/accept-invite" element={<AcceptInvite />} />
       <Route element={<AppLayout />}>
         <Route path="/" element={<Dashboard />} />
         <Route path="/dashboard" element={<Dashboard />} />

@@ -3,6 +3,15 @@ import { base44 } from "@/api/base44Client";
 import DismissibleNotification from "@/components/DismissibleNotification";
 import { usePlan, PlanGate } from "@/lib/PlanContext";
 
+const generateToken = () => {
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+  let token = '';
+  for (let i = 0; i < 32; i++) {
+    token += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return token;
+};
+
 export default function Team() {
   const { canAccess, org } = usePlan();
   const orgId = localStorage.getItem('bt_org_id');
@@ -18,6 +27,14 @@ export default function Team() {
   const [inviting, setInviting] = useState(false);
   const [inviteError, setInviteError] = useState('');
   const [notification, setNotification] = useState(null);
+  const [confirmRevokeId, setConfirmRevokeId] = useState(null);
+
+  // Link modal state
+  const [createdInviteLink, setCreatedInviteLink] = useState('');
+  const [createdInviteEmail, setCreatedInviteEmail] = useState('');
+  const [showLinkModal, setShowLinkModal] = useState(false);
+  const [linkCopied, setLinkCopied] = useState(false);
+  const [copiedInviteId, setCopiedInviteId] = useState(null);
 
   function showNotification(message, type = 'success') {
     setNotification({ message, type });
@@ -25,7 +42,11 @@ export default function Team() {
       setTimeout(() => setNotification(prev => prev?.message === message ? null : prev), 5000);
     }
   }
-  const [confirmRevokeId, setConfirmRevokeId] = useState(null);
+
+  async function loadInvites() {
+    const inviteData = await base44.entities.OrganizationInvite.filter({ organization_id: orgId });
+    setInvites((inviteData || []).filter(i => i.status !== 'revoked'));
+  }
 
   useEffect(() => {
     async function load() {
@@ -49,46 +70,53 @@ export default function Team() {
   }
 
   async function handleSendInvite() {
-    if (!inviteEmail.trim() || !inviteEmail.includes('@')) {
-      setInviteError('Please enter a valid email address.');
-      return;
-    }
+    if (!inviteEmail.trim()) { setInviteError('Please enter an email address.'); return; }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(inviteEmail.trim())) { setInviteError('Please enter a valid email address.'); return; }
+
     const existingUser = users.find(u => u.email?.toLowerCase() === inviteEmail.toLowerCase());
     if (existingUser) {
       const existingMembership = members.find(m => m.user_id === existingUser.id);
-      if (existingMembership) {
-        setInviteError('This user is already a member of your lab.');
-        return;
-      }
+      if (existingMembership) { setInviteError('This user is already a member of your lab.'); return; }
     }
     const existingInvite = invites.find(i => i.invited_email?.toLowerCase() === inviteEmail.toLowerCase() && i.status === 'pending');
-    if (existingInvite) {
-      setInviteError('A pending invite already exists for this email.');
-      return;
-    }
+    if (existingInvite) { setInviteError('A pending invite already exists for this email.'); return; }
 
     setInviting(true);
     setInviteError('');
     try {
-      const currentUser = await base44.auth.me();
-      const token = Array.from(crypto.getRandomValues(new Uint8Array(16))).map(b => b.toString(16).padStart(2, '0')).join('');
-      const invite = await base44.entities.OrganizationInvite.create({
+      const user = await base44.auth.me();
+      const token = generateToken();
+      await base44.entities.OrganizationInvite.create({
         organization_id: orgId,
         invited_email: inviteEmail.trim().toLowerCase(),
         invited_role: inviteRole,
         status: 'pending',
-        invited_by_user_id: currentUser.id,
-        invited_by_name: currentUser.full_name || currentUser.email,
+        invited_by_user_id: user.id,
+        invited_by_name: user.full_name || user.email,
+        token: token,
         created_at: new Date().toISOString(),
-        token,
       });
-      setInvites(prev => [...prev, invite]);
-      showNotification(`Invite created for ${inviteEmail}. Share the BenchTrace app URL with them.`, 'success');
+
+      const inviteLink = `${window.location.origin}/accept-invite?token=${token}`;
+      setCreatedInviteLink(inviteLink);
+      setCreatedInviteEmail(inviteEmail.trim());
       setInviteEmail('');
       setShowInviteForm(false);
+      setShowLinkModal(true);
+
+      await loadInvites();
+
+      await base44.entities.AuditLog.create({
+        organization_id: orgId,
+        event_type: 'team_invite_sent',
+        actor_user_id: user.id,
+        actor_email: user.email,
+        metadata: { invited_email: inviteEmail.trim(), invited_role: inviteRole },
+        created_at: new Date().toISOString(),
+      });
     } catch(e) {
-      setInviteError('Failed to create invite. Please try again.');
-      showNotification('Failed to create invite. Please try again.', 'error');
+      console.error('Invite failed:', e);
+      setInviteError(e.message || 'Failed to create invite. Please try again.');
     } finally {
       setInviting(false);
     }
@@ -178,7 +206,7 @@ export default function Team() {
               disabled={inviting || !inviteEmail.trim()}
               style={{ padding: '8px 20px', background: inviting || !inviteEmail.trim() ? '#94a3b8' : '#6366f1', color: 'white', border: 'none', borderRadius: 7, fontSize: 13, fontWeight: 700, cursor: inviting || !inviteEmail.trim() ? 'not-allowed' : 'pointer' }}
             >
-              {inviting ? 'Creating invite...' : 'Create Invite'}
+              {inviting ? 'Creating invite...' : 'Create Invite & Get Link'}
             </button>
           </div>
         </div>
@@ -230,19 +258,31 @@ export default function Team() {
                   <button onClick={() => setConfirmRevokeId(null)} style={{ padding: '5px 12px', background: 'white', color: '#475569', border: '1px solid #e2e8f0', borderRadius: 6, fontSize: 12, cursor: 'pointer' }}>Cancel</button>
                 </div>
               ) : (
-                <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-                  <div style={{ width: 40, height: 40, borderRadius: '50%', background: '#fffbeb', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, border: '1px solid #fde68a', fontSize: 18 }}>
-                    ✉
-                  </div>
-                  <div style={{ flex: 1 }}>
-                    <div style={{ fontSize: 14, fontWeight: 700, color: '#1e293b' }}>{invite.invited_email}</div>
-                    <div style={{ fontSize: 11, color: '#64748b' }}>
-                      Invited by {invite.invited_by_name || '—'} · Role: {invite.invited_role}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 14, fontWeight: 600, color: '#1e293b' }}>{invite.invited_email}</div>
+                    <div style={{ fontSize: 11, color: '#92400e' }}>
+                      {(invite.invited_role || 'member').toUpperCase()} · Pending · Sent {invite.created_at ? new Date(invite.created_at).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' }) : '—'}
                     </div>
                   </div>
-                  <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 99, background: '#fffbeb', color: '#d97706', border: '1px solid #fde68a' }}>PENDING</span>
+                  {invite.token && (
+                    <button
+                      onMouseDown={() => {
+                        const link = `${window.location.origin}/accept-invite?token=${invite.token}`;
+                        navigator.clipboard.writeText(link).then(() => {
+                          setCopiedInviteId(invite.id);
+                          setTimeout(() => setCopiedInviteId(null), 3000);
+                        });
+                      }}
+                      style={{ padding: '5px 12px', background: copiedInviteId === invite.id ? '#16a34a' : 'white', color: copiedInviteId === invite.id ? 'white' : '#6366f1', border: '1px solid', borderColor: copiedInviteId === invite.id ? '#16a34a' : '#6366f1', borderRadius: 6, fontSize: 11, fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap' }}
+                    >
+                      {copiedInviteId === invite.id ? '✓ Copied' : '📋 Copy Link'}
+                    </button>
+                  )}
                   {isAdmin && (
-                    <button onClick={() => setConfirmRevokeId(invite.id)} style={{ padding: '5px 12px', background: 'white', color: '#ef4444', border: '1px solid #fecaca', borderRadius: 6, fontSize: 11, cursor: 'pointer', fontWeight: 600 }}>Revoke</button>
+                    <button onClick={() => setConfirmRevokeId(invite.id)} style={{ padding: '5px 12px', background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 6, fontSize: 11, fontWeight: 700, cursor: 'pointer', color: '#dc2626', whiteSpace: 'nowrap' }}>
+                      Revoke
+                    </button>
                   )}
                 </div>
               )}
@@ -251,12 +291,130 @@ export default function Team() {
         </div>
       )}
 
-      <div style={{ marginTop: 24, padding: '14px 16px', background: '#f0f4ff', border: '1px solid #c7d2fe', borderRadius: 8 }}>
-        <div style={{ fontSize: 12, fontWeight: 700, color: '#4338ca', marginBottom: 4 }}>How invitations work</div>
-        <div style={{ fontSize: 12, color: '#475569', lineHeight: 1.6 }}>
-          When you create an invite, share the BenchTrace app URL with your colleague and ask them to sign up. Once they create an account, their membership and role will be active. Full email-based invite delivery is coming in a future update.
+      {/* Invite Link Modal */}
+      {showLinkModal && (
+        <div style={{
+          position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.6)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          zIndex: 1000, padding: 24, fontFamily: 'system-ui, sans-serif',
+        }}>
+          <div style={{
+            background: 'white', borderRadius: 14, width: '100%', maxWidth: 480,
+            boxShadow: '0 20px 60px rgba(0,0,0,0.2)', overflow: 'hidden',
+          }}>
+            {/* Header */}
+            <div style={{ background: '#f0fdf4', padding: '20px 24px', borderBottom: '1px solid #bbf7d0' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <div style={{ width: 36, height: 36, borderRadius: '50%', background: '#16a34a', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18, color: 'white', fontWeight: 700 }}>✓</div>
+                <div>
+                  <div style={{ fontSize: 15, fontWeight: 800, color: '#15803d' }}>Invite Created!</div>
+                  <div style={{ fontSize: 12, color: '#16a34a' }}>Share this link with {createdInviteEmail}</div>
+                </div>
+              </div>
+            </div>
+
+            <div style={{ padding: '24px' }}>
+              {/* How it works */}
+              <div style={{ marginBottom: 20 }}>
+                <div style={{ fontSize: 12, fontWeight: 700, color: '#374151', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 10 }}>How it works</div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  {[
+                    { step: '1', text: 'Copy the link below and send it to ' + createdInviteEmail },
+                    { step: '2', text: 'They click the link and sign up using that exact email address' },
+                    { step: '3', text: 'They are automatically added to your team' },
+                  ].map(s => (
+                    <div key={s.step} style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
+                      <div style={{ width: 22, height: 22, borderRadius: '50%', background: '#6366f1', color: 'white', fontSize: 11, fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>{s.step}</div>
+                      <div style={{ fontSize: 13, color: '#475569', lineHeight: 1.5 }}>{s.text}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Invite link */}
+              <div style={{ marginBottom: 20 }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: '#374151', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 8 }}>Invite Link</div>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <div style={{
+                    flex: 1, padding: '10px 12px', background: '#f8fafc',
+                    border: '1px solid #e2e8f0', borderRadius: 8,
+                    fontSize: 12, color: '#64748b', wordBreak: 'break-all',
+                    lineHeight: 1.5, fontFamily: 'monospace',
+                  }}>
+                    {createdInviteLink}
+                  </div>
+                  <button
+                    onMouseDown={() => {
+                      navigator.clipboard.writeText(createdInviteLink).then(() => {
+                        setLinkCopied(true);
+                        setTimeout(() => setLinkCopied(false), 3000);
+                      });
+                    }}
+                    style={{
+                      padding: '10px 16px', flexShrink: 0,
+                      background: linkCopied ? '#16a34a' : '#6366f1',
+                      color: 'white', border: 'none', borderRadius: 8,
+                      fontSize: 13, fontWeight: 700, cursor: 'pointer',
+                      transition: 'background 0.2s',
+                    }}
+                  >
+                    {linkCopied ? '✓ Copied!' : '📋 Copy'}
+                  </button>
+                </div>
+              </div>
+
+              {/* Share options */}
+              <div style={{ marginBottom: 20 }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: '#374151', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 8 }}>Share via</div>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <button
+                    onMouseDown={() => {
+                      const subject = 'Join my team on BenchTrace';
+                      const body = `Hi,\n\nI've invited you to join my team on BenchTrace — a lab protocol and QC compliance platform.\n\nClick this link to accept your invitation:\n${createdInviteLink}\n\nImportant: You must sign up using this email address: ${createdInviteEmail}\n\nThe link expires in 7 days.\n\nSee you on BenchTrace!`;
+                      window.open(`mailto:${createdInviteEmail}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`);
+                    }}
+                    style={{ flex: 1, padding: '8px', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 7, fontSize: 12, cursor: 'pointer', color: '#475569', fontWeight: 600 }}
+                  >
+                    ✉ Email
+                  </button>
+                  <button
+                    onMouseDown={() => {
+                      const text = `You've been invited to join BenchTrace! Click to accept: ${createdInviteLink} (Use email: ${createdInviteEmail})`;
+                      window.open(`https://wa.me/?text=${encodeURIComponent(text)}`);
+                    }}
+                    style={{ flex: 1, padding: '8px', background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 7, fontSize: 12, cursor: 'pointer', color: '#16a34a', fontWeight: 600 }}
+                  >
+                    💬 WhatsApp
+                  </button>
+                  <button
+                    onMouseDown={() => {
+                      navigator.clipboard.writeText(createdInviteLink).then(() => {
+                        setLinkCopied(true);
+                        setTimeout(() => setLinkCopied(false), 3000);
+                      });
+                    }}
+                    style={{ flex: 1, padding: '8px', background: '#eef2ff', border: '1px solid #c7d2fe', borderRadius: 7, fontSize: 12, cursor: 'pointer', color: '#4338ca', fontWeight: 600 }}
+                  >
+                    🔗 Copy Link
+                  </button>
+                </div>
+              </div>
+
+              {/* Warning */}
+              <div style={{ padding: '10px 12px', background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 8, marginBottom: 20, fontSize: 12, color: '#92400e', lineHeight: 1.5 }}>
+                ⚠ The invited person must sign up using <strong>{createdInviteEmail}</strong> exactly. The link expires in 7 days.
+              </div>
+
+              <button
+                onMouseDown={() => setShowLinkModal(false)}
+                style={{ width: '100%', padding: '11px', background: '#6366f1', color: 'white', border: 'none', borderRadius: 8, fontSize: 14, fontWeight: 700, cursor: 'pointer' }}
+              >
+                Done
+              </button>
+            </div>
+          </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }
