@@ -67,17 +67,20 @@ export default function Runs() {
   const [protocols, setProtocols] = useState({});
   const [filter, setFilter] = useState("All");
   const [loading, setLoading] = useState(true);
+  const [currentUserId, setCurrentUserId] = useState(null);
 
   useEffect(() => {
     async function load() {
-      const [runsData, protsData] = await Promise.all([
+      const [runsData, protsData, currentUser] = await Promise.all([
         base44.entities.Run.filter({ organization_id: orgId }, "-run_started_at"),
         base44.entities.Protocol.filter({ organization_id: orgId }),
+        base44.auth.me().catch(() => null),
       ]);
       const protMap = {};
       for (const p of protsData) protMap[p.id] = p;
       setRuns(runsData);
       setProtocols(protMap);
+      setCurrentUserId(currentUser?.id || null);
       setLoading(false);
     }
     load();
@@ -183,7 +186,7 @@ export default function Runs() {
                       {protocols[run.protocol_id]?.name || 'Protocol Run'}
                     </div>
                     <div style={{ fontSize: 11, color: '#94a3b8' }}>
-                      {run.operator_name} · {new Date(run.run_started_at).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}
+                      {run.operator_name}{run.operator_user_id === currentUserId && <span style={{ color: '#6366f1', fontWeight: 700, marginLeft: 4 }}>(you)</span>} · {new Date(run.run_started_at).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}
                     </div>
                   </div>
                   <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4, flexShrink: 0 }}>

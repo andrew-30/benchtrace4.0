@@ -251,6 +251,7 @@ export default function RunDetail() {
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState("overview");
   const [currentUser, setCurrentUser] = useState(null);
+  const [isOperator, setIsOperator] = useState(false);
 
   // Sign-off state
   const [showESignModal, setShowESignModal] = useState(false);
@@ -275,6 +276,7 @@ export default function RunDetail() {
       if (!runData || runData.length === 0) { navigate("/runs"); return; }
       const r = runData[0];
       setRun(r);
+      setIsOperator(r.operator_user_id === user.id);
       setDeviations(devsData || []);
 
       const proto = await base44.entities.Protocol.filter({ organization_id: orgId, id: r.protocol_id });
@@ -390,6 +392,7 @@ export default function RunDetail() {
             <StateBadge state={run.run_state} />
             <span style={{ fontSize: 12, color: "#64748b" }}>
               Operator: <strong>{run.operator_name || "—"}</strong>
+              {isOperator && <span style={{ color: '#6366f1', marginLeft: 4 }}>(you)</span>}
             </span>
             <span style={{ fontSize: 12, color: "#64748b" }}>
               {tzFmt(run.run_started_at)}
@@ -577,12 +580,19 @@ export default function RunDetail() {
               <div style={{ fontSize: 13, fontWeight: 700, color: '#1e293b', marginBottom: 6 }}>Ready to Sign Off</div>
               <div style={{ fontSize: 13, color: '#64748b', marginBottom: 16 }}>Review the run and apply your 21 CFR Part 11 electronic signature.</div>
               {canAccess('esignature') ? (
-                <button
-                  onClick={() => setShowESignModal(true)}
-                  style={{ padding: '10px 22px', background: '#1e293b', color: 'white', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8 }}
-                >
-                  🔏 Sign Off Run
-                </button>
+                isOperator ? (
+                  <div style={{ padding: '14px 16px', background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 10 }}>
+                    <div style={{ fontSize: 14, fontWeight: 700, color: '#92400e', marginBottom: 4 }}>🔒 Sign-off requires a different operator</div>
+                    <div style={{ fontSize: 12, color: '#78350f', lineHeight: 1.6 }}>21 CFR Part 11 requires separation of duties. You executed this run, so another team member or supervisor must sign it off.</div>
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => setShowESignModal(true)}
+                    style={{ padding: '10px 22px', background: '#1e293b', color: 'white', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8 }}
+                  >
+                    🔏 Sign Off Run
+                  </button>
+                )
               ) : (
                 <div style={{ padding: '12px 16px', background: '#f8fafc', border: '1px dashed #e2e8f0', borderRadius: 8, textAlign: 'center' }}>
                   <div style={{ fontSize: 13, fontWeight: 700, color: '#94a3b8', marginBottom: 4 }}>🔒 21 CFR Part 11 E-Signature</div>
@@ -597,6 +607,7 @@ export default function RunDetail() {
                   )}
                 </div>
               )}
+
             </div>
           )}
 

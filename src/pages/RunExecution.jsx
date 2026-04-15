@@ -186,12 +186,97 @@ function StepTimerBlock({ step, timerState, elapsed, onStart, onPause, onRestart
   );
 }
 
+function RunLiveMonitor({ run, protocol, mergedSteps, stepRuns, currentUser, onRequestControl, navigate }) {
+  const role = localStorage.getItem('bt_role');
+  const isAdmin = role === 'admin';
+  const completedSteps = (stepRuns || []).filter(sr => sr.step_state === 'completed').length;
+  const totalSteps = (mergedSteps || []).length;
+  const progressPct = totalSteps > 0 ? Math.round((completedSteps / totalSteps) * 100) : 0;
+  const currentStepIndex = completedSteps;
+  const currentStep = mergedSteps?.[currentStepIndex];
+
+  return (
+    <div style={{ minHeight: '100vh', background: '#0f172a', fontFamily: 'system-ui, sans-serif' }}>
+      <style>{`@keyframes bt-pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }`}</style>
+      <div style={{ position: 'fixed', top: 0, left: 0, right: 0, zIndex: 200, background: '#0f172a', borderBottom: '1px solid rgba(255,255,255,0.1)', padding: '10px 16px', display: 'flex', alignItems: 'center', gap: 12 }}>
+        <button onClick={() => navigate('/runs')} style={{ padding: '6px 14px', background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.15)', color: '#94a3b8', borderRadius: 6, fontSize: 12, cursor: 'pointer', fontWeight: 600 }}>← Runs</button>
+        <div style={{ flex: 1 }}>
+          <div style={{ fontSize: 13, fontWeight: 700, color: 'white' }}>{protocol?.name}</div>
+          <div style={{ fontSize: 10, color: '#64748b' }}>{run.operator_name} · Read-only monitoring</div>
+        </div>
+        <div style={{ padding: '4px 12px', borderRadius: 99, background: 'rgba(59,130,246,0.2)', border: '1px solid rgba(59,130,246,0.4)', display: 'flex', alignItems: 'center', gap: 6 }}>
+          <div style={{ width: 6, height: 6, borderRadius: '50%', background: '#3b82f6', animation: 'bt-pulse 1.5s infinite' }} />
+          <span style={{ fontSize: 10, fontWeight: 700, color: '#60a5fa' }}>LIVE</span>
+        </div>
+      </div>
+      <div style={{ paddingTop: 72, maxWidth: 700, margin: '0 auto', padding: '72px 20px 40px' }}>
+        <div style={{ padding: '16px 20px', background: 'rgba(59,130,246,0.1)', border: '1px solid rgba(59,130,246,0.3)', borderRadius: 12, marginBottom: 24, display: 'flex', alignItems: 'center', gap: 12 }}>
+          <div style={{ width: 44, height: 44, borderRadius: '50%', background: '#3b82f6', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18, flexShrink: 0 }}>⚡</div>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontSize: 14, fontWeight: 700, color: 'white', marginBottom: 2 }}>{run.operator_name} is executing this run</div>
+            <div style={{ fontSize: 12, color: '#94a3b8' }}>You are viewing in read-only mode. Only {run.operator_name} can complete steps.</div>
+          </div>
+        </div>
+        <div style={{ background: '#1e293b', borderRadius: 12, padding: '20px', marginBottom: 20 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 10 }}>
+            <span style={{ fontSize: 13, fontWeight: 700, color: 'white' }}>Progress</span>
+            <span style={{ fontSize: 13, fontWeight: 700, color: '#6366f1' }}>{progressPct}%</span>
+          </div>
+          <div style={{ height: 8, background: 'rgba(255,255,255,0.1)', borderRadius: 4, overflow: 'hidden', marginBottom: 10 }}>
+            <div style={{ height: '100%', borderRadius: 4, background: '#6366f1', width: `${progressPct}%`, transition: 'width 0.5s ease' }} />
+          </div>
+          <div style={{ fontSize: 12, color: '#64748b' }}>{completedSteps} of {totalSteps} steps completed</div>
+        </div>
+        {currentStep && (
+          <div style={{ background: '#1e293b', border: '2px solid #6366f1', borderRadius: 12, padding: '18px 20px', marginBottom: 20 }}>
+            <div style={{ fontSize: 10, fontWeight: 700, color: '#6366f1', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8 }}>Currently executing — Step {currentStepIndex + 1}</div>
+            {currentStep.title && <div style={{ fontSize: 11, fontWeight: 700, color: '#a5b4fc', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 6 }}>{currentStep.title}</div>}
+            <div style={{ fontSize: 15, fontWeight: 600, color: 'white', lineHeight: 1.6 }}>{currentStep.instruction}</div>
+            {currentStep.is_critical && <div style={{ marginTop: 10, fontSize: 11, fontWeight: 700, color: '#fca5a5' }}>🔴 CRITICAL STEP</div>}
+          </div>
+        )}
+        <div style={{ fontSize: 11, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 12 }}>All Steps ({totalSteps})</div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 32 }}>
+          {(mergedSteps || []).map((step, idx) => {
+            const stepRun = (stepRuns || []).find(sr => sr.step_order === step.step_order);
+            const isDone = stepRun?.step_state === 'completed';
+            const isCurrent = idx === currentStepIndex;
+            return (
+              <div key={step._id || idx} style={{ padding: '10px 14px', borderRadius: 8, background: isDone ? 'rgba(22,163,74,0.1)' : isCurrent ? 'rgba(99,102,241,0.15)' : 'rgba(255,255,255,0.03)', border: `1px solid ${isDone ? 'rgba(22,163,74,0.3)' : isCurrent ? 'rgba(99,102,241,0.4)' : 'rgba(255,255,255,0.06)'}`, display: 'flex', alignItems: 'center', gap: 10 }}>
+                <div style={{ width: 24, height: 24, borderRadius: '50%', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 700, background: isDone ? '#16a34a' : isCurrent ? '#6366f1' : 'rgba(255,255,255,0.08)', color: isDone || isCurrent ? 'white' : '#64748b' }}>
+                  {isDone ? '✓' : idx + 1}
+                </div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  {step.title && <div style={{ fontSize: 10, color: '#6366f1', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 2 }}>{step.title}</div>}
+                  <div style={{ fontSize: 12, color: isDone ? '#86efac' : isCurrent ? '#a5b4fc' : '#94a3b8', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{step.instruction}</div>
+                </div>
+                {step.is_critical && !isDone && <div style={{ fontSize: 10, color: '#fca5a5' }}>🔴</div>}
+              </div>
+            );
+          })}
+        </div>
+        {isAdmin && (
+          <div style={{ padding: '16px 20px', background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)', borderRadius: 12 }}>
+            <div style={{ fontSize: 13, fontWeight: 700, color: '#fca5a5', marginBottom: 6 }}>Emergency Control</div>
+            <div style={{ fontSize: 12, color: '#94a3b8', lineHeight: 1.6, marginBottom: 12 }}>If {run.operator_name} is unavailable, you can take control of this run. This action will be permanently recorded in the audit trail.</div>
+            <button onClick={onRequestControl} style={{ padding: '8px 20px', background: 'rgba(239,68,68,0.2)', border: '1px solid rgba(239,68,68,0.4)', color: '#fca5a5', borderRadius: 7, fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>⚡ Request Emergency Control</button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export default function RunExecution() {
   const navigate = useNavigate();
   const orgId = localStorage.getItem('bt_org_id');
   const runId = new URLSearchParams(window.location.search).get('id');
   const device = useDeviceType();
 
+  const [currentUser, setCurrentUser] = useState(null);
+  const [isOperator, setIsOperator] = useState(false);
+  const [showTakeoverConfirm, setShowTakeoverConfirm] = useState(false);
+  const [requestingControl, setRequestingControl] = useState(false);
   const [run, setRun] = useState(null);
   const [protocol, setProtocol] = useState(null);
   const [mergedSteps, setMergedSteps] = useState([]);
@@ -313,6 +398,18 @@ export default function RunExecution() {
     return () => clearInterval(runTimerRef.current);
   }, [run]);
 
+  // Load current user and check operator status
+  useEffect(() => {
+    async function loadUser() {
+      try {
+        const user = await base44.auth.me();
+        setCurrentUser(user);
+        if (run) setIsOperator(run.operator_user_id === user.id);
+      } catch(e) { console.error('Failed to load user:', e); }
+    }
+    if (run) loadUser();
+  }, [run?.id, run?.operator_user_id]);
+
   const currentStep = mergedSteps[currentStepIndex];
 
   async function handleCompleteStep() {
@@ -386,6 +483,69 @@ export default function RunExecution() {
   }
 
   const completedCount = mergedSteps.filter(s => s.step_state === 'completed' || s.step_state === 'skipped').length;
+
+  // Read-only monitoring view for non-operators
+  if (run && run.run_state === 'in_progress' && currentUser && !isOperator) {
+    return (
+      <>
+        <RunLiveMonitor
+          run={run}
+          protocol={protocol}
+          mergedSteps={mergedSteps}
+          stepRuns={mergedSteps}
+          currentUser={currentUser}
+          onRequestControl={() => setShowTakeoverConfirm(true)}
+          navigate={navigate}
+        />
+        {showTakeoverConfirm && (
+          <div style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.85)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 500, padding: 24, fontFamily: 'system-ui, sans-serif' }}>
+            <div style={{ background: '#1e293b', borderRadius: 14, maxWidth: 440, width: '100%', border: '1px solid rgba(239,68,68,0.3)', overflow: 'hidden' }}>
+              <div style={{ background: 'rgba(239,68,68,0.1)', padding: '16px 20px', borderBottom: '1px solid rgba(239,68,68,0.2)' }}>
+                <div style={{ fontSize: 15, fontWeight: 800, color: '#fca5a5' }}>⚡ Emergency Run Takeover</div>
+                <div style={{ fontSize: 12, color: '#94a3b8', marginTop: 2 }}>This action is permanent and audited</div>
+              </div>
+              <div style={{ padding: '20px' }}>
+                <div style={{ fontSize: 13, color: '#94a3b8', lineHeight: 1.7, marginBottom: 16 }}>
+                  You are about to take control of <strong style={{ color: 'white' }}>{run?.operator_name}</strong>'s run. This will be recorded permanently in the audit trail. All subsequent steps will show your name as the operator.
+                </div>
+                <div style={{ padding: '10px 14px', background: 'rgba(245,158,11,0.1)', border: '1px solid rgba(245,158,11,0.2)', borderRadius: 8, marginBottom: 20, fontSize: 12, color: '#fbbf24' }}>
+                  ⚠ Only use this for genuine emergencies — operator unavailable, device failure, or safety incident.
+                </div>
+                <div style={{ display: 'flex', gap: 10 }}>
+                  <button onClick={() => setShowTakeoverConfirm(false)} style={{ flex: 1, padding: '10px', background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.15)', borderRadius: 8, color: '#94a3b8', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>Cancel</button>
+                  <button
+                    onClick={async () => {
+                      setRequestingControl(true);
+                      const user = await base44.auth.me();
+                      await base44.entities.Run.update(run.id, {
+                        operator_user_id: user.id,
+                        operator_name: user.full_name || user.email,
+                        context_notes: `${run.context_notes || ''} | Emergency takeover by ${user.full_name || user.email} at ${new Date().toISOString()}`.trim(),
+                      });
+                      await base44.entities.AuditLog.create({
+                        organization_id: orgId, event_type: 'run_takeover',
+                        actor_user_id: user.id, actor_email: user.email,
+                        metadata: { run_id: run.id, original_operator: run.operator_name, original_operator_id: run.operator_user_id, takeover_reason: 'emergency', step_at_takeover: completedCount + 1 },
+                        created_at: new Date().toISOString(),
+                      });
+                      setShowTakeoverConfirm(false);
+                      setIsOperator(true);
+                      setCurrentUser(user);
+                      setRequestingControl(false);
+                    }}
+                    disabled={requestingControl}
+                    style={{ flex: 2, padding: '10px', background: requestingControl ? '#475569' : '#ef4444', color: 'white', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: requestingControl ? 'not-allowed' : 'pointer' }}
+                  >
+                    {requestingControl ? 'Taking control...' : 'Yes, Take Control'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+      </>
+    );
+  }
 
   const miniHeader = (
     <div style={{ position: 'fixed', top: 0, left: 0, right: 0, zIndex: 200, background: '#0f172a', borderBottom: '1px solid rgba(255,255,255,0.1)', padding: device.isMobile ? '8px 12px' : '8px 16px', display: 'flex', alignItems: 'center', gap: device.isMobile ? 8 : 12, fontFamily: 'system-ui, sans-serif' }}>
