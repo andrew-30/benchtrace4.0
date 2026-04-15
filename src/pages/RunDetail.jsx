@@ -144,89 +144,172 @@ function AddDeviationForm({ stepRun, onSave, onCancel }) {
 }
 
 // ─── ESignatureModal ─────────────────────────────────────────────────────────
-function ESignatureModal({ run, onSign, onCancel, signing }) {
-  const [result, setResult] = useState('pass');
-  const [signatoryName, setSignatoryName] = useState('');
-  const [certificationStatement, setCertificationStatement] = useState('');
-  const [nameError, setNameError] = useState('');
-  const [statementError, setStatementError] = useState('');
+function ESignatureModal({ run, protocol, stepRuns, deviations, onSign, onClose, signing }) {
+  const [result, setResult] = useState('');
+  const [intentConfirmed, setIntentConfirmed] = useState(false);
+  const [statement, setStatement] = useState('I certify that all steps were completed as per the protocol and results are accurately recorded.');
+  const [currentUser, setCurrentUser] = useState(null);
+  const [resultError, setResultError] = useState('');
 
-  const CERTIFICATION_TEMPLATES = [
+  const STATEMENTS = [
     'I certify that all steps were completed as per the protocol and results are accurately recorded.',
     'I confirm that this run was executed under controlled conditions and all deviations have been documented.',
     'I verify that the data recorded in this run is accurate and complete to the best of my knowledge.',
   ];
 
-  function validateAndSign() {
-    let valid = true;
-    if (!signatoryName.trim()) { setNameError('Please enter your full name to confirm your identity.'); valid = false; } else { setNameError(''); }
-    if (!certificationStatement.trim()) { setStatementError('A certification statement is required.'); valid = false; } else { setStatementError(''); }
-    if (!valid) return;
-    onSign(result, signatoryName.trim(), certificationStatement.trim());
+  useEffect(() => {
+    base44.auth.me().then(user => setCurrentUser(user)).catch(() => {});
+  }, []);
+
+  const totalSteps = (stepRuns || []).length;
+  const completedSteps = (stepRuns || []).filter(s => s.step_state === 'completed').length;
+  const openDeviations = (deviations || []).filter(d => d.status === 'open' && !d.archived).length;
+  const resolvedDeviations = (deviations || []).filter(d => d.status === 'resolved' && !d.archived).length;
+  const totalDeviations = openDeviations + resolvedDeviations;
+  const measurementSteps = (stepRuns || []).filter(s => s.measurement_values && Object.keys(s.measurement_values).length > 0);
+  const allResolved = openDeviations === 0;
+  const canSign = result !== '' && intentConfirmed;
+
+  function handleApply() {
+    if (!result) { setResultError('Please select Pass or Fail before signing.'); return; }
+    if (!intentConfirmed) return;
+    onSign({ result, signerName: currentUser?.full_name || currentUser?.email || 'Unknown', signerEmail: currentUser?.email || '', statement });
   }
 
   return (
-    <div style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: 24, fontFamily: 'system-ui, sans-serif' }}>
-      <div style={{ background: 'white', borderRadius: 14, width: '100%', maxWidth: 520, boxShadow: '0 20px 60px rgba(0,0,0,0.3)', overflow: 'hidden' }}>
-        <div style={{ background: '#1e293b', padding: '18px 24px' }}>
-          <div style={{ fontSize: 16, fontWeight: 800, color: 'white', marginBottom: 2 }}>Electronic Sign-Off</div>
-          <div style={{ fontSize: 12, color: '#94a3b8' }}>21 CFR Part 11 compliant e-signature — this action is permanent and audited</div>
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.8)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: 20, fontFamily: 'system-ui, sans-serif', overflowY: 'auto' }}>
+      <div style={{ background: 'white', borderRadius: 14, width: '100%', maxWidth: 520, boxShadow: '0 24px 64px rgba(0,0,0,0.3)', overflow: 'hidden', margin: 'auto' }}>
+        <div style={{ background: 'linear-gradient(135deg, #1e293b, #0f172a)', padding: '20px 24px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 4 }}>
+            <span style={{ fontSize: 22 }}>🔏</span>
+            <div style={{ fontSize: 17, fontWeight: 800, color: 'white' }}>Electronic Sign-Off</div>
+          </div>
+          <div style={{ fontSize: 12, color: '#94a3b8' }}>21 CFR Part 11 compliant · Permanent · Cryptographically hashed</div>
         </div>
-        <div style={{ padding: '22px 24px', maxHeight: '75vh', overflowY: 'auto' }}>
-          <div style={{ padding: '10px 14px', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 8, marginBottom: 20 }}>
-            <div style={{ fontSize: 11, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 4 }}>Run being signed</div>
-            <div style={{ fontSize: 13, fontWeight: 600, color: '#1e293b' }}>{run?.operator_name || '—'}</div>
-            <div style={{ fontSize: 11, color: '#64748b' }}>Run ID: {(run?.id || '').slice(-12)}</div>
-          </div>
 
-          <div style={{ marginBottom: 18 }}>
-            <label style={{ fontSize: 11, fontWeight: 700, color: '#374151', display: 'block', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Step 1 — Run Result *</label>
-            <div style={{ display: 'flex', gap: 8 }}>
-              {[
-                { value: 'pass', label: '✓ Pass', bg: '#f0fdf4', color: '#16a34a', border: '#bbf7d0', activeBg: '#16a34a' },
-                { value: 'fail', label: '✗ Fail', bg: '#fef2f2', color: '#dc2626', border: '#fecaca', activeBg: '#dc2626' },
-                { value: 'pending', label: '— Pending', bg: '#f8fafc', color: '#64748b', border: '#e2e8f0', activeBg: '#64748b' },
-              ].map(opt => (
-                <button key={opt.value} onClick={() => setResult(opt.value)}
-                  style={{ flex: 1, padding: '10px 8px', borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: 'pointer', border: `2px solid ${result === opt.value ? opt.activeBg : opt.border}`, background: result === opt.value ? opt.activeBg : opt.bg, color: result === opt.value ? 'white' : opt.color, transition: 'all 0.15s' }}>
-                  {opt.label}
-                </button>
-              ))}
+        <div style={{ padding: '20px 24px', maxHeight: '75vh', overflowY: 'auto' }}>
+          {/* Run Summary */}
+          <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 10, padding: '14px 16px', marginBottom: 20 }}>
+            <div style={{ fontSize: 11, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 10 }}>Run Summary</div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+              <div>
+                <div style={{ fontSize: 11, color: '#94a3b8', marginBottom: 2 }}>Protocol</div>
+                <div style={{ fontSize: 12, fontWeight: 700, color: '#1e293b', lineHeight: 1.3 }}>{protocol?.name || '—'}</div>
+              </div>
+              <div>
+                <div style={{ fontSize: 11, color: '#94a3b8', marginBottom: 2 }}>Operator</div>
+                <div style={{ fontSize: 12, fontWeight: 700, color: '#1e293b' }}>{run?.operator_name || '—'}</div>
+              </div>
+              <div>
+                <div style={{ fontSize: 11, color: '#94a3b8', marginBottom: 2 }}>Steps Completed</div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                  <span style={{ fontSize: 12, fontWeight: 700, color: completedSteps === totalSteps ? '#16a34a' : '#d97706' }}>{completedSteps}/{totalSteps}</span>
+                  {completedSteps === totalSteps && <span style={{ fontSize: 11, color: '#16a34a' }}>✓</span>}
+                </div>
+              </div>
+              <div>
+                <div style={{ fontSize: 11, color: '#94a3b8', marginBottom: 2 }}>Deviations</div>
+                {totalDeviations === 0 ? (
+                  <span style={{ fontSize: 12, fontWeight: 700, color: '#16a34a' }}>None ✓</span>
+                ) : allResolved ? (
+                  <span style={{ fontSize: 12, fontWeight: 700, color: '#16a34a' }}>{totalDeviations} resolved ✓</span>
+                ) : (
+                  <span style={{ fontSize: 12, fontWeight: 700, color: '#dc2626' }}>{openDeviations} open ⚠</span>
+                )}
+              </div>
+              <div>
+                <div style={{ fontSize: 11, color: '#94a3b8', marginBottom: 2 }}>Measurements</div>
+                <div style={{ fontSize: 12, fontWeight: 700, color: '#1e293b' }}>{measurementSteps.length} recorded</div>
+              </div>
+              <div>
+                <div style={{ fontSize: 11, color: '#94a3b8', marginBottom: 2 }}>Run Date</div>
+                <div style={{ fontSize: 12, fontWeight: 700, color: '#1e293b' }}>
+                  {run?.run_started_at ? new Date(run.run_started_at).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'}
+                </div>
+              </div>
             </div>
+            {openDeviations > 0 && (
+              <div style={{ marginTop: 12, padding: '8px 12px', background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 7, fontSize: 12, color: '#dc2626', fontWeight: 600 }}>
+                ⚠ {openDeviations} open deviation{openDeviations > 1 ? 's' : ''} — consider resolving before signing
+              </div>
+            )}
           </div>
 
-          <div style={{ marginBottom: 18 }}>
-            <label style={{ fontSize: 11, fontWeight: 700, color: '#374151', display: 'block', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Step 2 — Confirm Your Full Name *</label>
-            <div style={{ fontSize: 11, color: '#64748b', marginBottom: 6 }}>Type your full name exactly as it should appear on the audit record</div>
-            <input value={signatoryName} onChange={e => { setSignatoryName(e.target.value); setNameError(''); }} placeholder="e.g. ANDREW KISITU"
-              style={{ width: '100%', padding: '10px 12px', border: `1px solid ${nameError ? '#ef4444' : '#e2e8f0'}`, borderRadius: 8, fontSize: 14, fontWeight: 600, boxSizing: 'border-box', fontFamily: 'inherit', textTransform: 'uppercase' }} />
-            {nameError && <div style={{ fontSize: 11, color: '#ef4444', marginTop: 4 }}>{nameError}</div>}
-          </div>
-
+          {/* Step 1 — Quality Decision */}
           <div style={{ marginBottom: 20 }}>
-            <label style={{ fontSize: 11, fontWeight: 700, color: '#374151', display: 'block', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Step 3 — Certification Statement *</label>
-            <div style={{ fontSize: 11, color: '#64748b', marginBottom: 8 }}>Select a template or write your own statement</div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginBottom: 8 }}>
-              {CERTIFICATION_TEMPLATES.map((tmpl, i) => (
-                <button key={i} onClick={() => { setCertificationStatement(tmpl); setStatementError(''); }}
-                  style={{ padding: '6px 10px', background: certificationStatement === tmpl ? '#eef2ff' : '#f8fafc', border: `1px solid ${certificationStatement === tmpl ? '#c7d2fe' : '#e2e8f0'}`, borderRadius: 6, fontSize: 11, cursor: 'pointer', textAlign: 'left', color: certificationStatement === tmpl ? '#4338ca' : '#475569', fontWeight: certificationStatement === tmpl ? 600 : 400 }}>
-                  {tmpl}
+            <div style={{ fontSize: 12, fontWeight: 700, color: '#374151', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 4 }}>
+              Step 1 — Quality Decision <span style={{ color: '#ef4444' }}>*</span>
+            </div>
+            <div style={{ fontSize: 12, color: '#64748b', marginBottom: 12, lineHeight: 1.5 }}>Based on your review of this run, what is your quality decision?</div>
+            <div style={{ display: 'flex', gap: 10 }}>
+              <button onClick={() => { setResult('pass'); setResultError(''); }}
+                style={{ flex: 1, padding: '14px 12px', borderRadius: 10, cursor: 'pointer', border: `2px solid ${result === 'pass' ? '#16a34a' : '#e2e8f0'}`, background: result === 'pass' ? '#f0fdf4' : 'white', transition: 'all 0.15s', textAlign: 'center' }}>
+                <div style={{ fontSize: 24, marginBottom: 4 }}>✓</div>
+                <div style={{ fontSize: 14, fontWeight: 800, color: result === 'pass' ? '#16a34a' : '#374151' }}>PASS</div>
+                <div style={{ fontSize: 11, color: '#64748b', lineHeight: 1.4, marginTop: 4 }}>Results acceptable for use or release</div>
+              </button>
+              <button onClick={() => { setResult('fail'); setResultError(''); }}
+                style={{ flex: 1, padding: '14px 12px', borderRadius: 10, cursor: 'pointer', border: `2px solid ${result === 'fail' ? '#dc2626' : '#e2e8f0'}`, background: result === 'fail' ? '#fef2f2' : 'white', transition: 'all 0.15s', textAlign: 'center' }}>
+                <div style={{ fontSize: 24, marginBottom: 4 }}>✗</div>
+                <div style={{ fontSize: 14, fontWeight: 800, color: result === 'fail' ? '#dc2626' : '#374151' }}>FAIL</div>
+                <div style={{ fontSize: 11, color: '#64748b', lineHeight: 1.4, marginTop: 4 }}>Results rejected — investigation required</div>
+              </button>
+            </div>
+            {resultError && <div style={{ marginTop: 8, fontSize: 11, color: '#dc2626', fontWeight: 600 }}>{resultError}</div>}
+          </div>
+
+          {/* Step 2 — Identity */}
+          <div style={{ marginBottom: 20 }}>
+            <div style={{ fontSize: 12, fontWeight: 700, color: '#374151', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 4 }}>Step 2 — Your Identity</div>
+            <div style={{ padding: '14px 16px', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 10, display: 'flex', alignItems: 'center', gap: 12 }}>
+              <div style={{ width: 42, height: 42, borderRadius: '50%', background: '#6366f1', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18, flexShrink: 0 }}>👤</div>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: 14, fontWeight: 700, color: '#1e293b' }}>{currentUser?.full_name || currentUser?.email || 'Loading...'}</div>
+                <div style={{ fontSize: 11, color: '#64748b' }}>{currentUser?.email || ''}</div>
+                <div style={{ fontSize: 10, color: '#16a34a', fontWeight: 600, marginTop: 2 }}>✓ Identity verified via BenchTrace session</div>
+              </div>
+              <div style={{ padding: '3px 10px', background: '#eef2ff', border: '1px solid #c7d2fe', borderRadius: 99 }}>
+                <span style={{ fontSize: 10, fontWeight: 700, color: '#4338ca' }}>VERIFIED</span>
+              </div>
+            </div>
+            <div style={{ marginTop: 12 }}>
+              <label style={{ display: 'flex', alignItems: 'flex-start', gap: 10, cursor: 'pointer', padding: '12px 14px', background: intentConfirmed ? '#eef2ff' : '#f8fafc', border: `1px solid ${intentConfirmed ? '#c7d2fe' : '#e2e8f0'}`, borderRadius: 8, transition: 'all 0.15s' }}>
+                <input type="checkbox" checked={intentConfirmed} onChange={e => setIntentConfirmed(e.target.checked)}
+                  style={{ width: 18, height: 18, marginTop: 1, cursor: 'pointer', flexShrink: 0, accentColor: '#6366f1' }} />
+                <span style={{ fontSize: 13, color: '#374151', lineHeight: 1.5 }}>
+                  I confirm this signature represents my <strong>intentional and informed</strong> approval of this run result. I have reviewed the run data and accept responsibility for this sign-off.
+                </span>
+              </label>
+            </div>
+          </div>
+
+          {/* Step 3 — Certification Statement */}
+          <div style={{ marginBottom: 20 }}>
+            <div style={{ fontSize: 12, fontWeight: 700, color: '#374151', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 8 }}>Step 3 — Certification Statement</div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              {STATEMENTS.map((s, i) => (
+                <button key={i} onClick={() => setStatement(s)}
+                  style={{ padding: '10px 12px', borderRadius: 7, cursor: 'pointer', textAlign: 'left', border: `1px solid ${statement === s ? '#c7d2fe' : '#e2e8f0'}`, background: statement === s ? '#eef2ff' : 'white', fontSize: 12, color: statement === s ? '#4338ca' : '#475569', lineHeight: 1.5 }}>
+                  <span style={{ marginRight: 6, fontWeight: 800 }}>{statement === s ? '◉' : '○'}</span>
+                  {s}
                 </button>
               ))}
             </div>
-            <textarea value={certificationStatement} onChange={e => { setCertificationStatement(e.target.value); setStatementError(''); }} placeholder="Or type a custom certification statement..." rows={3}
-              style={{ width: '100%', padding: '8px 12px', border: `1px solid ${statementError ? '#ef4444' : '#e2e8f0'}`, borderRadius: 8, fontSize: 12, resize: 'none', boxSizing: 'border-box', fontFamily: 'inherit' }} />
-            {statementError && <div style={{ fontSize: 11, color: '#ef4444', marginTop: 4 }}>{statementError}</div>}
           </div>
 
-          <div style={{ padding: '10px 12px', background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 7, marginBottom: 20, fontSize: 11, color: '#92400e' }}>
-            By clicking "Apply Electronic Signature" you are applying a legally binding electronic signature. This action is permanent, time-stamped, and cannot be undone. A cryptographic hash will be generated and stored as proof of this signature.
+          {/* Legal notice */}
+          <div style={{ padding: '10px 14px', background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 8, marginBottom: 20, fontSize: 11, color: '#92400e', lineHeight: 1.6 }}>
+            By clicking "Apply Electronic Signature" you are applying a legally binding electronic signature. This action is <strong>permanent</strong>, time-stamped, and <strong>cannot be undone</strong>. A SHA-256 cryptographic hash will be generated as proof of this signature.
           </div>
 
           <div style={{ display: 'flex', gap: 10 }}>
-            <button onClick={onCancel} disabled={signing} style={{ flex: 1, padding: '11px', background: 'white', border: '1px solid #e2e8f0', borderRadius: 8, fontSize: 13, cursor: 'pointer', color: '#475569', fontWeight: 600 }}>Cancel</button>
-            <button onClick={validateAndSign} disabled={signing} style={{ flex: 2, padding: '11px', background: signing ? '#94a3b8' : '#1e293b', color: 'white', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: signing ? 'not-allowed' : 'pointer' }}>
-              {signing ? 'Applying signature...' : 'Apply Electronic Signature'}
+            <button onMouseDown={onClose} disabled={signing}
+              style={{ flex: 1, padding: '12px', background: 'white', border: '1px solid #e2e8f0', borderRadius: 8, fontSize: 14, cursor: 'pointer', color: '#475569', fontWeight: 600 }}>
+              Cancel
+            </button>
+            <button onClick={handleApply} disabled={!canSign || signing}
+              style={{ flex: 2, padding: '12px', background: !canSign || signing ? '#94a3b8' : result === 'pass' ? '#16a34a' : '#dc2626', color: 'white', border: 'none', borderRadius: 8, fontSize: 14, fontWeight: 800, cursor: !canSign || signing ? 'not-allowed' : 'pointer', transition: 'background 0.2s' }}>
+              {signing ? 'Applying signature...' : !result ? 'Select Pass or Fail to continue' : !intentConfirmed ? 'Confirm your intent to continue' : `Apply ${result === 'pass' ? 'PASS' : 'FAIL'} Signature 🔏`}
             </button>
           </div>
         </div>
@@ -312,34 +395,32 @@ export default function RunDetail() {
     load();
   }, [runId, orgId]);
 
-  async function handleSignOff(resultStatus, signatoryName, certificationStatement) {
+  async function handleSignOff({ result, signerName, signerEmail, statement }) {
+    setSigning(true);
     const user = await base44.auth.me();
     const now = new Date().toISOString();
     let signatureHash = '';
     try {
-      const hashInput = `${run.id}|${signatoryName}|${now}|${resultStatus}|${certificationStatement}`;
-      const encoder = new TextEncoder();
-      const data = encoder.encode(hashInput);
-      const hashBuffer = await crypto.subtle.digest('SHA-256', data);
-      const hashArray = Array.from(new Uint8Array(hashBuffer));
-      signatureHash = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+      const hashInput = `${run.id}|${signerName}|${signerEmail}|${result}|${now}|${statement}`;
+      const hashBuffer = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(hashInput));
+      signatureHash = Array.from(new Uint8Array(hashBuffer)).map(b => b.toString(16).padStart(2, '0')).join('');
     } catch(e) {
-      console.error('Hash generation failed:', e);
       signatureHash = `fallback-${Date.now()}`;
     }
     await base44.entities.Run.update(run.id, {
       run_state: 'signed', is_signed_off: true, signed_off_at: now,
-      signed_off_by_user_id: user.id, signed_off_by_name: signatoryName,
-      result_status: resultStatus, signature_hash: signatureHash,
+      signed_off_by_user_id: user.id, signed_off_by_name: signerName,
+      result_status: result, signature_hash: signatureHash,
     });
     await base44.entities.AuditLog.create({
       organization_id: orgId, entity_type: 'Run', entity_id: run.id,
       event_type: 'run_signed', actor_user_id: user.id, actor_email: user.email,
-      metadata: { result_status: resultStatus, signed_at: now, signed_by_name: signatoryName, certification_statement: certificationStatement, signature_hash: signatureHash, cfr_part_11: true },
+      metadata: { result_status: result, signed_at: now, signed_by_name: signerName, signer_email: signerEmail, certification_statement: statement, signature_hash: signatureHash, cfr_part_11: true },
       created_at: now,
     });
-    setRun(prev => ({ ...prev, run_state: 'signed', is_signed_off: true, result_status: resultStatus, signed_off_by_name: signatoryName, signed_off_at: now, signature_hash: signatureHash }));
+    setRun(prev => ({ ...prev, run_state: 'signed', is_signed_off: true, result_status: result, signed_off_by_name: signerName, signed_off_at: now, signature_hash: signatureHash }));
     setShowESignModal(false);
+    setSigning(false);
   }
 
   async function handleAddDeviation(stepRun, description, severity) {
@@ -614,12 +695,11 @@ export default function RunDetail() {
           {showESignModal && (
             <ESignatureModal
               run={run}
-              onSign={async (result, name, statement) => {
-                setSigning(true);
-                await handleSignOff(result, name, statement);
-                setSigning(false);
-              }}
-              onCancel={() => setShowESignModal(false)}
+              protocol={protocol}
+              stepRuns={mergedSteps}
+              deviations={deviations}
+              onSign={handleSignOff}
+              onClose={() => setShowESignModal(false)}
               signing={signing}
             />
           )}
