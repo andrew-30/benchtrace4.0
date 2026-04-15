@@ -79,10 +79,95 @@ export default function AppLayout() {
   const [user, setUser] = useState(null);
   const [role, setRole] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [inviteSuccess, setInviteSuccess] = useState('');
+  const [inviteError, setInviteError] = useState('');
   const navigate = useNavigate();
   const location = useLocation();
   const planProvider = usePlanProvider();
   const { org, setOrg, loadOrg } = planProvider;
+
+  // Preserve invite token to localStorage before any redirect
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const inviteToken = urlParams.get('invite_token');
+    if (inviteToken) {
+      localStorage.setItem('bt_pending_invite_token', inviteToken);
+    }
+  }, []);
+
+  const handleInviteToken = async (currentUser) => {
+    try {
+      const urlParams = new URLSearchParams(window.location.search);
+      const inviteToken = urlParams.get('invite_token');
+      const storedToken = localStorage.getItem('bt_pending_invite_token');
+      const token = inviteToken || storedToken;
+      if (!token) return;
+
+      // Clean up URL and localStorage immediately
+      window.history.replaceState({}, document.title, window.location.pathname);
+      localStorage.removeItem('bt_pending_invite_token');
+
+      const invites = await base44.entities.OrganizationInvite.filter({ token });
+      const invite = invites?.[0];
+      if (!invite) return;
+      if (invite.status === 'revoked') return;
+
+      if (invite.status === 'accepted') {
+        if (invite.organization_id !== localStorage.getItem('bt_org_id')) {
+          localStorage.setItem('bt_org_id', invite.organization_id);
+          window.location.reload();
+        }
+        return;
+      }
+
+      // Check expiry (7 days)
+      if (invite.created_at) {
+        const diffDays = (Date.now() - new Date(invite.created_at).getTime()) / (1000 * 60 * 60 * 24);
+        if (diffDays > 7) return;
+      }
+
+      // Verify email matches
+      if (currentUser.email.toLowerCase() !== invite.invited_email.toLowerCase()) {
+        setInviteError(`This invite was sent to ${invite.invited_email}. You are logged in as ${currentUser.email}.`);
+        return;
+      }
+
+      // Create membership if not already a member
+      const existingMemberships = await base44.entities.OrganizationMembership.filter({
+        organization_id: invite.organization_id,
+        user_id: currentUser.id,
+      });
+      if (!existingMemberships || existingMemberships.length === 0) {
+        await base44.entities.OrganizationMembership.create({
+          organization_id: invite.organization_id,
+          user_id: currentUser.id,
+          role: invite.invited_role || 'member',
+          joined_at: new Date().toISOString(),
+        });
+      }
+
+      await base44.entities.OrganizationInvite.update(invite.id, {
+        status: 'accepted',
+        accepted_at: new Date().toISOString(),
+      });
+
+      await base44.entities.AuditLog.create({
+        organization_id: invite.organization_id,
+        event_type: 'team_member_joined',
+        actor_user_id: currentUser.id,
+        actor_email: currentUser.email,
+        metadata: { role: invite.invited_role, invited_by: invite.invited_by_name },
+        created_at: new Date().toISOString(),
+      });
+
+      localStorage.setItem('bt_org_id', invite.organization_id);
+      localStorage.setItem('bt_role', invite.invited_role || 'member');
+      setInviteSuccess(`Welcome! You've joined the team on BenchTrace.`);
+      setTimeout(() => window.location.reload(), 1500);
+    } catch(e) {
+      console.error('handleInviteToken failed:', e);
+    }
+  };
 
   useEffect(() => {
     const currentPath = window.location.pathname;
@@ -93,6 +178,9 @@ export default function AppLayout() {
     async function boot() {
       const currentUser = await base44.auth.me();
       setUser(currentUser);
+
+      // Handle invite token before org loading
+      await handleInviteToken(currentUser);
 
       if (cachedOrgId) {
         const org = await migrateOrg(cachedOrgId);
@@ -199,6 +287,19 @@ export default function AppLayout() {
         }
       `}</style>
       <TopNav user={user} />
+      {inviteSuccess && (
+        <div style={{ position: 'fixed', top: 80, left: '50%', transform: 'translateX(-50%)', background: '#f0fdf4', border: '2px solid #16a34a', borderRadius: 10, padding: '14px 24px', zIndex: 500, fontFamily: 'system-ui, sans-serif', display: 'flex', alignItems: 'center', gap: 10, boxShadow: '0 4px 20px rgba(0,0,0,0.1)', whiteSpace: 'nowrap' }}>
+          <span style={{ fontSize: 20 }}>🎉</span>
+          <span style={{ fontSize: 14, fontWeight: 700, color: '#15803d' }}>{inviteSuccess}</span>
+        </div>
+      )}
+      {inviteError && (
+        <div style={{ position: 'fixed', top: 80, left: '50%', transform: 'translateX(-50%)', background: '#fef2f2', border: '2px solid #dc2626', borderRadius: 10, padding: '14px 24px', zIndex: 500, fontFamily: 'system-ui, sans-serif', display: 'flex', alignItems: 'center', gap: 10, boxShadow: '0 4px 20px rgba(0,0,0,0.1)', maxWidth: 480 }}>
+          <span style={{ fontSize: 20 }}>⚠️</span>
+          <span style={{ fontSize: 13, fontWeight: 600, color: '#dc2626' }}>{inviteError}</span>
+          <button onMouseDown={() => setInviteError('')} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#dc2626', fontSize: 18, marginLeft: 8 }}>×</button>
+        </div>
+      )}
       <main className="max-w-7xl mx-auto px-6 py-6">
         <Outlet context={{ user, org, role, setOrg, setRole }} />
       </main>

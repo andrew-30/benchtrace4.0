@@ -97,7 +97,7 @@ export default function Team() {
         created_at: new Date().toISOString(),
       });
 
-      const inviteLink = `${window.location.origin}/accept-invite?token=${token}`;
+      const inviteLink = `${window.location.origin}/?invite_token=${token}`;
       setCreatedInviteLink(inviteLink);
       setCreatedInviteEmail(inviteEmail.trim());
       setInviteEmail('');
@@ -268,7 +268,7 @@ export default function Team() {
                   {invite.token && (
                     <button
                       onMouseDown={() => {
-                        const link = `${window.location.origin}/accept-invite?token=${invite.token}`;
+                        const link = `${window.location.origin}/?invite_token=${invite.token}`;
                         navigator.clipboard.writeText(link).then(() => {
                           setCopiedInviteId(invite.id);
                           setTimeout(() => setCopiedInviteId(null), 3000);

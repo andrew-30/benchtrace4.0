@@ -14,16 +14,6 @@ export const AuthProvider = ({ children }) => {
   const [appPublicSettings, setAppPublicSettings] = useState(null); // Contains only { id, public_settings }
 
   useEffect(() => {
-    // PUBLIC ROUTES — skip all auth checks entirely
-    const publicPaths = ['/accept-invite'];
-    if (publicPaths.includes(window.location.pathname)) {
-      setIsLoadingPublicSettings(false);
-      setIsLoadingAuth(false);
-      setIsAuthenticated(false);
-      setAuthError(null);
-      return;
-    }
-
     checkAppState();
   }, []);
 

@@ -22,19 +22,8 @@ import AuditReadiness from './pages/AuditReadiness';
 import Traceability from './pages/Traceability';
 import Team from './pages/Team';
 import Pricing from './pages/Pricing';
-import AcceptInvite from './pages/AcceptInvite';
-
 const AuthenticatedApp = () => {
   const { isLoadingAuth, isLoadingPublicSettings, authError, navigateToLogin } = useAuth();
-
-  // PUBLIC ROUTE — must be checked BEFORE any auth/loading logic
-  if (window.location.pathname === '/accept-invite') {
-    return (
-      <Routes>
-        <Route path="/accept-invite" element={<AcceptInvite />} />
-      </Routes>
-    );
-  }
 
   if (isLoadingPublicSettings || isLoadingAuth) {
     return (
@@ -56,7 +45,6 @@ const AuthenticatedApp = () => {
   return (
     <Routes>
       <Route path="/onboarding" element={<Onboarding />} />
-      <Route path="/accept-invite" element={<AcceptInvite />} />
       <Route element={<AppLayout />}>
         <Route path="/" element={<Dashboard />} />
         <Route path="/dashboard" element={<Dashboard />} />
