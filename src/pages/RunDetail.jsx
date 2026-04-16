@@ -285,15 +285,25 @@ function ESignatureModal({ run, protocol, stepRuns, deviations, onSign, onClose,
 
           {/* Step 3 — Certification Statement */}
           <div style={{ marginBottom: 20 }}>
-            <div style={{ fontSize: 12, fontWeight: 700, color: '#374151', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 8 }}>Step 3 — Certification Statement</div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-              {STATEMENTS.map((s, i) => (
-                <button key={i} onClick={() => setStatement(s)}
-                  style={{ padding: '10px 12px', borderRadius: 7, cursor: 'pointer', textAlign: 'left', border: `1px solid ${statement === s ? '#c7d2fe' : '#e2e8f0'}`, background: statement === s ? '#eef2ff' : 'white', fontSize: 12, color: statement === s ? '#4338ca' : '#475569', lineHeight: 1.5 }}>
-                  <span style={{ marginRight: 6, fontWeight: 800 }}>{statement === s ? '◉' : '○'}</span>
-                  {s}
-                </button>
-              ))}
+            <div style={{ fontSize: 12, fontWeight: 700, color: '#374151', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 4 }}>
+              Step 3 — Certification Statement
+            </div>
+            <div style={{ fontSize: 12, color: '#64748b', marginBottom: 12, lineHeight: 1.5 }}>
+              Select the statement that best applies to this run:
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {STATEMENTS.map((s, i) => {
+                const isSelected = statement === s;
+                return (
+                  <button key={i} onClick={() => setStatement(s)}
+                    style={{ padding: '14px 16px', borderRadius: 9, cursor: 'pointer', textAlign: 'left', width: '100%', border: `2px solid ${isSelected ? '#6366f1' : '#e2e8f0'}`, background: isSelected ? '#eef2ff' : 'white', transition: 'all 0.15s', display: 'flex', alignItems: 'flex-start', gap: 12 }}>
+                    <div style={{ width: 20, height: 20, borderRadius: '50%', border: `2px solid ${isSelected ? '#6366f1' : '#cbd5e1'}`, background: isSelected ? '#6366f1' : 'white', flexShrink: 0, marginTop: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 0.15s' }}>
+                      {isSelected && <div style={{ width: 8, height: 8, borderRadius: '50%', background: 'white' }} />}
+                    </div>
+                    <span style={{ fontSize: 13, color: isSelected ? '#4338ca' : '#475569', lineHeight: 1.6, fontWeight: isSelected ? 600 : 400 }}>{s}</span>
+                  </button>
+                );
+              })}
             </div>
           </div>
 
