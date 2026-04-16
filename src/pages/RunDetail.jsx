@@ -655,41 +655,45 @@ export default function RunDetail() {
           )}
 
           {/* Sign-off section */}
-          {run.run_state === 'completed' && (
-            <div style={{ background: 'white', borderRadius: 10, border: '1px solid #c7d2fe', padding: '20px' }}>
-              <div style={{ fontSize: 13, fontWeight: 700, color: '#1e293b', marginBottom: 6 }}>Ready to Sign Off</div>
-              <div style={{ fontSize: 13, color: '#64748b', marginBottom: 16 }}>Review the run and apply your 21 CFR Part 11 electronic signature.</div>
-              {canAccess('esignature') ? (
-                isOperator ? (
-                  <div style={{ padding: '14px 16px', background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 10 }}>
-                    <div style={{ fontSize: 14, fontWeight: 700, color: '#92400e', marginBottom: 4 }}>🔒 Sign-off requires a different operator</div>
-                    <div style={{ fontSize: 12, color: '#78350f', lineHeight: 1.6 }}>21 CFR Part 11 requires separation of duties. You executed this run, so another team member or supervisor must sign it off.</div>
-                  </div>
-                ) : (
-                  <button
-                    onClick={() => setShowESignModal(true)}
-                    style={{ padding: '10px 22px', background: '#1e293b', color: 'white', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8 }}
-                  >
-                    🔏 Sign Off Run
-                  </button>
-                )
-              ) : (
-                <div style={{ padding: '12px 16px', background: '#f8fafc', border: '1px dashed #e2e8f0', borderRadius: 8, textAlign: 'center' }}>
-                  <div style={{ fontSize: 13, fontWeight: 700, color: '#94a3b8', marginBottom: 4 }}>🔒 21 CFR Part 11 E-Signature</div>
-                  <div style={{ fontSize: 12, color: '#94a3b8', marginBottom: isBeta ? 8 : 0 }}>Available on Lab Pro (€249/month)</div>
-                  {isBeta && (
+          {run.run_state === 'completed' && (() => {
+            const role = localStorage.getItem('bt_role');
+            const isAdmin = role === 'admin';
+            const blockedFromSignOff = isOperator && !isAdmin;
+            return (
+              <div style={{ background: 'white', borderRadius: 10, border: '1px solid #c7d2fe', padding: '20px' }}>
+                <div style={{ fontSize: 13, fontWeight: 700, color: '#1e293b', marginBottom: 6 }}>Ready to Sign Off</div>
+                <div style={{ fontSize: 13, color: '#64748b', marginBottom: 16 }}>Review the run and apply your 21 CFR Part 11 electronic signature.</div>
+                {canAccess('esignature') ? (
+                  blockedFromSignOff ? (
+                    <div style={{ padding: '14px 16px', background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 10 }}>
+                      <div style={{ fontSize: 14, fontWeight: 700, color: '#92400e', marginBottom: 4 }}>🔒 Sign-off requires a supervisor or admin</div>
+                      <div style={{ fontSize: 12, color: '#78350f', lineHeight: 1.6 }}>You executed this run as a team member. An admin or supervisor must review and sign it off. Please ask your QC supervisor to review this run.</div>
+                    </div>
+                  ) : (
                     <button
-                      onClick={() => switchPreviewPlan('lab_pro')}
-                      style={{ padding: '6px 16px', background: '#dc2626', color: 'white', border: 'none', borderRadius: 6, fontSize: 12, fontWeight: 700, cursor: 'pointer' }}
+                      onClick={() => setShowESignModal(true)}
+                      style={{ padding: '10px 22px', background: '#1e293b', color: 'white', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8 }}
                     >
-                      Preview as Lab Pro →
+                      🔏 Sign Off Run
                     </button>
-                  )}
-                </div>
-              )}
-
-            </div>
-          )}
+                  )
+                ) : (
+                  <div style={{ padding: '12px 16px', background: '#f8fafc', border: '1px dashed #e2e8f0', borderRadius: 8, textAlign: 'center' }}>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: '#94a3b8', marginBottom: 4 }}>🔒 21 CFR Part 11 E-Signature</div>
+                    <div style={{ fontSize: 12, color: '#94a3b8', marginBottom: isBeta ? 8 : 0 }}>Available on Lab Pro (€249/month)</div>
+                    {isBeta && (
+                      <button
+                        onClick={() => switchPreviewPlan('lab_pro')}
+                        style={{ padding: '6px 16px', background: '#dc2626', color: 'white', border: 'none', borderRadius: 6, fontSize: 12, fontWeight: 700, cursor: 'pointer' }}
+                      >
+                        Preview as Lab Pro →
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
+            );
+          })()}
 
           {showESignModal && (
             <ESignatureModal
