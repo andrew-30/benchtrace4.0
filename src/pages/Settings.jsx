@@ -182,18 +182,18 @@ export default function Settings() {
 
         const plans = [
           {
-            value: 'starter', name: 'Starter', price: '€19/mo', color: '#3b82f6',
+            value: 'starter', name: 'Bench', price: '€19/mo', color: '#3b82f6',
             features: ['Up to 5 protocols', '30 runs per month', 'Protocol import (DOCX)', 'Step timer control', 'Deviation logging', 'Basic PDF reports', 'Lot number tracking'],
             locked: ['Team members', 'Traceability navigator', '21 CFR Part 11 e-signature', 'Audit View'],
           },
           {
-            value: 'lab', name: 'Lab', price: '€79/mo', color: '#6366f1',
+            value: 'lab', name: 'Pro', price: '€79/mo', color: '#6366f1',
             features: ['Unlimited protocols', 'Unlimited runs', 'Up to 15 team members', 'Team management + invites', 'Traceability navigator', 'Audit readiness score', 'Protocol version control', 'Advanced dashboard + charts'],
             locked: ['21 CFR Part 11 e-signature', 'Audit View mode'],
           },
           {
-            value: 'lab_pro', name: 'Lab Pro', price: '€249/mo', color: '#dc2626',
-            features: ['Everything in Lab', '21 CFR Part 11 e-signature', 'SHA-256 cryptographic hash', 'Inspector-ready Audit View', 'Advanced PDF audit reports', 'Deviation severity management', 'Materials lot traceability', 'Unlimited audit log retention'],
+            value: 'lab_pro', name: 'GMP', price: '€249/mo', color: '#dc2626',
+            features: ['Everything in Pro', '21 CFR Part 11 e-signature', 'SHA-256 cryptographic hash', 'Inspector-ready Audit View', 'Advanced PDF audit reports', 'Deviation severity management', 'Materials lot traceability', 'Unlimited audit log retention'],
             locked: [],
           },
         ];

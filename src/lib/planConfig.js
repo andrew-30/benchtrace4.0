@@ -1,6 +1,6 @@
 export const PLAN_CONFIG = {
   starter: {
-    name: 'Starter',
+    name: 'Bench',
     price: 19,
     annualPrice: 15,
     color: '#3b82f6',
@@ -25,7 +25,7 @@ export const PLAN_CONFIG = {
     ],
   },
   lab: {
-    name: 'Lab',
+    name: 'Pro',
     price: 79,
     annualPrice: 59,
     color: '#6366f1',
@@ -51,7 +51,7 @@ export const PLAN_CONFIG = {
     ],
   },
   lab_pro: {
-    name: 'Lab Pro',
+    name: 'GMP',
     price: 249,
     annualPrice: 199,
     color: '#dc2626',
@@ -61,7 +61,7 @@ export const PLAN_CONFIG = {
     trialDays: 30,
     target: 'GMP manufacturing, clinical diagnostics, pharma, CRO',
     features: [
-      { text: 'Everything in Lab +', included: true },
+      { text: 'Everything in Pro +', included: true },
       { text: 'Unlimited team members', included: true },
       { text: '21 CFR Part 11 e-signature', included: true },
       { text: 'SHA-256 cryptographic hash', included: true },

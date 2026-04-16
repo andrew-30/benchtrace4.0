@@ -22,10 +22,11 @@ export const FEATURE_TIERS = {
 };
 
 export const PLAN_META = {
-  free:     { name: 'Free',     price: 0,   color: '#94a3b8' },
-  starter:  { name: 'Starter',  price: 19,  color: '#3b82f6' },
-  lab:      { name: 'Lab',      price: 79,  color: '#6366f1' },
-  lab_pro:  { name: 'Lab Pro',  price: 249, color: '#dc2626' },
+  free:       { name: 'Free',       price: 0,    color: '#94a3b8', icon: '○' },
+  starter:    { name: 'Bench',      price: 19,   color: '#3b82f6', icon: '◉', annualPrice: 15 },
+  lab:        { name: 'Pro',        price: 79,   color: '#6366f1', icon: '◉', annualPrice: 59, popular: true },
+  lab_pro:    { name: 'GMP',        price: 249,  color: '#dc2626', icon: '◉', annualPrice: 199 },
+  enterprise: { name: 'Enterprise', price: null, color: '#0f172a', icon: '◉' },
 };
 
 const FEATURE_NAMES = {

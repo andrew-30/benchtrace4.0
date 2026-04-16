@@ -14,7 +14,7 @@ const FAQ = [
   },
   {
     q: 'Which features are restricted to which plan after beta?',
-    a: 'Starter ($19/mo): protocol import, run execution, timers, deviation logging, basic PDF reports, lot tracking — for individual researchers. Lab ($79/mo): adds team management, traceability navigator, audit readiness score, version control — for research groups. Lab Pro ($249/mo): adds 21 CFR Part 11 e-signature with SHA-256 hash, Audit View inspector mode, advanced PDF reports, deviation severity management — for regulated environments. During beta, all features are available to everyone.',
+    a: 'Bench (€19/mo): protocol import, run execution, timers, deviation logging, basic PDF reports, lot tracking — for individual researchers. Pro (€79/mo): adds team management, traceability navigator, audit readiness score, version control — for research groups. GMP (€249/mo): adds 21 CFR Part 11 e-signature with SHA-256 hash, Audit View inspector mode, advanced PDF reports, deviation severity management — for regulated environments. During beta, all features are available to everyone.',
   },
   {
     q: 'Is there a student or academic discount?',
@@ -30,7 +30,7 @@ const FAQ = [
   },
   {
     q: 'Do you offer annual billing?',
-    a: 'Yes — annual billing saves you up to 25%. Starter: $15/mo ($180/yr), Lab: $59/mo ($708/yr), Lab Pro: $199/mo ($2,388/yr).',
+    a: 'Yes — annual billing saves you up to 25%. Bench: €15/mo (€180/yr), Pro: €59/mo (€708/yr), GMP: €199/mo (€2,388/yr).',
   },
 ];
 
@@ -216,7 +216,7 @@ export default function Pricing() {
               Talk to Us →
             </a>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-              {['Everything in Lab Pro +','Unlimited labs & sites','SOC 2 / ISO 27001 (coming)','SSO / LDAP integration (coming)','Dedicated customer success','Custom SLA + uptime guarantee','Custom compliance templates','Procurement & legal support'].map((f, i) => (
+              {['Everything in GMP +','Unlimited labs & sites','SOC 2 / ISO 27001 (coming)','SSO / LDAP integration (coming)','Dedicated customer success','Custom SLA + uptime guarantee','Custom compliance templates','Procurement & legal support'].map((f, i) => (
                 <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                   <span style={{ fontSize: 13, color: '#94a3b8', flexShrink: 0 }}>✓</span>
                   <span style={{ fontSize: 12, color: '#94a3b8' }}>{f}</span>
