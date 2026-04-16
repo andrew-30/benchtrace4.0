@@ -144,15 +144,15 @@ function AddDeviationForm({ stepRun, onSave, onCancel }) {
 }
 
 // ─── ESignatureModal ─────────────────────────────────────────────────────────
+const PASS_STATEMENT = 'I certify that all steps in this run were completed as per the protocol, results are within specification, and this run is approved for release.';
+const FAIL_STATEMENT = 'I confirm that this run has been reviewed and the results do not meet the required specification. This run is rejected and requires investigation before further action.';
+
 function ESignatureModal({ run, protocol, stepRuns, deviations, onSign, onClose, signing }) {
   const [result, setResult] = useState('');
   const [intentConfirmed, setIntentConfirmed] = useState(false);
   const statement = result === 'pass' ? PASS_STATEMENT : result === 'fail' ? FAIL_STATEMENT : '';
   const [currentUser, setCurrentUser] = useState(null);
   const [resultError, setResultError] = useState('');
-
-  const PASS_STATEMENT = 'I certify that all steps in this run were completed as per the protocol, results are within specification, and this run is approved for release.';
-  const FAIL_STATEMENT = 'I confirm that this run has been reviewed and the results do not meet the required specification. This run is rejected and requires investigation before further action.';
 
   useEffect(() => {
     base44.auth.me().then(user => setCurrentUser(user)).catch(() => {});
