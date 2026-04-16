@@ -147,15 +147,12 @@ function AddDeviationForm({ stepRun, onSave, onCancel }) {
 function ESignatureModal({ run, protocol, stepRuns, deviations, onSign, onClose, signing }) {
   const [result, setResult] = useState('');
   const [intentConfirmed, setIntentConfirmed] = useState(false);
-  const [statement, setStatement] = useState('I certify that all steps were completed as per the protocol and results are accurately recorded.');
+  const statement = result === 'pass' ? PASS_STATEMENT : result === 'fail' ? FAIL_STATEMENT : '';
   const [currentUser, setCurrentUser] = useState(null);
   const [resultError, setResultError] = useState('');
 
-  const STATEMENTS = [
-    'I certify that all steps were completed as per the protocol and results are accurately recorded.',
-    'I confirm that this run was executed under controlled conditions and all deviations have been documented.',
-    'I verify that the data recorded in this run is accurate and complete to the best of my knowledge.',
-  ];
+  const PASS_STATEMENT = 'I certify that all steps in this run were completed as per the protocol, results are within specification, and this run is approved for release.';
+  const FAIL_STATEMENT = 'I confirm that this run has been reviewed and the results do not meet the required specification. This run is rejected and requires investigation before further action.';
 
   useEffect(() => {
     base44.auth.me().then(user => setCurrentUser(user)).catch(() => {});
@@ -283,29 +280,21 @@ function ESignatureModal({ run, protocol, stepRuns, deviations, onSign, onClose,
             </div>
           </div>
 
-          {/* Step 3 — Certification Statement */}
-          <div style={{ marginBottom: 20 }}>
-            <div style={{ fontSize: 12, fontWeight: 700, color: '#374151', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 4 }}>
-              Step 3 — Certification Statement
+          {/* Auto certification statement */}
+          {result && (
+            <div style={{ marginBottom: 20 }}>
+              <div style={{ fontSize: 12, fontWeight: 700, color: '#374151', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 8 }}>
+                Certification Statement
+              </div>
+              <div style={{ padding: '14px 16px', borderRadius: 9, border: `2px solid ${result === 'pass' ? '#bbf7d0' : '#fecaca'}`, background: result === 'pass' ? '#f0fdf4' : '#fef2f2', display: 'flex', alignItems: 'flex-start', gap: 10 }}>
+                <span style={{ fontSize: 16, flexShrink: 0, marginTop: 1 }}>{result === 'pass' ? '✓' : '✗'}</span>
+                <span style={{ fontSize: 13, color: result === 'pass' ? '#15803d' : '#dc2626', lineHeight: 1.6, fontWeight: 500 }}>{statement}</span>
+              </div>
+              <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 6, fontStyle: 'italic' }}>
+                This statement is automatically set based on your quality decision above.
+              </div>
             </div>
-            <div style={{ fontSize: 12, color: '#64748b', marginBottom: 12, lineHeight: 1.5 }}>
-              Select the statement that best applies to this run:
-            </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-              {STATEMENTS.map((s, i) => {
-                const isSelected = statement === s;
-                return (
-                  <button key={i} onClick={() => setStatement(s)}
-                    style={{ padding: '14px 16px', borderRadius: 9, cursor: 'pointer', textAlign: 'left', width: '100%', border: `2px solid ${isSelected ? '#6366f1' : '#e2e8f0'}`, background: isSelected ? '#eef2ff' : 'white', transition: 'all 0.15s', display: 'flex', alignItems: 'flex-start', gap: 12 }}>
-                    <div style={{ width: 20, height: 20, borderRadius: '50%', border: `2px solid ${isSelected ? '#6366f1' : '#cbd5e1'}`, background: isSelected ? '#6366f1' : 'white', flexShrink: 0, marginTop: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 0.15s' }}>
-                      {isSelected && <div style={{ width: 8, height: 8, borderRadius: '50%', background: 'white' }} />}
-                    </div>
-                    <span style={{ fontSize: 13, color: isSelected ? '#4338ca' : '#475569', lineHeight: 1.6, fontWeight: isSelected ? 600 : 400 }}>{s}</span>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
+          )}
 
           {/* Legal notice */}
           <div style={{ padding: '10px 14px', background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 8, marginBottom: 20, fontSize: 11, color: '#92400e', lineHeight: 1.6 }}>
